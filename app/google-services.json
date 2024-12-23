@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1023520031753",
+    "project_id": "sharide-v4",
+    "storage_bucket": "sharide-v4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1023520031753:android:1f95e184c48abc738c64d8",
+        "android_client_info": {
+          "package_name": "com.kxxr.sharide"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDQbg8NwOmnVxdBvmHinwWcN_R7xmxeaCY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
