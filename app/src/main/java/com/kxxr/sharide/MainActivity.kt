@@ -12,6 +12,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import com.google.firebase.auth.FirebaseAuth
+import com.kxxr.sharide.screen.AppNavHost
 import com.kxxr.sharide.screen.IntroScreen
 import com.kxxr.sharide.ui.theme.SHARideTheme
 
@@ -28,7 +30,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun ShareRideApp() {
     MaterialTheme {
-        IntroScreen()
+        AppNavHost(FirebaseAuth.getInstance())// Get Firebase Auth instance)
     }
 }
 

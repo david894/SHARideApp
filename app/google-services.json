@@ -12,7 +12,20 @@
           "package_name": "com.kxxr.sharide"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "1023520031753-cicbbp4d0tpheor283f78al9ajgbfpdt.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.kxxr.sharide",
+            "certificate_hash": "dacb72d61d04dfb38534d4077ad9244f8a981922"
+          }
+        },
+        {
+          "client_id": "1023520031753-ivf24ojn18h5fe6i8beh838rhmmk6etb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDQbg8NwOmnVxdBvmHinwWcN_R7xmxeaCY"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1023520031753-ivf24ojn18h5fe6i8beh838rhmmk6etb.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
