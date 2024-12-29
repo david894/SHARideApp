@@ -51,8 +51,12 @@ android {
 }
 
 dependencies {
-    implementation ("com.google.android.gms:play-services-auth:20.7.0") // Use the latest version
-    //implementation ("com.google.firebase:firebase-auth-ktx:22.1.1")
+    implementation ("com.google.android.gms:play-services-auth:20.7.0")
+    implementation ("com.google.mlkit:text-recognition:16.0.1")
+    implementation ("com.google.mlkit:object-detection:17.0.0")
+    implementation ("jp.co.cyberagent.android:gpuimage:2.1.0")
+    implementation ("androidx.exifinterface:exifinterface:1.3.6")
+
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -66,6 +70,12 @@ dependencies {
     implementation(libs.androidx.navigation.runtime.ktx)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.firebase.firestore.ktx)
+    implementation(libs.vision.common)
+    implementation(libs.play.services.mlkit.text.recognition.common)
+    implementation(libs.play.services.mlkit.text.recognition)
+    implementation(libs.play.services.mlkit.face.detection)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

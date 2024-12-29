@@ -2,23 +2,21 @@ package com.kxxr.sharide.screen
 
 import android.app.Activity
 import android.content.Context
-import android.content.Intent
-import android.os.Bundle
-import android.util.Log
+import android.graphics.Bitmap
+import android.net.Uri
+import android.provider.MediaStore
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
@@ -27,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -48,6 +47,11 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.firestore
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.face.FaceDetection
+import com.google.mlkit.vision.face.FaceDetectorOptions
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.kxxr.sharide.R
 import kotlinx.coroutines.delay
 
@@ -58,6 +62,14 @@ fun AppNavHost(firebaseAuth: FirebaseAuth) {
     NavHost(navController = navController, startDestination = "intro") {
         composable("intro") { IntroScreen(navController) }
         composable("login") { LoginScreen(navController, firebaseAuth) }
+        composable("signup") { SignupIntroScreen(navController) }
+        composable("signup1") { IdVerificationScreen(navController) }
+        composable("signupScreen/{name}/{studentId}") { backStackEntry ->
+                val name = backStackEntry.arguments?.getString("name") ?: ""
+                val studentId = backStackEntry.arguments?.getString("studentId") ?: ""
+                SignUpScreen(navController, name, studentId)
+        }
+        composable("signupFailed") { IntroScreen(navController) }
         // Add more screens like SignUp if needed
     }
 }
@@ -192,7 +204,7 @@ fun IntroScreen(navController: NavController) {
 
         Button(
             onClick = {
-                // Navigate to Sign Up
+                navController.navigate("signup") // Navigate to Sign Up
             },
             modifier = Modifier
                 .fillMaxWidth(0.8f)
@@ -378,47 +390,59 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
                 .clickable {
                     if (email.isNotEmpty()) {
                         // Check if email exists in Firebase
-                        firebaseAuth.fetchSignInMethodsForEmail(email)
+                        firebaseAuth
+                            .fetchSignInMethodsForEmail(email)
                             .addOnCompleteListener { fetchTask ->
                                 if (fetchTask.isSuccessful) {
                                     val signInMethods = fetchTask.result?.signInMethods
                                     if (signInMethods.isNullOrEmpty()) {
                                         // No user found with this email
-                                        Toast.makeText(
-                                            context,
-                                            "No user found with this email!",
-                                            Toast.LENGTH_LONG
-                                        ).show()
+                                        Toast
+                                            .makeText(
+                                                context,
+                                                "No user found with this email!",
+                                                Toast.LENGTH_LONG
+                                            )
+                                            .show()
                                     } else {
                                         // Email exists, send reset link
-                                        firebaseAuth.sendPasswordResetEmail(email)
+                                        firebaseAuth
+                                            .sendPasswordResetEmail(email)
                                             .addOnCompleteListener { resetTask ->
                                                 if (resetTask.isSuccessful) {
-                                                    Toast.makeText(
-                                                        context,
-                                                        "Password reset email sent!",
-                                                        Toast.LENGTH_LONG
-                                                    ).show()
+                                                    Toast
+                                                        .makeText(
+                                                            context,
+                                                            "Password reset email sent!",
+                                                            Toast.LENGTH_LONG
+                                                        )
+                                                        .show()
                                                 } else {
-                                                    Toast.makeText(
-                                                        context,
-                                                        "Error: ${resetTask.exception?.message}",
-                                                        Toast.LENGTH_LONG
-                                                    ).show()
+                                                    Toast
+                                                        .makeText(
+                                                            context,
+                                                            "Error: ${resetTask.exception?.message}",
+                                                            Toast.LENGTH_LONG
+                                                        )
+                                                        .show()
                                                 }
                                             }
                                     }
                                 } else {
                                     // Error while fetching sign-in methods
-                                    Toast.makeText(
-                                        context,
-                                        "Error: ${fetchTask.exception?.message}",
-                                        Toast.LENGTH_LONG
-                                    ).show()
+                                    Toast
+                                        .makeText(
+                                            context,
+                                            "Error: ${fetchTask.exception?.message}",
+                                            Toast.LENGTH_LONG
+                                        )
+                                        .show()
                                 }
                             }
                     } else {
-                        Toast.makeText(context, "Enter your email to proceed!", Toast.LENGTH_LONG).show()
+                        Toast
+                            .makeText(context, "Enter your email to proceed!", Toast.LENGTH_LONG)
+                            .show()
                     }
                 }
         )
@@ -473,3 +497,480 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
         }
     }
 }
+
+@Composable
+fun SignupIntroScreen(navController: NavController) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.SpaceBetween,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(90.dp))
+
+        // Title
+        Text(
+            text = "Few Steps to get started!",
+            fontWeight = FontWeight.Bold,
+            fontSize = 24.sp,
+            color = Color.Black,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Steps
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(30.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            StepCard(
+                stepNumber = "1",
+                title = "Verify your TAR UMT ID",
+                description = "Scan and Upload your Valid TAR UMT ID to verify"
+            )
+            StepCard(
+                stepNumber = "2",
+                title = "Fill in additional information",
+                description = "Fill in all required information to get started"
+            )
+            StepCard(
+                stepNumber = "3",
+                title = "Done :D",
+                description = "Experience new commute way starting from today!"
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Start Button
+        Button(
+            onClick = {
+                navController.navigate("signup1")
+            },
+            modifier = Modifier
+                .fillMaxWidth(0.8f)
+                .height(56.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Text(
+                text = "Start",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        // Sign-Up Text
+        Row(
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = "Already have an account?")
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "Sign In",
+                color = Color.Blue,
+                modifier = Modifier.clickable {
+                    navController.navigate("login")
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(60.dp))
+    }
+}
+
+@Composable
+fun StepCard(stepNumber: String, title: String, description: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(4.dp, shape = RoundedCornerShape(12.dp))
+            .background(Color.White)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Step Number
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(Color.Blue, shape = CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = stepNumber,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        // Title and Description
+        Column {
+            Text(
+                text = title,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                color = Color.Black
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = description,
+                fontSize = 14.sp,
+                color = Color.Gray
+            )
+        }
+    }
+}
+
+@Composable
+fun IdVerificationScreen(navController: NavController) {
+    var name by remember { mutableStateOf("") }
+    var studentId by remember { mutableStateOf("") }
+    var validTARUMT by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    var profilePicture by remember { mutableStateOf<Bitmap?>(null) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Spacer(modifier = Modifier.height(120.dp))
+
+        Text(
+            text = "1. Verify Your TAR UMT ID",
+            fontWeight = FontWeight.Bold,
+            fontSize = 25.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Please Upload the front of your TARUMT ID for verification purpose",
+            fontSize = 16.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Image(
+            painter = painterResource(id = R.drawable.tarumt_id),
+            contentDescription = "TARUMT ID image",
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.3f)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Please Make Sure : \n1. No obstacle or blur image of the ID\n" +
+                    "2. The Whole ID is visible and center in the picture",
+            fontSize = 16.sp,
+            textAlign = TextAlign.Start
+        )
+        Spacer(modifier = Modifier.height(36.dp))
+
+        UploadIdButton { uri ->
+            val originalBitmap = MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+            detectFaceFromIdCard(originalBitmap) { faceBitmap ->
+                if (faceBitmap != null) {
+                    // Save the face image
+                    profilePicture = faceBitmap
+                }
+            }
+            extractInfoFromIdCard(context, uri) { extractedName, extractedId, TARUMT ->
+                name = extractedName
+                studentId = extractedId
+                validTARUMT = TARUMT
+            }
+        }
+        if(validTARUMT == "Verified"){
+            validTARUMT = ""
+            navController.navigate("signupScreen/$name/$studentId")
+        }else if(validTARUMT == "Error"){
+            validTARUMT = ""
+            navController.navigate("signupFailed")
+        }
+        Text(
+            text = "All information is processed by AI and store securely in our database.",
+            fontSize = 15.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        profilePicture?.let {
+            Image(bitmap = it.asImageBitmap(), contentDescription = null, modifier = Modifier.size(150.dp))
+        }
+        Text(text = "Name: $name", fontSize = 16.sp)
+        Text(text = "Student ID: $studentId", fontSize = 16.sp)
+    }
+}
+@Composable
+fun UploadIdButton(onImageSelected: (Uri) -> Unit) {
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { onImageSelected(it) }
+    }
+
+    Button(
+        onClick = { launcher.launch("image/*") },
+        colors = ButtonDefaults.buttonColors(containerColor = Color.Blue),
+        modifier = Modifier
+            .padding(16.dp)
+            .fillMaxWidth()
+            .height(50.dp)
+    ) {
+        Text(text = "Upload ID")
+    }
+}
+
+fun extractInfoFromIdCard(
+    context: Context,
+    imageUri: Uri,
+    onResult: (String, String, String) -> Unit // Name, Student ID, Profile Picture
+) {
+    val inputImage = InputImage.fromFilePath(context, imageUri)
+    val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    recognizer.process(inputImage)
+        .addOnSuccessListener { visionText ->
+            val extractedText = visionText.text
+            if (!extractedText.contains("TARUMT", ignoreCase = true)) {
+                onResult("", "", "Error") // Not a valid TARUMT ID
+                return@addOnSuccessListener
+            }
+
+            var name = ""
+            var studentId = ""
+
+            // Loop through the text blocks and lines to extract Name and Student ID
+            for (block in visionText.textBlocks) {
+                for (line in block.lines) {
+                    val text = line.text
+                    if (Regex("[0-9]{2}").containsMatchIn(text)){
+                        studentId = text // Matches Student ID pattern
+                    } else if (text.contains(" ")) {
+                        name = text // Heuristics for Name
+                    }
+                }
+            }
+
+            // Return results
+            onResult(name, studentId, "Verified")
+        }
+        .addOnFailureListener { e ->
+            onResult("", "", "Error" ) // Failed to process image
+        }
+}
+
+fun detectFaceFromIdCard(
+    idCardBitmap: Bitmap,
+    onResult: (Bitmap?) -> Unit
+) {
+    val options = FaceDetectorOptions.Builder()
+        .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+        .setContourMode(FaceDetectorOptions.CONTOUR_MODE_NONE)
+        .build()
+
+    val detector = FaceDetection.getClient(options)
+    val image = InputImage.fromBitmap(idCardBitmap, 0)
+
+    detector.process(image)
+        .addOnSuccessListener { faces ->
+            if (faces.isNotEmpty()) {
+                val face = faces[0].boundingBox
+
+                // Crop the face region
+                val faceBitmap = Bitmap.createBitmap(
+                    idCardBitmap,
+                    face.left.coerceAtLeast(0),
+                    face.top.coerceAtLeast(0),
+                    face.width().coerceAtMost(idCardBitmap.width),
+                    face.height().coerceAtMost(idCardBitmap.height)
+                )
+                onResult(faceBitmap)
+            } else {
+                onResult(null) // No face detected
+            }
+        }
+        .addOnFailureListener {
+            onResult(null) // Handle error
+        }
+}
+
+@Composable
+fun SignUpScreen(navController: NavController, name: String, studentId: String) {
+    var email by remember { mutableStateOf("") }
+    var phoneNumber by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var gender by remember { mutableStateOf("M") } // Default to "M"
+    var isEmailValid by remember { mutableStateOf(true) }
+    var isPhoneValid by remember { mutableStateOf(true) }
+    var userName by remember { mutableStateOf(name) }
+    var userid by remember { mutableStateOf(studentId.replace('O', '0')) }
+    val context = LocalContext.current
+    val firestore = Firebase.firestore // Ensure Firebase Firestore is set up correctly
+    val firebaseAuth = FirebaseAuth.getInstance() // Firebase Authentication instance
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "2. Fill in Additional Information",
+            fontWeight = FontWeight.Bold,
+            fontSize = 20.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedTextField(
+            value = userName,
+            onValueChange = {
+                userName = it.uppercase()
+            },
+            label = { Text("Name") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedTextField(
+            value = userid,
+            onValueChange = {
+                userid = it
+            },
+            label = { Text("Student ID") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        // Email Field
+        OutlinedTextField(
+            value = email,
+            onValueChange = {
+                email = it
+                isEmailValid = email.endsWith("tarc.edu.my")
+            },
+            label = { Text("Email") },
+            isError = !isEmailValid,
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (!isEmailValid) {
+            Text(text = "Only email ending with tarc.edu.my is accepted", color = Color.Red, fontSize = 12.sp)
+        }
+
+        // Phone Number Field
+        OutlinedTextField(
+            value = phoneNumber,
+            onValueChange = {
+                phoneNumber = it
+                isPhoneValid = phoneNumber.startsWith("01") && phoneNumber.length <= 11
+            },
+            label = { Text("Phone Number") },
+            isError = !isPhoneValid,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (!isPhoneValid) {
+            Text(text = "Invalid Malaysian phone number", color = Color.Red, fontSize = 12.sp)
+        }
+
+        // Password Field
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it },
+            label = { Text("Password") },
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Gender Selection (Switch)
+        Text(text = "Gender", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            Row(
+                modifier = Modifier.clickable { gender = "M" },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(
+                    selected = gender == "M",
+                    onClick = { gender = "M" }
+                )
+                Text(text = "Male")
+            }
+            Row(
+                modifier = Modifier.clickable { gender = "F" },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(
+                    selected = gender == "F",
+                    onClick = { gender = "F" }
+                )
+                Text(text = "Female")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Sign Up Button
+        Button(
+            onClick = {
+                // Generate a unique user identifier
+                val uniqueUserId = firestore.collection("users").document().id
+
+                if (isEmailValid && isPhoneValid && userName.isNotEmpty() && userid.isNotEmpty()) {
+                    // Create User in Firebase Authentication
+                    firebaseAuth.createUserWithEmailAndPassword(email, password)
+                        .addOnCompleteListener { task ->
+                            if (task.isSuccessful) {
+                                // Get the Firebase user ID
+                                val firebaseUserId = task.result?.user?.uid
+
+                                // Save user data to Firestore
+                                val userData = hashMapOf(
+                                    "firebaseUserId" to firebaseUserId, // Firebase Authentication user ID
+                                    "name" to userName,
+                                    "studentId" to userid,
+                                    "email" to email,
+                                    "phoneNumber" to phoneNumber,
+                                    "gender" to gender
+                                )
+                                firestore.collection("users")
+                                    .add(userData)
+                                    .addOnSuccessListener {
+                                        Toast.makeText(context, "User Registered Successfully", Toast.LENGTH_SHORT).show()
+                                        navController.navigate("home")
+                                    }
+                                    .addOnFailureListener { e ->
+                                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                            }else {
+                                // Show error if Firebase Authentication failed
+                                Toast.makeText(context, "Error: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                } else {
+                    Toast.makeText(context, "Please fill in all fields correctly", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            //colors = ButtonDefaults.buttonColors(backgroundColor = Color.Blue)
+        ) {
+            Text(text = "Sign Up", color = Color.White)
+        }
+    }
+}
+
+
+
