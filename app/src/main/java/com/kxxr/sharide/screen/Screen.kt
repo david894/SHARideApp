@@ -3,13 +3,16 @@ package com.kxxr.sharide.screen
 import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.MediaStore
+import android.util.Base64
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -54,6 +57,9 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.kxxr.sharide.R
 import kotlinx.coroutines.delay
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
 
 @Composable
 fun AppNavHost(firebaseAuth: FirebaseAuth) {
@@ -64,12 +70,14 @@ fun AppNavHost(firebaseAuth: FirebaseAuth) {
         composable("login") { LoginScreen(navController, firebaseAuth) }
         composable("signup") { SignupIntroScreen(navController) }
         composable("signup1") { IdVerificationScreen(navController) }
-        composable("signupScreen/{name}/{studentId}") { backStackEntry ->
-                val name = backStackEntry.arguments?.getString("name") ?: ""
-                val studentId = backStackEntry.arguments?.getString("studentId") ?: ""
-                SignUpScreen(navController, name, studentId)
+        composable("signupScreen/{name}/{studentId}/{imagePath}") { backStackEntry ->
+            val name = backStackEntry.arguments?.getString("name").orEmpty()
+            val studentId = backStackEntry.arguments?.getString("studentId").orEmpty()
+            val imagePath = Uri.decode(backStackEntry.arguments?.getString("imagePath").orEmpty())
+
+            SignUpScreen(navController, name, studentId, imagePath)
         }
-        composable("signupFailed") { IntroScreen(navController) }
+        composable("signupFailed") { UnableToVerifyScreen(navController) }
         // Add more screens like SignUp if needed
     }
 }
@@ -636,6 +644,7 @@ fun IdVerificationScreen(navController: NavController) {
     var validTARUMT by remember { mutableStateOf("") }
     val context = LocalContext.current
     var profilePicture by remember { mutableStateOf<Bitmap?>(null) }
+    var filePath by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -683,6 +692,10 @@ fun IdVerificationScreen(navController: NavController) {
                 if (faceBitmap != null) {
                     // Save the face image
                     profilePicture = faceBitmap
+                    // Save the face image to cache
+                    filePath = saveBitmapToCache(context, faceBitmap, "profile_picture.png")
+                }else{
+                    filePath = "Error"
                 }
             }
             extractInfoFromIdCard(context, uri) { extractedName, extractedId, TARUMT ->
@@ -691,11 +704,13 @@ fun IdVerificationScreen(navController: NavController) {
                 validTARUMT = TARUMT
             }
         }
-        if(validTARUMT == "Verified"){
+        if(validTARUMT == "Verified" && filePath != ""){
             validTARUMT = ""
-            navController.navigate("signupScreen/$name/$studentId")
-        }else if(validTARUMT == "Error"){
+            val encodedFilePath = Uri.encode(filePath) // Encode the file path
+            navController.navigate("signupScreen/$name/$studentId/$encodedFilePath")
+        }else if(validTARUMT == "Error" || filePath == "Error"){
             validTARUMT = ""
+            filePath = ""
             navController.navigate("signupFailed")
         }
         Text(
@@ -705,13 +720,13 @@ fun IdVerificationScreen(navController: NavController) {
         )
         Spacer(modifier = Modifier.height(16.dp))
 
-        profilePicture?.let {
-            Image(bitmap = it.asImageBitmap(), contentDescription = null, modifier = Modifier.size(150.dp))
-        }
-        Text(text = "Name: $name", fontSize = 16.sp)
-        Text(text = "Student ID: $studentId", fontSize = 16.sp)
+//        profilePicture?.let {
+//            Image(bitmap = it.asImageBitmap(), contentDescription = null, modifier = Modifier.size(150.dp))
+//        }
+//        Text(text = "Student ID: $studentId", fontSize = 16.sp)
     }
 }
+
 @Composable
 fun UploadIdButton(onImageSelected: (Uri) -> Unit) {
     val launcher = rememberLauncherForActivityResult(
@@ -754,9 +769,9 @@ fun extractInfoFromIdCard(
             for (block in visionText.textBlocks) {
                 for (line in block.lines) {
                     val text = line.text
-                    if (Regex("[0-9]{2}").containsMatchIn(text)){
+                    if (Regex("[0-9]{2}[A-z]{1}").containsMatchIn(text)){
                         studentId = text // Matches Student ID pattern
-                    } else if (text.contains(" ")) {
+                    } else if (text.contains(" ") && !Regex("\\d").containsMatchIn(text)) {
                         name = text // Heuristics for Name
                     }
                 }
@@ -805,8 +820,21 @@ fun detectFaceFromIdCard(
         }
 }
 
+fun saveBitmapToCache(context: Context, bitmap: Bitmap, fileName: String): String {
+    // Create a file in the cache directory
+    val cacheDir = context.cacheDir
+    val file = File(cacheDir, fileName)
+
+    FileOutputStream(file).use { outputStream ->
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream) // Save as PNG
+        outputStream.flush()
+    }
+
+    return file.absolutePath // Return the file path for later use
+}
+
 @Composable
-fun SignUpScreen(navController: NavController, name: String, studentId: String) {
+fun SignUpScreen(navController: NavController, name: String, studentId: String, imagePath: String) {
     var email by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -818,6 +846,13 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String) 
     val context = LocalContext.current
     val firestore = Firebase.firestore // Ensure Firebase Firestore is set up correctly
     val firebaseAuth = FirebaseAuth.getInstance() // Firebase Authentication instance
+
+//     Load Bitmap from the file path
+    val profilePicture: Bitmap? = if (imagePath.isNotEmpty()) {
+        BitmapFactory.decodeFile(File(imagePath).absolutePath)
+    } else {
+        null
+    }
 
     Column(
         modifier = Modifier
@@ -832,14 +867,32 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String) 
             fontSize = 20.sp,
             textAlign = TextAlign.Center
         )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(36.dp))
+
+        if (profilePicture != null) {
+            Image(
+                bitmap = profilePicture.asImageBitmap(),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(150.dp)
+                    .border(5.dp, Color.Gray)
+            )
+        }
+        Spacer(modifier = Modifier.height(26.dp))
+
         OutlinedTextField(
             value = userName,
             onValueChange = {
                 userName = it.uppercase()
             },
-            label = { Text("Name") },
-            modifier = Modifier.fillMaxWidth()
+            label = { Text("Name", color = Color.Black) },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
         )
         OutlinedTextField(
             value = userid,
@@ -847,7 +900,13 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String) 
                 userid = it
             },
             label = { Text("Student ID") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
         )
         // Email Field
         OutlinedTextField(
@@ -858,7 +917,13 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String) 
             },
             label = { Text("Email") },
             isError = !isEmailValid,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
         )
         if (!isEmailValid) {
             Text(text = "Only email ending with tarc.edu.my is accepted", color = Color.Red, fontSize = 12.sp)
@@ -874,7 +939,13 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String) 
             label = { Text("Phone Number") },
             isError = !isPhoneValid,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
         )
         if (!isPhoneValid) {
             Text(text = "Invalid Malaysian phone number", color = Color.Red, fontSize = 12.sp)
@@ -886,38 +957,58 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String) 
             onValueChange = { password = it },
             label = { Text("Password") },
             visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
         )
+        Text(text = "Contain at least 6 alphabet")
 
         Spacer(modifier = Modifier.height(16.dp))
 
         // Gender Selection (Switch)
-        Text(text = "Gender", fontSize = 16.sp, fontWeight = FontWeight.Medium)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.Start // Align everything to the start
         ) {
+            Text(text = "Gender", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Spacer(modifier = Modifier.height(8.dp))
+
             Row(
-                modifier = Modifier.clickable { gender = "M" },
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(50.dp) // Space options evenly
             ) {
-                RadioButton(
-                    selected = gender == "M",
-                    onClick = { gender = "M" }
-                )
-                Text(text = "Male")
-            }
-            Row(
-                modifier = Modifier.clickable { gender = "F" },
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                RadioButton(
-                    selected = gender == "F",
-                    onClick = { gender = "F" }
-                )
-                Text(text = "Female")
+                Row(
+                    modifier = Modifier.clickable { gender = "M" },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = gender == "M",
+                        onClick = { gender = "M" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = Color.Blue,
+                            unselectedColor = Color.Gray
+                        )
+                    )
+                    Text(text = "Male")
+                }
+                Row(
+                    modifier = Modifier.clickable { gender = "F" },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = gender == "F",
+                        onClick = { gender = "F" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = Color.Blue,
+                            unselectedColor = Color.Gray
+                        )
+                    )
+                    Text(text = "Female")
+                }
             }
         }
 
@@ -964,13 +1055,70 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String) 
                     Toast.makeText(context, "Please fill in all fields correctly", Toast.LENGTH_SHORT).show()
                 }
             },
-            modifier = Modifier.fillMaxWidth(),
-            //colors = ButtonDefaults.buttonColors(backgroundColor = Color.Blue)
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
         ) {
             Text(text = "Sign Up", color = Color.White)
         }
     }
 }
 
+@Composable
+fun UnableToVerifyScreen(navController: NavController) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Unable to Verify",
+            fontWeight = FontWeight.Bold,
+            fontSize = 24.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Image(
+            painter = painterResource(id = R.drawable.error), // Replace with your error image resource
+            contentDescription = "Error Icon",
+            modifier = Modifier.size(100.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Your ID couldn't be verified at the moment. Please ensure the ID is TAR UMT ID and try again later or contact our customer service for assistance.",
+            fontSize = 16.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(modifier = Modifier.height(34.dp))
+
+        // "Try Again" Button
+        Button(
+            onClick = {
+                navController.navigate("signup1")
+            }, // Navigate to the verification screen
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+        ) {
+            Text(text = "Try Again", color = Color.White)
+        }
+        //Spacer(modifier = Modifier.height(1.dp))
+
+        // "Contact Customer Service" Button
+        TextButton(
+            onClick = { /* Navigate to customer service or open email/phone */ },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = "Contact Customer Service", color = Color.Blue, fontSize = 16.sp)
+        }
+    }
+}
 
 
