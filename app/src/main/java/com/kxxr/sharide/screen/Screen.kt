@@ -78,6 +78,7 @@ fun AppNavHost(firebaseAuth: FirebaseAuth) {
             SignUpScreen(navController, name, studentId, imagePath)
         }
         composable("signupFailed") { UnableToVerifyScreen(navController) }
+        composable("MainUI") {  Testing123(name = "Hello")}
         // Add more screens like SignUp if needed
     }
 }
