@@ -4,9 +4,12 @@ import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.provider.MediaStore
 import android.util.Base64
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,9 +18,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Email
@@ -47,42 +52,126 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.firebase.Firebase
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.firestore
+import com.google.firebase.storage.FirebaseStorage
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.kxxr.sharide.R
+import com.kxxr.sharide.logic.NetworkViewModel
 import kotlinx.coroutines.delay
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.util.UUID
 
 @Composable
-fun AppNavHost(firebaseAuth: FirebaseAuth) {
+fun AppNavHost(firebaseAuth: FirebaseAuth, networkViewModel: NetworkViewModel) {
     val navController = rememberNavController()
+    val isConnected by networkViewModel.isConnected.collectAsState(initial = true) // Observe connectivity
 
-    NavHost(navController = navController, startDestination = "intro") {
-        composable("intro") { IntroScreen(navController) }
-        composable("login") { LoginScreen(navController, firebaseAuth) }
-        composable("signup") { SignupIntroScreen(navController) }
-        composable("signup1") { IdVerificationScreen(navController) }
-        composable("signupScreen/{name}/{studentId}/{imagePath}") { backStackEntry ->
-            val name = backStackEntry.arguments?.getString("name").orEmpty()
-            val studentId = backStackEntry.arguments?.getString("studentId").orEmpty()
-            val imagePath = Uri.decode(backStackEntry.arguments?.getString("imagePath").orEmpty())
+    if (!isConnected) {
+        // Show the "No Internet Connection" screen
+        NoInternetScreen(onRetry = { })
+    }else{
+        // Determine the start destination based on user login status
+        val startDestination = if (firebaseAuth.currentUser != null) "home" else "intro"
 
-            SignUpScreen(navController, name, studentId, imagePath)
+        NavHost(navController = navController, startDestination = startDestination) {
+            composable("intro") { IntroScreen(navController) }
+            composable("login") { LoginScreen(navController, firebaseAuth) }
+            composable("signup") { SignupIntroScreen(navController) }
+            composable("signup1") { IdVerificationScreen(navController) }
+            composable("signupScreen/{name}/{studentId}/{imagePath}") { backStackEntry ->
+                val name = backStackEntry.arguments?.getString("name").orEmpty()
+                val studentId = backStackEntry.arguments?.getString("studentId").orEmpty()
+                val imagePath = Uri.decode(backStackEntry.arguments?.getString("imagePath").orEmpty())
+
+                SignUpScreen(navController, name, studentId, imagePath)
+            }
+            composable("signupFailed") { UnableToVerifyScreen(navController) }
+            composable("signupFailedFace") { UnableToVerifyFace(navController) }
+            composable("duplicateID"){UnableToVerifyDuplicateID(navController)}
+            composable("home") {  HomeScreen(firebaseAuth, navController) }
+            composable("customerServiceTARUMTID") { CustomerServiceScreen() }
+            // Add more screens like SignUp if needed
         }
-        composable("signupFailed") { UnableToVerifyScreen(navController) }
-        composable("MainUI") {  Testing123(name = "Hello")}
-        // Add more screens like SignUp if needed
     }
 }
 
+@Composable
+fun isConnectedToInternet(): Boolean {
+    val context = LocalContext.current
+    val connectivityManager = remember {
+        context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    }
+
+    val networkStatus = remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val network = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(network)
+        networkStatus.value = capabilities != null &&
+                (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR))
+    }
+
+    return networkStatus.value
+}
+
+@Composable
+fun NoInternetScreen(onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Oops! No Internet Connection",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(26.dp))
+        Image(
+            painter = painterResource(id = R.drawable.error), // Replace with your error image resource
+            contentDescription = "Error Icon",
+            modifier = Modifier.size(100.dp)
+        )
+        Spacer(modifier = Modifier.height(26.dp))
+        Text(
+            text = "This app requires an internet connection to work properly. Please check your connection and try again.",
+            textAlign = TextAlign.Center,
+            color = Color.Gray
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = "Tips that you could do:\n" +
+                    "1. Try turn on your mobile data\n" +
+                    "2. Connect to a WIFI\n" +
+                    "3. Turn off airplane mode",
+            color = Color.Gray,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp)
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)) {
+            Text("Try Again")
+        }
+    }
+}
 
 @Composable
 fun IntroScreen(navController: NavController) {
@@ -234,6 +323,7 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val context = LocalContext.current
+    var errormsg by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -253,7 +343,7 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
         Spacer(modifier = Modifier.height(40.dp))
 
         // Google Sign-In Logic
-        val token = "1023520031753-ivf24ojn18h5fe6i8beh838rhmmk6etb.apps.googleusercontent.com"
+        val token = "424509601720-l27h6t59dlr9dk2t8sto3tg6lu9a7tsv.apps.googleusercontent.com"
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken(token)
             .requestEmail()
@@ -270,56 +360,96 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
                     val account = task.getResult(ApiException::class.java)!!
                     val email = account.email
 
-                    // Check if the email ends with tarc.edu.my
                     if (email != null && email.endsWith("tarc.edu.my")) {
-                        val db = Firebase.firestore
+                        val googleCredential = GoogleAuthProvider.getCredential(account.idToken!!, null)
 
-                        // Check if the email exists in Firestore
-                        db.collection("users")
-                            .whereEqualTo("email", email)
-                            .get()
-                            .addOnSuccessListener { querySnapshot ->
-                                if (!querySnapshot.isEmpty) {
-                                    // User exists in Firestore, proceed with Firebase authentication
-                                    val credential = GoogleAuthProvider.getCredential(account.idToken!!, null)
-                                    firebaseAuth.signInWithCredential(credential)
-                                        .addOnCompleteListener { authTask ->
-                                            if (authTask.isSuccessful) {
-                                                val userName = firebaseAuth.currentUser?.displayName
-                                                Toast.makeText(context, "Welcome Back, $userName.", Toast.LENGTH_SHORT).show()
-                                            } else {
-                                                // Handle Firebase authentication failure
+                        // Sign in with Google
+                        firebaseAuth.signInWithCredential(googleCredential)
+                            .addOnCompleteListener { googleSignInTask ->
+                                if (googleSignInTask.isSuccessful) {
+                                    val firebaseUser = googleSignInTask.result?.user
+
+                                    if (firebaseUser != null) {
+                                        // Check existing sign-in methods
+                                        firebaseAuth.fetchSignInMethodsForEmail(email)
+                                            .addOnSuccessListener { result ->
+                                                val signInMethods = result.signInMethods
+
+                                                if (signInMethods.isNullOrEmpty()) {
+                                                    // No linked methods, link email/password
+                                                    val emailCredential = EmailAuthProvider.getCredential(email, "user_password")
+                                                    firebaseUser.linkWithCredential(emailCredential)
+                                                        .addOnCompleteListener { linkTask ->
+                                                            if (linkTask.isSuccessful) {
+                                                                Toast.makeText(
+                                                                    context,
+                                                                    "Successfully linked Email/Password with Google.",
+                                                                    Toast.LENGTH_SHORT
+                                                                ).show()
+                                                                navController.navigate("home")
+                                                            } else {
+                                                                if (firebaseAuth.currentUser != null){
+                                                                    navController.navigate("home")
+                                                                }else{
+                                                                    Toast.makeText(
+                                                                        context,
+                                                                        "Failed to link Email/Password: ${linkTask.exception?.message}",
+                                                                        Toast.LENGTH_SHORT
+                                                                    ).show()
+                                                                }
+                                                            }
+                                                        }
+                                                } else if (!signInMethods.contains(EmailAuthProvider.EMAIL_PASSWORD_SIGN_IN_METHOD)) {
+                                                    // Email/Password not linked yet
+                                                    val emailCredential = EmailAuthProvider.getCredential(email, "user_password")
+                                                    firebaseUser.linkWithCredential(emailCredential)
+                                                        .addOnCompleteListener { linkTask ->
+                                                            if (linkTask.isSuccessful) {
+                                                                Toast.makeText(
+                                                                    context,
+                                                                    "Successfully linked Email/Password with Google.",
+                                                                    Toast.LENGTH_SHORT
+                                                                ).show()
+                                                                navController.navigate("home")
+                                                            } else {
+                                                                Toast.makeText(
+                                                                    context,
+                                                                    "Failed to link Email/Password: ${linkTask.exception?.message}",
+                                                                    Toast.LENGTH_SHORT
+                                                                ).show()
+                                                            }
+                                                        }
+                                                } else {
+                                                    // Already linked, allow sign-in
+                                                    Toast.makeText(
+                                                        context,
+                                                        "Google Sign-In successful. Email/Password already linked.",
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                    navController.navigate("home")
+                                                }
+                                            }
+                                            .addOnFailureListener { e ->
                                                 Toast.makeText(
                                                     context,
-                                                    "Authentication failed: ${authTask.exception?.message}",
+                                                    "Failed to check linked methods: ${e.localizedMessage}",
                                                     Toast.LENGTH_SHORT
                                                 ).show()
                                             }
-                                        }
+                                    }
                                 } else {
-                                    // User does not exist in Firestore
                                     Toast.makeText(
                                         context,
-                                        "Access denied. Only registered users are allowed.",
+                                        "Google Sign-In failed: ${googleSignInTask.exception?.message}",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
                             }
-                            .addOnFailureListener { e ->
-                                // Handle Firestore query failure
-                                Toast.makeText(
-                                    context,
-                                    "Failed to verify user: ${e.localizedMessage}",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
                     } else {
-                        // Email does not end with tarc.edu.my
                         Toast.makeText(context, "Only tarc.edu.my emails are allowed.", Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: ApiException) {
-                    // Handle Google sign-in exception
-                    Toast.makeText(context, "Google sign in failed: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Google Sign-In failed: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -390,79 +520,54 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Forgot Password Text
+        //forgot password
         Text(
             text = "Forgot Password?",
             color = Color.Blue,
             modifier = Modifier
                 .align(Alignment.End)
                 .clickable {
-                    if (email.isNotEmpty()) {
-                        // Check if email exists in Firebase
+                    val trimmedEmail = email.trim() // Remove unnecessary spaces
+                    if (trimmedEmail.isNotEmpty()) {
+                        Toast
+                            .makeText(context, "Checking email...", Toast.LENGTH_SHORT)
+                            .show()
                         firebaseAuth
-                            .fetchSignInMethodsForEmail(email)
-                            .addOnCompleteListener { fetchTask ->
-                                if (fetchTask.isSuccessful) {
-                                    val signInMethods = fetchTask.result?.signInMethods
-                                    if (signInMethods.isNullOrEmpty()) {
-                                        // No user found with this email
-                                        Toast
-                                            .makeText(
-                                                context,
-                                                "No user found with this email!",
-                                                Toast.LENGTH_LONG
-                                            )
-                                            .show()
-                                    } else {
-                                        // Email exists, send reset link
-                                        firebaseAuth
-                                            .sendPasswordResetEmail(email)
-                                            .addOnCompleteListener { resetTask ->
-                                                if (resetTask.isSuccessful) {
-                                                    Toast
-                                                        .makeText(
-                                                            context,
-                                                            "Password reset email sent!",
-                                                            Toast.LENGTH_LONG
-                                                        )
-                                                        .show()
-                                                } else {
-                                                    Toast
-                                                        .makeText(
-                                                            context,
-                                                            "Error: ${resetTask.exception?.message}",
-                                                            Toast.LENGTH_LONG
-                                                        )
-                                                        .show()
-                                                }
-                                            }
-                                    }
-                                } else {
-                                    // Error while fetching sign-in methods
+                            .sendPasswordResetEmail(trimmedEmail)
+                            .addOnCompleteListener { resetTask ->
+                                if (resetTask.isSuccessful) {
                                     Toast
                                         .makeText(
                                             context,
-                                            "Error: ${fetchTask.exception?.message}",
+                                            "Password reset email sent successfully!",
+                                            Toast.LENGTH_LONG
+                                        )
+                                        .show()
+                                } else {
+                                    Log.e(
+                                        "ResetPassword",
+                                        "Error sending reset email",
+                                        resetTask.exception
+                                    )
+                                    Toast
+                                        .makeText(
+                                            context,
+                                            "Error: ${resetTask.exception?.message}",
                                             Toast.LENGTH_LONG
                                         )
                                         .show()
                                 }
                             }
-                    } else {
-                        Toast
-                            .makeText(context, "Enter your email to proceed!", Toast.LENGTH_LONG)
-                            .show()
                     }
                 }
         )
-
 
         Spacer(modifier = Modifier.height(24.dp))
 
         // Login Button
         Button(
             onClick = {
-                if(email.isNotEmpty() && password.isNotEmpty()){
+                if (email.isNotEmpty() && password.isNotEmpty()) {
                     // Trigger Firebase email/password authentication
                     firebaseAuth.signInWithEmailAndPassword(email, password)
                         .addOnCompleteListener { task ->
@@ -471,11 +576,25 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
                                 // Navigate to the next screen
                                 navController.navigate("home")
                             } else {
-                                Toast.makeText(context, "Invalid Credentials ! Try Again", Toast.LENGTH_LONG).show()
+                                // Check if the error is due to invalid credentials caused by linking with Google
+                                val exception = task.exception
+                                if (exception is FirebaseAuthInvalidUserException || exception is FirebaseAuthInvalidCredentialsException) {
+                                    // Handle invalid credentials
+                                    errormsg = "Invalid Credentials! If you previously linked with Google, please reset your password to continue."
+
+                                    Toast.makeText(
+                                        context,
+                                        "Invalid Credential! Try Again",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+
+                                } else {
+                                    Toast.makeText(context, "Login failed: ${exception?.localizedMessage}", Toast.LENGTH_LONG).show()
+                                }
                             }
                         }
-                }else{
-                    Toast.makeText(context, "Fill in Your Details To Proceed!", Toast.LENGTH_LONG).show()
+                } else {
+                    errormsg = "Please fill in all fields to proceed!"
                 }
             },
             modifier = Modifier
@@ -504,6 +623,10 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
                 }
             )
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(text = "$errormsg",color = Color.Red , textAlign = TextAlign.Center)
     }
 }
 
@@ -709,10 +832,14 @@ fun IdVerificationScreen(navController: NavController) {
             validTARUMT = ""
             val encodedFilePath = Uri.encode(filePath) // Encode the file path
             navController.navigate("signupScreen/$name/$studentId/$encodedFilePath")
-        }else if(validTARUMT == "Error" || filePath == "Error"){
+        }else if(validTARUMT == "Error"){
             validTARUMT = ""
             filePath = ""
             navController.navigate("signupFailed")
+        }else if(filePath == "Error"){
+            validTARUMT = ""
+            filePath = ""
+            navController.navigate("signupFailedFace")
         }
         Text(
             text = "All information is processed by AI and store securely in our database.",
@@ -898,7 +1025,7 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
         OutlinedTextField(
             value = userid,
             onValueChange = {
-                userid = it
+                userid = it.uppercase()
             },
             label = { Text("Student ID") },
             modifier = Modifier.fillMaxWidth(),
@@ -1018,39 +1145,75 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
         // Sign Up Button
         Button(
             onClick = {
-                // Generate a unique user identifier
-                val uniqueUserId = firestore.collection("users").document().id
+// Validate form inputs
+                if (isEmailValid && isPhoneValid && userName.isNotEmpty() && userid.isNotEmpty() && profilePicture != null) {
+                    // Check for duplicate studentId in Firestore
+                    firestore.collection("users")
+                        .whereEqualTo("studentId", userid)
+                        .get()
+                        .addOnSuccessListener { querySnapshot ->
+                            if (querySnapshot.isEmpty) {
+                                // No duplicate studentId, proceed with sign-up
+                                firebaseAuth.createUserWithEmailAndPassword(email, password)
+                                    .addOnCompleteListener { task ->
+                                        if (task.isSuccessful) {
+                                            // Get the Firebase user ID
+                                            val firebaseUserId = task.result?.user?.uid
 
-                if (isEmailValid && isPhoneValid && userName.isNotEmpty() && userid.isNotEmpty()) {
-                    // Create User in Firebase Authentication
-                    firebaseAuth.createUserWithEmailAndPassword(email, password)
-                        .addOnCompleteListener { task ->
-                            if (task.isSuccessful) {
-                                // Get the Firebase user ID
-                                val firebaseUserId = task.result?.user?.uid
+                                            // Upload profile picture to Firebase Storage
+                                            val storageReference = FirebaseStorage.getInstance()
+                                                .reference
+                                                .child("ProfilePic/$firebaseUserId.png")
 
-                                // Save user data to Firestore
-                                val userData = hashMapOf(
-                                    "firebaseUserId" to firebaseUserId, // Firebase Authentication user ID
-                                    "name" to userName,
-                                    "studentId" to userid,
-                                    "email" to email,
-                                    "phoneNumber" to phoneNumber,
-                                    "gender" to gender
-                                )
-                                firestore.collection("users")
-                                    .add(userData)
-                                    .addOnSuccessListener {
-                                        Toast.makeText(context, "User Registered Successfully", Toast.LENGTH_SHORT).show()
-                                        navController.navigate("home")
+                                            val byteArrayOutputStream = ByteArrayOutputStream()
+                                            profilePicture.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
+                                            val profilePicData = byteArrayOutputStream.toByteArray()
+
+                                            val uploadTask = storageReference.putBytes(profilePicData)
+                                            uploadTask.addOnSuccessListener {
+                                                // Get the download URL for the uploaded profile picture
+                                                storageReference.downloadUrl.addOnSuccessListener { uri ->
+                                                    val profileImageUrl = uri.toString()
+
+                                                    // Save user data to Firestore
+                                                    val userData = hashMapOf(
+                                                        "firebaseUserId" to firebaseUserId, // Firebase Authentication user ID
+                                                        "name" to userName,
+                                                        "studentId" to userid,
+                                                        "email" to email,
+                                                        "phoneNumber" to phoneNumber,
+                                                        "gender" to gender,
+                                                        "profileImageUrl" to profileImageUrl // Save URL of the uploaded image
+                                                    )
+                                                    firestore.collection("users")
+                                                        .add(userData)
+                                                        .addOnSuccessListener {
+                                                            Toast.makeText(context, "User Registered Successfully", Toast.LENGTH_SHORT).show()
+                                                            navController.navigate("home")
+                                                        }
+                                                        .addOnFailureListener { e ->
+                                                            Toast.makeText(context, "Error saving user data: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                }.addOnFailureListener { e ->
+                                                    Toast.makeText(context, "Error getting image URL: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }.addOnFailureListener { e ->
+                                                Toast.makeText(context, "Error uploading profile picture: ${e.message}", Toast.LENGTH_SHORT).show()
+                                            }
+                                        } else {
+                                            // Show error if Firebase Authentication failed
+                                            Toast.makeText(context, "Error: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
+                                        }
                                     }
-                                    .addOnFailureListener { e ->
-                                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                                    }
-                            }else {
-                                // Show error if Firebase Authentication failed
-                                Toast.makeText(context, "Error: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
+                            } else {
+                                // Duplicate studentId found
+                                navController.navigate("duplicateID")
+                                Toast.makeText(context, "Student ID already exists. Please use a different ID.", Toast.LENGTH_SHORT).show()
                             }
+                        }
+                        .addOnFailureListener { e ->
+                            // Handle Firestore query failure
+                            Toast.makeText(context, "Error checking Student ID: ${e.message}", Toast.LENGTH_SHORT).show()
                         }
                 } else {
                     Toast.makeText(context, "Please fill in all fields correctly", Toast.LENGTH_SHORT).show()
@@ -1114,7 +1277,7 @@ fun UnableToVerifyScreen(navController: NavController) {
 
         // "Contact Customer Service" Button
         TextButton(
-            onClick = { /* Navigate to customer service or open email/phone */ },
+            onClick = { navController.navigate("customerServiceTARUMTID") },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(text = "Contact Customer Service", color = Color.Blue, fontSize = 16.sp)
@@ -1122,4 +1285,449 @@ fun UnableToVerifyScreen(navController: NavController) {
     }
 }
 
+@Composable
+fun UnableToVerifyFace(navController: NavController) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Unable to extract face from ID",
+            fontWeight = FontWeight.Bold,
+            fontSize = 24.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Image(
+            painter = painterResource(id = R.drawable.profile_error), // Replace with your error image resource
+            contentDescription = "Error Icon",
+            modifier = Modifier.size(100.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Your ID couldn't be verified at the moment. Please ensure your face on ID is sharp and clear and without obstacle. Try again later or contact our customer service for assistance.",
+            fontSize = 16.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(modifier = Modifier.height(34.dp))
+
+        // "Try Again" Button
+        Button(
+            onClick = {
+                navController.navigate("signup1")
+            }, // Navigate to the verification screen
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+        ) {
+            Text(text = "Try Again", color = Color.White)
+        }
+        //Spacer(modifier = Modifier.height(1.dp))
+
+        // "Contact Customer Service" Button
+        TextButton(
+            onClick = { navController.navigate("customerServiceTARUMTID") },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = "Contact Customer Service", color = Color.Blue, fontSize = 16.sp)
+        }
+    }
+}
+@Composable
+fun UnableToVerifyDuplicateID(navController: NavController) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Duplicated ID Detected",
+            fontWeight = FontWeight.Bold,
+            fontSize = 24.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Image(
+            painter = painterResource(id = R.drawable.error), // Replace with your error image resource
+            contentDescription = "Error Icon",
+            modifier = Modifier.size(100.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Your ID couldn't be verified at the moment. Please ensure the student ID is typed correctly and try again later. \n\n SHARide only allow one student ID per account, Contact our customer service for assistance.",
+            fontSize = 16.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(modifier = Modifier.height(34.dp))
+
+        // "Try Again" Button
+        Button(
+            onClick = {
+                navController.navigate("signup1")
+            }, // Navigate to the verification screen
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+        ) {
+            Text(text = "Try Again", color = Color.White)
+        }
+        //Spacer(modifier = Modifier.height(1.dp))
+
+        // "Contact Customer Service" Button
+        TextButton(
+            onClick = { navController.navigate("customerServiceTARUMTID") },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = "Contact Customer Service", color = Color.Blue, fontSize = 16.sp)
+        }
+    }
+}
+
+@Composable
+fun CustomerServiceScreen() {
+    val context = LocalContext.current
+    val firebaseStorage = FirebaseStorage.getInstance()
+    val firestore = Firebase.firestore // Ensure Firebase Firestore is set up correctly
+
+    // User inputs
+    var name by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var studentId by remember { mutableStateOf("") }
+    var gender by remember { mutableStateOf("M") } // Default to "M"
+
+    // Image upload URIs
+    var studentIdUri by remember { mutableStateOf<Uri?>(null) }
+    var selfieUri by remember { mutableStateOf<Uri?>(null) }
+
+    var isEmailValid by remember { mutableStateOf(true) }
+    var isPhoneValid by remember { mutableStateOf(true) }
+
+    // Generate a unique case ID
+    val caseId = UUID.randomUUID().toString()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()), // Enable scrolling
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Title
+        Spacer(modifier = Modifier.height(36.dp))
+
+        Text("Manual ID Verification",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("Please Fill in all the field to submit the form")
+        Spacer(modifier = Modifier.height(36.dp))
+
+        // Personal Details
+        Text("1. Personal Details",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it.uppercase() },
+            label = { Text("Your Name") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = studentId,
+            onValueChange = { studentId = it.uppercase() },
+            label = { Text("Your Student ID (Eg.22WMR10099)") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = email,
+            onValueChange = {
+                email = it
+                isEmailValid = email.endsWith("tarc.edu.my")
+            },
+            label = { Text("Your Email") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
+        )
+        if (!isEmailValid) {
+            Text(text = "Only email ending with tarc.edu.my is accepted", color = Color.Red, fontSize = 12.sp)
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = phone,
+            onValueChange = {
+                phone = it
+                isPhoneValid = phone.startsWith("01") && phone.length <= 11
+            },
+            label = { Text("Your Phone") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
+        )
+        if (!isPhoneValid) {
+            Text(text = "Invalid Malaysian phone number", color = Color.Red, fontSize = 12.sp)
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Gender Selection (Switch)
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.Start // Align everything to the start
+        ) {
+            Text(text = "Gender", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(50.dp) // Space options evenly
+            ) {
+                Row(
+                    modifier = Modifier.clickable { gender = "M" },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = gender == "M",
+                        onClick = { gender = "M" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = Color.Blue,
+                            unselectedColor = Color.Gray
+                        )
+                    )
+                    Text(text = "Male")
+                }
+                Row(
+                    modifier = Modifier.clickable { gender = "F" },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = gender == "F",
+                        onClick = { gender = "F" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = Color.Blue,
+                            unselectedColor = Color.Gray
+                        )
+                    )
+                    Text(text = "Female")
+                }
+            }
+        }
+        if(name.isNotEmpty() && phone.isNotEmpty() && email.isNotEmpty() && studentId.isNotEmpty()){
+            Text(text = "Done",
+                fontWeight = FontWeight.Bold,
+                color = Color.Black,
+                modifier = Modifier
+                    .background(color = Color.Green)
+                    .padding(10.dp)
+                    .fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Upload ID
+        Text("2. Upload ID",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text("Please Upload the front of your TARUMT ID for verification purpose", modifier = Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(8.dp))
+        Image(
+            painter = painterResource(id = R.drawable.tarumt_id),
+            contentDescription = "TARUMT ID image",
+            modifier = Modifier
+                .fillMaxWidth()
+                .size(200.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Please Make Sure:\n" +
+                "1.No obstacle or blur image of the ID\n" +
+                "2.The Whole ID is visible and center in the picture ",
+            modifier = Modifier.fillMaxWidth())
+        UploadIdButton { uri ->
+            studentIdUri =  uri
+        }
+        if(studentIdUri != null){
+            Text(text = "Done",
+                fontWeight = FontWeight.Bold,
+                color = Color.Black,
+                modifier = Modifier
+                    .background(color = Color.Green)
+                    .padding(10.dp)
+                    .fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Upload Selfie
+        Text("3. Selfie with your ID",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text("Please Upload your selfie with the ID", modifier = Modifier.fillMaxWidth())
+        //Spacer(modifier = Modifier.height(8.dp))
+        Image(
+            painter = painterResource(id = R.drawable.selfie_tarumt),
+            contentDescription = "TARUMT ID image",
+            modifier = Modifier
+                .fillMaxWidth()
+                .size(200.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Please Make Sure:\n" +
+                "1.No obstacle or blur image of the selfie\n" +
+                "2.The Whole Face and ID is visible and center in the picture ",
+            modifier = Modifier.fillMaxWidth())
+        UploadIdButton { uri ->
+            selfieUri =  uri
+        }
+        if(selfieUri != null){
+            Text(text = "Done",
+                fontWeight = FontWeight.Bold,
+                color = Color.Black,
+                modifier = Modifier
+                    .background(color = Color.Green)
+                    .padding(10.dp)
+                    .fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
+//      Submit Button
+        Button(
+            onClick = {
+                if (name.isNotEmpty() && phone.isNotEmpty() && email.isNotEmpty() && studentId.isNotEmpty() && studentIdUri != null && selfieUri != null) {
+                    uploadImagesAndSaveData(
+                        context = context,
+                        firestore = firestore,
+                        firebaseStorage = firebaseStorage,
+                        caseId = caseId,
+                        name = name,
+                        phone = phone,
+                        email = email,
+                        gender = gender,
+                        studentId = studentId,
+                        studentIdUri = studentIdUri!!,
+                        selfieUri = selfieUri!!
+                    )
+                } else {
+                    Toast.makeText(context, "Please fill all the fields and upload both images", Toast.LENGTH_LONG).show()
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+        ) {
+            Text("Submit")
+        }
+    }
+}
+
+private fun uploadImagesAndSaveData(
+    context: Context,
+    firestore: FirebaseFirestore,
+    firebaseStorage: FirebaseStorage,
+    caseId: String,
+    name: String,
+    phone: String,
+    email: String,
+    gender: String,
+    studentId: String,
+    studentIdUri: Uri,
+    selfieUri: Uri
+) {
+    val studentIdRef = firebaseStorage.reference.child("ID Case/$caseId/student_id.jpg")
+    val selfieRef = firebaseStorage.reference.child("ID Case/$caseId/selfie.jpg")
+
+    // Upload Student ID
+    studentIdRef.putFile(studentIdUri).addOnSuccessListener {
+        studentIdRef.downloadUrl.addOnSuccessListener { studentIdUrl ->
+            // Upload Selfie
+            selfieRef.putFile(selfieUri).addOnSuccessListener {
+                selfieRef.downloadUrl.addOnSuccessListener { selfieUrl ->
+                    // Save details to Firestore
+                    val userData = hashMapOf(
+                        "caseId" to caseId,
+                        "name" to name,
+                        "phone" to phone,
+                        "email" to email,
+                        "gender" to gender,
+                        "studentId" to studentId,
+                        "studentIdLink" to studentIdUrl.toString(),
+                        "selfieLink" to selfieUrl.toString(),
+                        "status" to "",
+                        "remark" to ""
+                    )
+                    firestore.collection("ID Case").document(caseId)
+                        .set(userData)
+                        .addOnSuccessListener {
+                            Toast.makeText(context, "Submitted Successfully", Toast.LENGTH_SHORT).show()
+                        }
+                        .addOnFailureListener { e ->
+                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                }
+            }.addOnFailureListener { e ->
+                Toast.makeText(context, "Error uploading selfie: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }.addOnFailureListener { e ->
+        Toast.makeText(context, "Error uploading ID: ${e.message}", Toast.LENGTH_SHORT).show()
+    }
+}
 

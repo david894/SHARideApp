@@ -10,13 +10,21 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.firebase.auth.FirebaseAuth
+import com.kxxr.sharide.logic.NetworkViewModel
 import com.kxxr.sharide.screen.AppNavHost
 import com.kxxr.sharide.screen.IntroScreen
+import com.kxxr.sharide.screen.NoInternetScreen
 import com.kxxr.sharide.ui.theme.SHARideTheme
+import dagger.hilt.android.AndroidEntryPoint
+import dagger.hilt.android.HiltAndroidApp
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,10 +37,23 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun ShareRideApp() {
+    // Get the NetworkViewModel instance using hiltViewModel
+    val networkViewModel: NetworkViewModel = hiltViewModel()
+
+    // Observe network state
+    val isConnected by networkViewModel.isConnected.collectAsState(initial = true)
+
     MaterialTheme {
-        AppNavHost(FirebaseAuth.getInstance())// Get Firebase Auth instance)
+        if (isConnected) {
+            AppNavHost(FirebaseAuth.getInstance(), networkViewModel)
+        } else {
+            // Show a no-internet connection screen
+            NoInternetScreen(onRetry = { /* Retry logic, if needed */ })
+        }
     }
 }
+
+
 
 @Composable
 fun Greeting(name: String, modifier: Modifier = Modifier) {

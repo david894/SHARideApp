@@ -1,41 +1,41 @@
 {
   "project_info": {
-    "project_number": "1023520031753",
-    "project_id": "sharide-v4",
-    "storage_bucket": "sharide-v4.firebasestorage.app"
+    "project_number": "424509601720",
+    "project_id": "todoapp-16e0c",
+    "storage_bucket": "todoapp-16e0c.appspot.com"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1023520031753:android:1f95e184c48abc738c64d8",
+        "mobilesdk_app_id": "1:424509601720:android:75aeea6001fc8b4873014d",
         "android_client_info": {
           "package_name": "com.kxxr.sharide"
         }
       },
       "oauth_client": [
         {
-          "client_id": "1023520031753-cicbbp4d0tpheor283f78al9ajgbfpdt.apps.googleusercontent.com",
+          "client_id": "424509601720-dd14m84vk6ru09b16uv02vesi6cm5p34.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.kxxr.sharide",
-            "certificate_hash": "dacb72d61d04dfb38534d4077ad9244f8a981922"
+            "certificate_hash": "3d1dea6f337b477ca47c6a50fe1c293493884dfe"
           }
         },
         {
-          "client_id": "1023520031753-ivf24ojn18h5fe6i8beh838rhmmk6etb.apps.googleusercontent.com",
+          "client_id": "424509601720-l27h6t59dlr9dk2t8sto3tg6lu9a7tsv.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyDQbg8NwOmnVxdBvmHinwWcN_R7xmxeaCY"
+          "current_key": "AIzaSyDoLSZBSTESpxzcM-K4PTp2NGKpzGvwRV4"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "1023520031753-ivf24ojn18h5fe6i8beh838rhmmk6etb.apps.googleusercontent.com",
+              "client_id": "424509601720-l27h6t59dlr9dk2t8sto3tg6lu9a7tsv.apps.googleusercontent.com",
               "client_type": 3
             }
           ]

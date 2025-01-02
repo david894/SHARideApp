@@ -56,7 +56,8 @@ dependencies {
     implementation ("com.google.mlkit:object-detection:17.0.0")
     implementation ("jp.co.cyberagent.android:gpuimage:2.1.0")
     implementation ("androidx.exifinterface:exifinterface:1.3.6")
-
+    implementation ("com.google.dagger:hilt-android:2.48")
+    implementation ("androidx.hilt:hilt-navigation-compose:1.0.0")
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -76,6 +77,7 @@ dependencies {
     implementation(libs.play.services.mlkit.face.detection)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
+    implementation(libs.firebase.storage.ktx)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
