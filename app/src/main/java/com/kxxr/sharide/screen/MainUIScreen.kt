@@ -84,6 +84,8 @@ fun HomeScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
                                     profileBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                                 }
                                 .addOnFailureListener { e ->
+                                    showDialog = false
+
                                     Toast.makeText(context, "Error fetching image: ${e.message}", Toast.LENGTH_SHORT).show()
                                 }
                         }
