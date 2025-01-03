@@ -57,8 +57,12 @@ fun HomeScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
     var profileImageUrl by remember { mutableStateOf("") }
     var profileBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
+    // Dialog visibility state
+    var showDialog by remember { mutableStateOf(false) }
+
     // Fetch user data from Firestore
     LaunchedEffect(Unit) {
+        showDialog = true
         currentUser?.uid?.let { userId ->
             firestore.collection("users")
                 .whereEqualTo("firebaseUserId", userId)
@@ -75,6 +79,8 @@ fun HomeScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
                             val storageReference = FirebaseStorage.getInstance().getReferenceFromUrl(profileImageUrl)
                             storageReference.getBytes(1024 * 1024) // Limit file size to 1MB
                                 .addOnSuccessListener { bytes ->
+                                    showDialog = false
+
                                     profileBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                                 }
                                 .addOnFailureListener { e ->
@@ -138,4 +144,6 @@ fun HomeScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
             Text(text = "Log Out", color = Color.White, fontSize = 16.sp)
         }
     }
+    // Show Loading Dialog
+    LoadingDialog(text = "Loading...",showDialog = showDialog, onDismiss = { showDialog = false })
 }

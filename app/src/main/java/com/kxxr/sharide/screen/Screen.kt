@@ -26,7 +26,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -41,9 +43,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -101,7 +106,8 @@ fun AppNavHost(firebaseAuth: FirebaseAuth, networkViewModel: NetworkViewModel) {
             composable("signupFailedFace") { UnableToVerifyFace(navController) }
             composable("duplicateID"){UnableToVerifyDuplicateID(navController)}
             composable("home") {  HomeScreen(firebaseAuth, navController) }
-            composable("customerServiceTARUMTID") { CustomerServiceScreen() }
+            composable("customerServiceTARUMTID") { CustomerServiceScreen(navController) }
+            composable("ReportSubmitted") { ReportSubmitted(navController) }
             // Add more screens like SignUp if needed
         }
     }
@@ -325,6 +331,12 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
     val context = LocalContext.current
     var errormsg by remember { mutableStateOf("") }
 
+    // Password TextField with Visibility Toggle
+    var passwordVisible by remember { mutableStateOf(false) }
+
+    // Dialog visibility state
+    var showDialog by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -512,10 +524,15 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
             onValueChange = { password = it },
             label = { Text("Password") },
             leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Password Icon") },
+            trailingIcon ={
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Image(painter = painterResource(id = R.drawable.hide ), contentDescription = "password visibility",modifier = Modifier.size(24.dp))
+                }
+            },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done, keyboardType = KeyboardType.Password),
-            visualTransformation = PasswordVisualTransformation()
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation()
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -568,19 +585,22 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
         Button(
             onClick = {
                 if (email.isNotEmpty() && password.isNotEmpty()) {
+                    showDialog = true
                     // Trigger Firebase email/password authentication
                     firebaseAuth.signInWithEmailAndPassword(email, password)
                         .addOnCompleteListener { task ->
                             if (task.isSuccessful) {
+                                showDialog = false
                                 Toast.makeText(context, "Login successful!", Toast.LENGTH_LONG).show()
                                 // Navigate to the next screen
                                 navController.navigate("home")
                             } else {
+                                showDialog = false
                                 // Check if the error is due to invalid credentials caused by linking with Google
                                 val exception = task.exception
                                 if (exception is FirebaseAuthInvalidUserException || exception is FirebaseAuthInvalidCredentialsException) {
                                     // Handle invalid credentials
-                                    errormsg = "Invalid Credentials! If you previously linked with Google, please reset your password to continue."
+                                    errormsg = "Invalid Credentials! \n If you previously linked with Google, please reset your password to continue."
 
                                     Toast.makeText(
                                         context,
@@ -628,6 +648,8 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
 
         Text(text = "$errormsg",color = Color.Red , textAlign = TextAlign.Center)
     }
+    // Show Loading Dialog
+    LoadingDialog(text="Logging in...",showDialog = showDialog, onDismiss = { showDialog = false })
 }
 
 @Composable
@@ -770,6 +792,8 @@ fun IdVerificationScreen(navController: NavController) {
     var profilePicture by remember { mutableStateOf<Bitmap?>(null) }
     var filePath by remember { mutableStateOf("") }
 
+    // Dialog visibility state
+    var showDialog by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -811,6 +835,7 @@ fun IdVerificationScreen(navController: NavController) {
         Spacer(modifier = Modifier.height(36.dp))
 
         UploadIdButton { uri ->
+            showDialog = true
             val originalBitmap = MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
             detectFaceFromIdCard(originalBitmap) { faceBitmap ->
                 if (faceBitmap != null) {
@@ -826,6 +851,9 @@ fun IdVerificationScreen(navController: NavController) {
                 name = extractedName
                 studentId = extractedId
                 validTARUMT = TARUMT
+            }
+            if(validTARUMT == "Verified" || validTARUMT == "Error"){
+                showDialog = false
             }
         }
         if(validTARUMT == "Verified" && filePath != ""){
@@ -848,10 +876,8 @@ fun IdVerificationScreen(navController: NavController) {
         )
         Spacer(modifier = Modifier.height(16.dp))
 
-//        profilePicture?.let {
-//            Image(bitmap = it.asImageBitmap(), contentDescription = null, modifier = Modifier.size(150.dp))
-//        }
-//        Text(text = "Student ID: $studentId", fontSize = 16.sp)
+        // Show Loading Dialog
+        LoadingDialog(text = "Extracting Data from ID...", showDialog = showDialog, onDismiss = { showDialog = false })
     }
 }
 
@@ -975,6 +1001,11 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
     val firestore = Firebase.firestore // Ensure Firebase Firestore is set up correctly
     val firebaseAuth = FirebaseAuth.getInstance() // Firebase Authentication instance
 
+    // Dialog visibility state
+    var showDialog by remember { mutableStateOf(false) }
+    // Password TextField with Visibility Toggle
+    var passwordVisible by remember { mutableStateOf(false) }
+
 //     Load Bitmap from the file path
     val profilePicture: Bitmap? = if (imagePath.isNotEmpty()) {
         BitmapFactory.decodeFile(File(imagePath).absolutePath)
@@ -1046,6 +1077,7 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
             label = { Text("Email") },
             isError = !isEmailValid,
             modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done, keyboardType = KeyboardType.Email),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color.Blue, // Blue border when focused
                 unfocusedBorderColor = Color.Gray,
@@ -1066,7 +1098,7 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
             },
             label = { Text("Phone Number") },
             isError = !isPhoneValid,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done, keyboardType = KeyboardType.Phone),
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color.Blue, // Blue border when focused
@@ -1084,7 +1116,12 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
             value = password,
             onValueChange = { password = it },
             label = { Text("Password") },
-            visualTransformation = PasswordVisualTransformation(),
+            trailingIcon ={
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Image(painter = painterResource(id = R.drawable.hide ), contentDescription = "password visibility",modifier = Modifier.size(24.dp))
+                }
+            },
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color.Blue, // Blue border when focused
@@ -1145,8 +1182,10 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
         // Sign Up Button
         Button(
             onClick = {
-// Validate form inputs
-                if (isEmailValid && isPhoneValid && userName.isNotEmpty() && userid.isNotEmpty() && profilePicture != null) {
+                // Validate form inputs
+                if (email.isNotEmpty() && isEmailValid && phoneNumber.isNotEmpty() && isPhoneValid && userName.isNotEmpty() && userid.isNotEmpty() && password.isNotEmpty() && profilePicture != null) {
+                    showDialog = true
+
                     // Check for duplicate studentId in Firestore
                     firestore.collection("users")
                         .whereEqualTo("studentId", userid)
@@ -1188,30 +1227,39 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
                                                     firestore.collection("users")
                                                         .add(userData)
                                                         .addOnSuccessListener {
+                                                            showDialog = false
                                                             Toast.makeText(context, "User Registered Successfully", Toast.LENGTH_SHORT).show()
                                                             navController.navigate("home")
                                                         }
                                                         .addOnFailureListener { e ->
+                                                            showDialog = false
                                                             Toast.makeText(context, "Error saving user data: ${e.message}", Toast.LENGTH_SHORT).show()
                                                         }
                                                 }.addOnFailureListener { e ->
+                                                    showDialog = false
                                                     Toast.makeText(context, "Error getting image URL: ${e.message}", Toast.LENGTH_SHORT).show()
                                                 }
                                             }.addOnFailureListener { e ->
+                                                showDialog = false
                                                 Toast.makeText(context, "Error uploading profile picture: ${e.message}", Toast.LENGTH_SHORT).show()
                                             }
                                         } else {
+                                            showDialog = false
                                             // Show error if Firebase Authentication failed
                                             Toast.makeText(context, "Error: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
                                         }
                                     }
                             } else {
+                                showDialog = false
+
                                 // Duplicate studentId found
                                 navController.navigate("duplicateID")
                                 Toast.makeText(context, "Student ID already exists. Please use a different ID.", Toast.LENGTH_SHORT).show()
                             }
                         }
                         .addOnFailureListener { e ->
+                            showDialog = false
+
                             // Handle Firestore query failure
                             Toast.makeText(context, "Error checking Student ID: ${e.message}", Toast.LENGTH_SHORT).show()
                         }
@@ -1227,6 +1275,9 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
             Text(text = "Sign Up", color = Color.White)
         }
     }
+
+    // Show Loading Dialog
+    LoadingDialog(text="Uploading..." , showDialog = showDialog, onDismiss = { showDialog = false })
 }
 
 @Composable
@@ -1397,7 +1448,7 @@ fun UnableToVerifyDuplicateID(navController: NavController) {
 }
 
 @Composable
-fun CustomerServiceScreen() {
+fun CustomerServiceScreen(navController: NavController) {
     val context = LocalContext.current
     val firebaseStorage = FirebaseStorage.getInstance()
     val firestore = Firebase.firestore // Ensure Firebase Firestore is set up correctly
@@ -1418,6 +1469,9 @@ fun CustomerServiceScreen() {
 
     // Generate a unique case ID
     val caseId = UUID.randomUUID().toString()
+
+    // Dialog visibility state
+    var showDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -1484,6 +1538,7 @@ fun CustomerServiceScreen() {
             },
             label = { Text("Your Email") },
             modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done, keyboardType = KeyboardType.Email),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color.Blue, // Blue border when focused
                 unfocusedBorderColor = Color.Gray,
@@ -1505,6 +1560,7 @@ fun CustomerServiceScreen() {
             },
             label = { Text("Your Phone") },
             modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done, keyboardType = KeyboardType.Phone),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color.Blue, // Blue border when focused
                 unfocusedBorderColor = Color.Gray,
@@ -1651,6 +1707,9 @@ fun CustomerServiceScreen() {
         Button(
             onClick = {
                 if (name.isNotEmpty() && phone.isNotEmpty() && email.isNotEmpty() && studentId.isNotEmpty() && studentIdUri != null && selfieUri != null) {
+                    // Show loading dialog
+                    showDialog = true
+
                     uploadImagesAndSaveData(
                         context = context,
                         firestore = firestore,
@@ -1662,7 +1721,18 @@ fun CustomerServiceScreen() {
                         gender = gender,
                         studentId = studentId,
                         studentIdUri = studentIdUri!!,
-                        selfieUri = selfieUri!!
+                        selfieUri = selfieUri!!,
+                        onUploadComplete = {
+                            // Dismiss loading dialog
+                            showDialog = false
+                            navController.navigate("reportSubmitted")
+                            Toast.makeText(context, "Data uploaded successfully!", Toast.LENGTH_LONG).show()
+                        },
+                        onError = {
+                            // Dismiss loading dialog
+                            showDialog = false
+                            Toast.makeText(context, "Failed to upload data.", Toast.LENGTH_LONG).show()
+                        }
                     )
                 } else {
                     Toast.makeText(context, "Please fill all the fields and upload both images", Toast.LENGTH_LONG).show()
@@ -1675,6 +1745,9 @@ fun CustomerServiceScreen() {
         ) {
             Text("Submit")
         }
+
+        // Show Loading Dialog
+        LoadingDialog(text= "Uploading..." , showDialog = showDialog, onDismiss = { showDialog = false })
     }
 }
 
@@ -1689,7 +1762,9 @@ private fun uploadImagesAndSaveData(
     gender: String,
     studentId: String,
     studentIdUri: Uri,
-    selfieUri: Uri
+    selfieUri: Uri,
+    onUploadComplete: () -> Unit,
+    onError: () -> Unit
 ) {
     val studentIdRef = firebaseStorage.reference.child("ID Case/$caseId/student_id.jpg")
     val selfieRef = firebaseStorage.reference.child("ID Case/$caseId/selfie.jpg")
@@ -1717,9 +1792,11 @@ private fun uploadImagesAndSaveData(
                         .set(userData)
                         .addOnSuccessListener {
                             Toast.makeText(context, "Submitted Successfully", Toast.LENGTH_SHORT).show()
+                            onUploadComplete()
                         }
                         .addOnFailureListener { e ->
                             Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                            onError()
                         }
                 }
             }.addOnFailureListener { e ->
@@ -1731,3 +1808,73 @@ private fun uploadImagesAndSaveData(
     }
 }
 
+@Composable
+fun LoadingDialog(text:String, showDialog: Boolean, onDismiss: () -> Unit) {
+    if (showDialog) {
+        Dialog(onDismissRequest = onDismiss) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(150.dp)
+                    .background(Color.White, shape = RoundedCornerShape(16.dp))
+                    .padding(16.dp)
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator(color = Color.Blue)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("$text", fontSize = 16.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ReportSubmitted(navController: NavController) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Request Submitted",
+            fontWeight = FontWeight.Bold,
+            fontSize = 24.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Image(
+            painter = painterResource(id = R.drawable.completed_icon), // Replace with your error image resource
+            contentDescription = "Complete Icon",
+            modifier = Modifier.size(150.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Your Request is submitted, please wait 3-5 Working days for manual verification, once verified we will update to you via email.\n\n" +
+                    "Thanks for choosing SHARide",
+            fontSize = 16.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(modifier = Modifier.height(34.dp))
+
+        // "Try Again" Button
+        Button(
+            onClick = {
+                navController.navigate("intro")
+            }, // Navigate to the verification screen
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+        ) {
+            Text(text = "Login", color = Color.White)
+        }
+    }
+}
