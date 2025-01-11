@@ -8,7 +8,6 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
 import android.provider.MediaStore
-import android.util.Base64
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -24,11 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,7 +44,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -61,6 +56,7 @@ import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.firestore
@@ -109,6 +105,19 @@ fun AppNavHost(firebaseAuth: FirebaseAuth, networkViewModel: NetworkViewModel) {
             composable("customerServiceTARUMTID") { CustomerServiceScreen(navController) }
             composable("ReportSubmitted") { ReportSubmitted(navController) }
             // Add more screens like SignUp if needed
+            composable("driverintro") { DriverIntroScreen(navController) }
+            composable("driversignup") { DriverSignupIntroScreen(navController) }
+            composable("driversignup1") { DriverIdVerificationScreen(navController) }
+            composable("driverFailed") { DriverFailed(navController) }
+            composable("driverFailedFace") { UnableToVerifyDriverFace(navController) }
+            composable("customerServiceDrivingID") { CustomerServiceScreen(navController) }
+            composable("driversignupscreen/{drivingid}/{lesen}/{imagePath}") { backStackEntry ->
+                val drivingid = backStackEntry.arguments?.getString("drivingid").orEmpty()
+                val lesen = Uri.decode(backStackEntry.arguments?.getString("lesen").orEmpty())
+                val imagePath = Uri.decode(backStackEntry.arguments?.getString("imagePath").orEmpty())
+
+                DriverSignUpScreen(navController = navController, drivingid = drivingid, lesen = lesen, imagePath = imagePath)
+            }
         }
     }
 }
@@ -897,7 +906,7 @@ fun UploadIdButton(onImageSelected: (Uri) -> Unit) {
             .fillMaxWidth()
             .height(50.dp)
     ) {
-        Text(text = "Upload ID")
+        Text(text = "Upload")
     }
 }
 
@@ -1877,4 +1886,655 @@ fun ReportSubmitted(navController: NavController) {
             Text(text = "Login", color = Color.White)
         }
     }
+}
+
+//Driver Verification
+@Composable
+fun DriverIntroScreen(navController: NavController) {
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White),
+        verticalArrangement = Arrangement.SpaceBetween,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(120.dp))
+
+        // Logo
+        Text(
+            text = "SHARide Driver",
+            fontWeight = FontWeight.Bold,
+            fontSize = 50.sp,
+            color = Color.Blue
+        )
+
+        Spacer(modifier = Modifier.height(30.dp))
+        Column (
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ){
+            // Rotating Image
+            Box(
+                modifier = Modifier
+                    .size(250.dp)
+                    .background(Color.Transparent),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.intro3),
+                    contentDescription = "Rotating image",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = 1f }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Dynamic Text
+            Text(
+                text = "Your Car, Your Community",
+                fontWeight = FontWeight.Bold,
+                fontSize = 30.sp,
+                color = Color.Blue,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Drive, connect, and earn – be part of the SHARide community now with few simple steps!",
+                textAlign = TextAlign.Center,
+                fontSize = 20.sp,
+                color = Color.Gray,
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+        }
+
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = {
+                navController.navigate("driversignup") // Navigate to Sign Up
+            },
+            modifier = Modifier
+                .fillMaxWidth(0.8f)
+                .height(60.dp)
+                .shadow(10.dp, shape = RoundedCornerShape(25.dp)),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
+            shape = RoundedCornerShape(25.dp)
+        ) {
+            Text(text = "Sign Up", color = Color.White, fontSize = 16.sp)
+        }
+
+        Spacer(modifier = Modifier.height(40.dp))
+    }
+}
+
+@Composable
+fun DriverSignupIntroScreen(navController: NavController) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.SpaceBetween,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(90.dp))
+
+        // Title
+        Text(
+            text = "Few Steps to get started!",
+            fontWeight = FontWeight.Bold,
+            fontSize = 24.sp,
+            color = Color.Black,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Steps
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(30.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            StepCard(
+                stepNumber = "1",
+                title = "Verify your driving lesen",
+                description = "Scan and Upload your Valid Driving Lesen to verify"
+            )
+            StepCard(
+                stepNumber = "2",
+                title = "Fill in your vehicle information",
+                description = "Fill in all required information of your vehicle details to get started"
+            )
+            StepCard(
+                stepNumber = "3",
+                title = "Done :D",
+                description = "Experience new commute way starting from today!"
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Start Button
+        Button(
+            onClick = {
+                navController.navigate("driversignup1")
+            },
+            modifier = Modifier
+                .fillMaxWidth(0.8f)
+                .height(56.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Text(
+                text = "Start",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        Spacer(modifier = Modifier.height(60.dp))
+    }
+}
+
+@Composable
+fun DriverIdVerificationScreen(navController: NavController) {
+    var name by remember { mutableStateOf("") }
+    var studentId by remember { mutableStateOf("") }
+    var validLesen by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    var profilePicture by remember { mutableStateOf<Bitmap?>(null) }
+    var filePath by remember { mutableStateOf("") }
+
+    // Dialog visibility state
+    var showDialog by remember { mutableStateOf(false) }
+
+    var idbitmap by remember { mutableStateOf<Bitmap?>(null) }
+
+    var drivingLesen by remember { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Spacer(modifier = Modifier.height(120.dp))
+
+        Text(
+            text = "1. Verify Your Driving Lesen",
+            fontWeight = FontWeight.Bold,
+            fontSize = 25.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Please Upload the front of your driving lesen for verification purpose",
+            fontSize = 16.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Image(
+            painter = painterResource(id = R.drawable.drivinglesen),
+            contentDescription = "Driving Lesen ID image",
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.3f)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Please Make Sure : \n1. No obstacle or blur image of the ID\n" +
+                    "2. The Whole ID is visible and center in the picture",
+            fontSize = 16.sp,
+            textAlign = TextAlign.Start
+        )
+        Spacer(modifier = Modifier.height(36.dp))
+
+        UploadIdButton { uri ->
+            showDialog = true
+            val originalBitmap = MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+
+            detectFaceFromIdCard(originalBitmap) { faceBitmap ->
+                if (faceBitmap != null) {
+                    // Save the face image
+                    profilePicture = faceBitmap
+                    // Save the face image to cache
+                    filePath = saveBitmapToCache(context, faceBitmap, "profile_picture.png")
+                }else{
+                    filePath = "Error"
+                }
+            }
+            drivingLesen = saveBitmapToCache(context, originalBitmap, "driving_lesen.png")
+
+            extractInfoFromDrivingId(context, uri) { extractedName, extractedId, Lesen ->
+                name = extractedName
+                studentId = extractedId
+                validLesen = Lesen
+            }
+            if(validLesen == "Verified" || validLesen == "Error"){
+                showDialog = false
+            }
+        }
+        if(validLesen == "Verified" && filePath != ""){
+            validLesen = ""
+            val encodedFilePath = Uri.encode(filePath) // Encode the file path
+            val encodedDrivingPath = Uri.encode(drivingLesen) // Encode the file path
+
+            navController.navigate("driversignupscreen/$studentId/$encodedDrivingPath/$encodedFilePath")
+        }else if(validLesen == "Error"){
+            validLesen = ""
+            filePath = ""
+            navController.navigate("driverFailed")
+        }else if(filePath == "Error"){
+            validLesen = ""
+            filePath = ""
+            navController.navigate("driverFailedFace")
+        }
+        Text(
+            text = "All information is processed by AI and store securely in our database.",
+            fontSize = 15.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Show Loading Dialog
+        LoadingDialog(text = "Extracting Data from ID...", showDialog = showDialog, onDismiss = { showDialog = false })
+    }
+}
+
+fun extractInfoFromDrivingId(
+    context: Context,
+    imageUri: Uri,
+    onResult: (String, String, String) -> Unit // Name, Student ID, Profile Picture
+) {
+    val inputImage = InputImage.fromFilePath(context, imageUri)
+    val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    recognizer.process(inputImage)
+        .addOnSuccessListener { visionText ->
+            val extractedText = visionText.text
+            if (!extractedText.contains("DRIVING LICENCE", ignoreCase = true)||!extractedText.contains("MALAYSIA", ignoreCase = true)) {
+                onResult("", "", "Error") // Not a valid TARUMT ID
+                return@addOnSuccessListener
+            }
+
+            var name = ""
+            var studentId = ""
+
+            // Loop through the text blocks and lines to extract Name and Student ID
+            for (block in visionText.textBlocks) {
+                for (line in block.lines) {
+                    val text = line.text
+
+                    if (Regex("[0-9]{12}").containsMatchIn(text)){
+                        studentId = text // Matches Student ID pattern
+                    }
+
+                    // Check if the line is likely a name
+                    if (text.all { it.isLetter() || it.isWhitespace() } && text.contains(" ")) {
+                        if (!text.contains("WARGANEGARA", ignoreCase = true) &&
+                            !text.contains("ADDRESS", ignoreCase = true) &&
+                            !text.contains("ALAMAT", ignoreCase = true) &&
+                            !text.contains("TEMPAT", ignoreCase = true)) {
+                            name = text
+                        }
+                    }
+                }
+            }
+
+            // Return results
+            onResult(name, studentId, "Verified")
+        }
+        .addOnFailureListener { e ->
+            onResult("", "", "Error" ) // Failed to process image
+        }
+}
+
+@Composable
+fun DriverFailed(navController: NavController) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Unable to Verify",
+            fontWeight = FontWeight.Bold,
+            fontSize = 24.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Image(
+            painter = painterResource(id = R.drawable.error), // Replace with your error image resource
+            contentDescription = "Error Icon",
+            modifier = Modifier.size(100.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Your ID couldn't be verified at the moment. Please ensure the ID is valid Malaysian Driving Licence and try again later or contact our customer service for assistance.",
+            fontSize = 16.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(modifier = Modifier.height(34.dp))
+
+        // "Try Again" Button
+        Button(
+            onClick = {
+                navController.navigate("driversignup1")
+            }, // Navigate to the verification screen
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+        ) {
+            Text(text = "Try Again", color = Color.White)
+        }
+        //Spacer(modifier = Modifier.height(1.dp))
+
+        // "Contact Customer Service" Button
+        TextButton(
+            onClick = { navController.navigate("customerServiceTARUMTID") },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = "Contact Customer Service", color = Color.Blue, fontSize = 16.sp)
+        }
+    }
+}
+
+@Composable
+fun UnableToVerifyDriverFace(navController: NavController) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Unable to extract face from ID",
+            fontWeight = FontWeight.Bold,
+            fontSize = 24.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Image(
+            painter = painterResource(id = R.drawable.profile_error), // Replace with your error image resource
+            contentDescription = "Error Icon",
+            modifier = Modifier.size(100.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Your ID couldn't be verified at the moment. Please ensure your face on ID is sharp and clear and without obstacle. Try again later or contact our customer service for assistance.",
+            fontSize = 16.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(modifier = Modifier.height(34.dp))
+
+        // "Try Again" Button
+        Button(
+            onClick = {
+                navController.navigate("driversignup1")
+            }, // Navigate to the verification screen
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+        ) {
+            Text(text = "Try Again", color = Color.White)
+        }
+        //Spacer(modifier = Modifier.height(1.dp))
+
+        // "Contact Customer Service" Button
+        TextButton(
+            onClick = { navController.navigate("customerServiceTARUMTID") },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = "Contact Customer Service", color = Color.Blue, fontSize = 16.sp)
+        }
+    }
+}
+
+@Composable
+fun DriverSignUpScreen(navController: NavController, drivingid: String, lesen: String, imagePath: String) {
+    val context = LocalContext.current
+    val firebaseStorage = FirebaseStorage.getInstance()
+    val firestore = Firebase.firestore // Ensure Firebase Firestore is set up correctly
+    val firebaseAuth = FirebaseAuth.getInstance()
+
+    // User inputs
+    var name by remember { mutableStateOf("") }
+    var driverid by remember { mutableStateOf(drivingid) }
+
+    // Dialog visibility state
+    var showDialog by remember { mutableStateOf(false) }
+
+    // Get logged-in user's ID
+    val userId = firebaseAuth.currentUser?.uid ?: "unknown_user"
+
+    //     Load Bitmap from the file path
+    val profilePicture: Bitmap? = if (imagePath.isNotEmpty()) {
+        BitmapFactory.decodeFile(File(imagePath).absolutePath)
+    } else {
+        null
+    }
+
+    //     Load Bitmap from the file path
+    val lesen: Bitmap? = if (lesen.isNotEmpty()) {
+        BitmapFactory.decodeFile(File(lesen).absolutePath)
+    } else {
+        null
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()), // Enable scrolling
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Title
+        Spacer(modifier = Modifier.height(36.dp))
+
+        Text(
+            text = "2. Fill in Additional Information",
+            fontWeight = FontWeight.Bold,
+            fontSize = 20.sp,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(text = "Fill in all required information of your vehicle details to get started", textAlign = TextAlign.Center, modifier = Modifier.padding(10.dp))
+
+        Spacer(modifier = Modifier.height(36.dp))
+
+        if (profilePicture != null) {
+            Image(
+                bitmap = profilePicture.asImageBitmap(),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(150.dp)
+                    .border(5.dp, Color.Gray)
+            )
+        }
+        Spacer(modifier = Modifier.height(38.dp))
+
+        // Personal Details
+        Text("1. Personal Details",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it.uppercase() },
+            label = { Text("Your Name") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = driverid,
+            onValueChange = { driverid = it.uppercase() },
+            label = { Text("Your Driving ID (Eg.030101141999)") },
+            modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done, keyboardType = KeyboardType.Decimal),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if(name.isNotEmpty() && driverid.isNotEmpty()){
+            Text(text = "Done",
+                fontWeight = FontWeight.Bold,
+                color = Color.Black,
+                modifier = Modifier
+                    .background(color = Color.Green)
+                    .padding(10.dp)
+                    .fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+        }
+
+        Spacer(modifier = Modifier.height(36.dp))
+
+//      Submit Button
+        Button(
+            onClick = {
+                if (name.isNotEmpty() && driverid.isNotEmpty()) {
+                    // Show loading dialog
+                    showDialog = true
+
+                    // Upload lesen and profile picture to Firebase Storage
+                    uploadToFirebaseStorage(
+                        userId,
+                        "Driving Lesen",
+                        "lesen.png",
+                        lesen,
+                        firebaseStorage
+                    ) { lesenUrl ->
+                        uploadToFirebaseStorage(
+                            userId,
+                            "Driving Lesen",
+                            "profile_picture.png",
+                            profilePicture,
+                            firebaseStorage
+                        ) { profileUrl ->
+                            // Save data to Firestore
+                            saveDriverToFirestore(
+                                userId,
+                                name,
+                                drivingid,
+                                profileUrl,
+                                lesenUrl,
+                                firestore
+                            ) {
+                                showDialog = false
+                                //navController.navigate("AddVehicle") // Navigate to the next screen
+                            }
+                        }
+                    }
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+        ) {
+            Text("Submit")
+        }
+
+        // Show Loading Dialog
+        LoadingDialog(text= "Uploading..." , showDialog = showDialog, onDismiss = { showDialog = false })
+    }
+}
+
+// Helper function to upload images to Firebase Storage
+private fun uploadToFirebaseStorage(
+    userId: String,
+    folderName: String,
+    fileName: String,
+    bitmap: Bitmap?,
+    storage: FirebaseStorage,
+    onComplete: (String) -> Unit
+) {
+    if (bitmap == null) {
+        onComplete("")
+        return
+    }
+
+    val storageRef = storage.reference.child("$folderName/$userId/$fileName")
+    val baos = ByteArrayOutputStream()
+    bitmap.compress(Bitmap.CompressFormat.PNG, 100, baos)
+    val data = baos.toByteArray()
+
+    storageRef.putBytes(data)
+        .addOnSuccessListener {
+            storageRef.downloadUrl.addOnSuccessListener { uri ->
+                onComplete(uri.toString())
+            }
+        }
+        .addOnFailureListener {
+            onComplete("")
+        }
+}
+
+// Helper function to save driver data to Firestore
+private fun saveDriverToFirestore(
+    userId: String,
+    name: String,
+    drivingId: String,
+    profileUrl: String,
+    lesenUrl: String,
+    firestore: FirebaseFirestore,
+    onComplete: () -> Unit
+) {
+    val driverData = hashMapOf(
+        "userId" to userId,
+        "name" to name,
+        "drivingId" to drivingId,
+        "vehicleId" to "",
+        "vehiclePlate" to "",
+        "profilePicture" to profileUrl, // Save profile picture URL
+        "lesen" to lesenUrl,           // Save lesen URL
+        "status" to "Active"
+    )
+
+    firestore.collection("driver").document(userId)
+        .set(driverData)
+        .addOnSuccessListener { onComplete() }
+        .addOnFailureListener { onComplete() }
 }

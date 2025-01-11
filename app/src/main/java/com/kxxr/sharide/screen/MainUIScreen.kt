@@ -130,6 +130,19 @@ fun HomeScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
 
         Spacer(modifier = Modifier.height(36.dp))
 
+        // Driver Button
+        Button(
+            onClick = {
+                navController.navigate("driverintro")
+            },
+            modifier = Modifier
+                .padding(horizontal = 16.dp)
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+        ) {
+            Text(text = "Driver", color = Color.White, fontSize = 16.sp)
+        }
+
         // Log Out Button
         Button(
             onClick = {
