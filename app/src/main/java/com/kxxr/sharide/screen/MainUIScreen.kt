@@ -56,7 +56,6 @@ fun HomeScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
     var studentId by remember { mutableStateOf("") }
     var profileImageUrl by remember { mutableStateOf("") }
     var profileBitmap by remember { mutableStateOf<Bitmap?>(null) }
-
     // Dialog visibility state
     var showDialog by remember { mutableStateOf(false) }
 
@@ -133,7 +132,20 @@ fun HomeScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
         // Driver Button
         Button(
             onClick = {
-                navController.navigate("driverintro")
+                if (currentUser != null) {
+                    firestore.collection("driver")
+                        .whereEqualTo("userId", currentUser.uid)
+                        .get()
+                        .addOnSuccessListener { querySnapshot ->
+                            if (querySnapshot.isEmpty) {
+                                // no driver record
+                                navController.navigate("driverintro")
+                            }else{
+                                //navigate to driver screen
+                                navController.navigate("home")
+                            }
+                        }
+                }
             },
             modifier = Modifier
                 .padding(horizontal = 16.dp)

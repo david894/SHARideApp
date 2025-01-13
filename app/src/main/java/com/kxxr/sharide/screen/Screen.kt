@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
@@ -103,14 +104,17 @@ fun AppNavHost(firebaseAuth: FirebaseAuth, networkViewModel: NetworkViewModel) {
             composable("duplicateID"){UnableToVerifyDuplicateID(navController)}
             composable("home") {  HomeScreen(firebaseAuth, navController) }
             composable("customerServiceTARUMTID") { CustomerServiceScreen(navController) }
-            composable("ReportSubmitted") { ReportSubmitted(navController) }
+            composable("ReportSubmitted/{link}") { backStackEntry ->
+                val link = backStackEntry.arguments?.getString("link").orEmpty()
+                ReportSubmitted(navController,link)
+            }
+
             // Add more screens like SignUp if needed
             composable("driverintro") { DriverIntroScreen(navController) }
             composable("driversignup") { DriverSignupIntroScreen(navController) }
             composable("driversignup1") { DriverIdVerificationScreen(navController) }
             composable("driverFailed") { DriverFailed(navController) }
             composable("driverFailedFace") { UnableToVerifyDriverFace(navController) }
-            composable("customerServiceDrivingID") { CustomerServiceScreen(navController) }
             composable("driversignupscreen/{drivingid}/{lesen}/{imagePath}") { backStackEntry ->
                 val drivingid = backStackEntry.arguments?.getString("drivingid").orEmpty()
                 val lesen = Uri.decode(backStackEntry.arguments?.getString("lesen").orEmpty())
@@ -118,6 +122,11 @@ fun AppNavHost(firebaseAuth: FirebaseAuth, networkViewModel: NetworkViewModel) {
 
                 DriverSignUpScreen(navController = navController, drivingid = drivingid, lesen = lesen, imagePath = imagePath)
             }
+            composable("duplicateDrivingID"){UnableToVerifyDuplicateDrivingID(navController)}
+            composable("addnewcar"){ AddNewVehicle(navController) }
+            composable("driversuccess") { DriverSuccess(navController) }
+            composable("duplicatecar") { DuplicateVehicle(navController)}
+            composable("driverCustomerService") { DriverCustomerService(navController) }
         }
     }
 }
@@ -965,13 +974,16 @@ fun detectFaceFromIdCard(
             if (faces.isNotEmpty()) {
                 val face = faces[0].boundingBox
 
+                // Padding in pixels
+                val padding = 300 // Adjust this value as needed (e.g., dp converted to pixels)
+
                 // Crop the face region
                 val faceBitmap = Bitmap.createBitmap(
                     idCardBitmap,
-                    face.left.coerceAtLeast(0),
-                    face.top.coerceAtLeast(0),
-                    face.width().coerceAtMost(idCardBitmap.width),
-                    face.height().coerceAtMost(idCardBitmap.height)
+                    (face.left - 150).coerceAtLeast(0),
+                    (face.top - 170).coerceAtLeast(0),
+                    (face.width() + padding).coerceAtMost(idCardBitmap.width),
+                    (face.height() + padding).coerceAtMost(idCardBitmap.height)
                 )
                 onResult(faceBitmap)
             } else {
@@ -1410,7 +1422,7 @@ fun UnableToVerifyDuplicateID(navController: NavController) {
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "Duplicated ID Detected",
+            text = "Duplicate ID Detected",
             fontWeight = FontWeight.Bold,
             fontSize = 24.sp,
             textAlign = TextAlign.Center
@@ -1425,7 +1437,7 @@ fun UnableToVerifyDuplicateID(navController: NavController) {
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "Your ID couldn't be verified at the moment. Please ensure the student ID is typed correctly and try again later. \n\n SHARide only allow one student ID per account, Contact our customer service for assistance.",
+            text = "Your ID couldn't be verified at the moment. Please ensure the student ID is typed correctly and try again later. \n\n SHARide only allows student ID that are not currently registered on our platform., Contact our customer service for assistance.",
             fontSize = 16.sp,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 16.dp)
@@ -1662,17 +1674,34 @@ fun CustomerServiceScreen(navController: NavController) {
         UploadIdButton { uri ->
             studentIdUri =  uri
         }
-        if(studentIdUri != null){
-            Text(text = "Done",
-                fontWeight = FontWeight.Bold,
-                color = Color.Black,
+
+        if (studentIdUri != null) {
+            Row(
                 modifier = Modifier
+                    .fillMaxWidth()
                     .background(color = Color.Green)
-                    .padding(10.dp)
-                    .fillMaxWidth(),
-                textAlign = TextAlign.Center
-            )
+                    .padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Done",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f) // Ensures the "Done" text takes available space
+                )
+
+                IconButton(onClick = { studentIdUri = null }) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Reset",
+                        tint = Color.Black
+                    )
+                }
+            }
         }
+
         Spacer(modifier = Modifier.height(16.dp))
 
         // Upload Selfie
@@ -1699,17 +1728,33 @@ fun CustomerServiceScreen(navController: NavController) {
         UploadIdButton { uri ->
             selfieUri =  uri
         }
-        if(selfieUri != null){
-            Text(text = "Done",
-                fontWeight = FontWeight.Bold,
-                color = Color.Black,
+        if (selfieUri != null) {
+            Row(
                 modifier = Modifier
+                    .fillMaxWidth()
                     .background(color = Color.Green)
-                    .padding(10.dp)
-                    .fillMaxWidth(),
-                textAlign = TextAlign.Center
-            )
+                    .padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Done",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f) // Ensures the "Done" text takes available space
+                )
+
+                IconButton(onClick = { selfieUri = null }) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Reset",
+                        tint = Color.Black
+                    )
+                }
+            }
         }
+
         Spacer(modifier = Modifier.height(16.dp))
 
 //      Submit Button
@@ -1734,7 +1779,7 @@ fun CustomerServiceScreen(navController: NavController) {
                         onUploadComplete = {
                             // Dismiss loading dialog
                             showDialog = false
-                            navController.navigate("reportSubmitted")
+                            navController.navigate("ReportSubmitted/intro")
                             Toast.makeText(context, "Data uploaded successfully!", Toast.LENGTH_LONG).show()
                         },
                         onError = {
@@ -1841,7 +1886,7 @@ fun LoadingDialog(text:String, showDialog: Boolean, onDismiss: () -> Unit) {
 }
 
 @Composable
-fun ReportSubmitted(navController: NavController) {
+fun ReportSubmitted(navController: NavController,link:String) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1876,7 +1921,11 @@ fun ReportSubmitted(navController: NavController) {
         // "Try Again" Button
         Button(
             onClick = {
-                navController.navigate("intro")
+                if (link == "intro"){
+                    navController.navigate("intro")
+                }else{
+                    navController.navigate("home")
+                }
             }, // Navigate to the verification screen
             modifier = Modifier
                 .fillMaxWidth()
@@ -2247,7 +2296,7 @@ fun DriverFailed(navController: NavController) {
 
         // "Contact Customer Service" Button
         TextButton(
-            onClick = { navController.navigate("customerServiceTARUMTID") },
+            onClick = { navController.navigate("driverCustomerService") },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(text = "Contact Customer Service", color = Color.Blue, fontSize = 16.sp)
@@ -2303,7 +2352,7 @@ fun UnableToVerifyDriverFace(navController: NavController) {
 
         // "Contact Customer Service" Button
         TextButton(
-            onClick = { navController.navigate("customerServiceTARUMTID") },
+            onClick = { navController.navigate("driverCustomerService") },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(text = "Contact Customer Service", color = Color.Blue, fontSize = 16.sp)
@@ -2317,6 +2366,7 @@ fun DriverSignUpScreen(navController: NavController, drivingid: String, lesen: S
     val firebaseStorage = FirebaseStorage.getInstance()
     val firestore = Firebase.firestore // Ensure Firebase Firestore is set up correctly
     val firebaseAuth = FirebaseAuth.getInstance()
+    var selfieUri by remember { mutableStateOf<Uri?>(null) }
 
     // User inputs
     var name by remember { mutableStateOf("") }
@@ -2362,7 +2412,7 @@ fun DriverSignUpScreen(navController: NavController, drivingid: String, lesen: S
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        Text(text = "Fill in all required information of your vehicle details to get started", textAlign = TextAlign.Center, modifier = Modifier.padding(10.dp))
+        Text(text = "Fill in all required information of your lesen details to get started", textAlign = TextAlign.Center, modifier = Modifier.padding(10.dp))
 
         Spacer(modifier = Modifier.height(36.dp))
 
@@ -2414,8 +2464,7 @@ fun DriverSignUpScreen(navController: NavController, drivingid: String, lesen: S
                 focusedLabelColor = Color.Blue,
             )
         )
-
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
         if(name.isNotEmpty() && driverid.isNotEmpty()){
             Text(text = "Done",
@@ -2429,44 +2478,126 @@ fun DriverSignUpScreen(navController: NavController, drivingid: String, lesen: S
             )
         }
 
+        Spacer(modifier = Modifier.height(38.dp))
+
+        // Personal Details
+        Text("2. Selfie with your Driving Lesen",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(text = "Please take a selfie with your Driving Lesen for verification purpose, make sure your face is fully exposed with your Driving Lesen together ")
+
+        //Spacer(modifier = Modifier.height(8.dp))
+        Image(
+            painter = painterResource(id = R.drawable.selfie_driver),
+            contentDescription = "TARUMT ID image",
+            modifier = Modifier
+                .fillMaxWidth()
+                .size(200.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Please Make Sure:\n" +
+                "1.No obstacle or blur image of the selfie\n" +
+                "2.The Whole Face and ID is visible and center in the picture ",
+            modifier = Modifier.fillMaxWidth())
+        UploadIdButton { uri ->
+            selfieUri =  uri
+        }
+        if (selfieUri != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(color = Color.Green)
+                    .padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Done",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f) // Ensures the "Done" text takes available space
+                )
+
+                IconButton(onClick = { selfieUri = null }) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Reset",
+                        tint = Color.Black
+                    )
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(36.dp))
 
 //      Submit Button
         Button(
             onClick = {
-                if (name.isNotEmpty() && driverid.isNotEmpty()) {
+                if (name.isNotEmpty() && driverid.isNotEmpty() && selfieUri != null) {
                     // Show loading dialog
                     showDialog = true
 
-                    // Upload lesen and profile picture to Firebase Storage
-                    uploadToFirebaseStorage(
-                        userId,
-                        "Driving Lesen",
-                        "lesen.png",
-                        lesen,
-                        firebaseStorage
-                    ) { lesenUrl ->
-                        uploadToFirebaseStorage(
-                            userId,
-                            "Driving Lesen",
-                            "profile_picture.png",
-                            profilePicture,
-                            firebaseStorage
-                        ) { profileUrl ->
-                            // Save data to Firestore
-                            saveDriverToFirestore(
-                                userId,
-                                name,
-                                drivingid,
-                                profileUrl,
-                                lesenUrl,
-                                firestore
-                            ) {
+                    firestore.collection("driver")
+                        .whereEqualTo("drivingId", driverid)
+                        .get()
+                        .addOnSuccessListener { querySnapshot ->
+                            if (querySnapshot.isEmpty) {
+                                // Upload lesen and profile picture to Firebase Storage
+                                uploadToFirebaseStorage(
+                                    userId,
+                                    "Driving Lesen",
+                                    "lesen.png",
+                                    lesen,
+                                    firebaseStorage
+                                ) { lesenUrl ->
+                                    uploadToFirebaseStorage(
+                                        userId,
+                                        "Driving Lesen",
+                                        "profile_picture.png",
+                                        profilePicture,
+                                        firebaseStorage
+                                    ) { selfieUrl ->
+                                        val selfieBitmap = MediaStore.Images.Media.getBitmap(
+                                            context.contentResolver,
+                                            selfieUri
+                                        )
+                                        uploadToFirebaseStorage(
+                                            userId,
+                                            "Driving Lesen",
+                                            "selfie.png",
+                                            selfieBitmap,
+                                            firebaseStorage
+                                        ) { profileUrl ->
+                                            // Save data to Firestore
+                                            saveDriverToFirestore(
+                                                userId,
+                                                name,
+                                                driverid,
+                                                profileUrl,
+                                                lesenUrl,
+                                                selfieUrl,
+                                                firestore
+                                            ) {
+                                                showDialog = false
+                                                navController.navigate("addnewcar") // Navigate to the next screen
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
                                 showDialog = false
-                                //navController.navigate("AddVehicle") // Navigate to the next screen
+                                navController.navigate("duplicateDrivingID")
                             }
                         }
-                    }
+                }else{
+                    Toast.makeText(context, "Please fill up all the details", Toast.LENGTH_SHORT).show()
                 }
             },
             modifier = Modifier
@@ -2519,6 +2650,7 @@ private fun saveDriverToFirestore(
     drivingId: String,
     profileUrl: String,
     lesenUrl: String,
+    selfieUrl: String,
     firestore: FirebaseFirestore,
     onComplete: () -> Unit
 ) {
@@ -2530,6 +2662,7 @@ private fun saveDriverToFirestore(
         "vehiclePlate" to "",
         "profilePicture" to profileUrl, // Save profile picture URL
         "lesen" to lesenUrl,           // Save lesen URL
+        "selfie" to selfieUrl,
         "status" to "Active"
     )
 
@@ -2537,4 +2670,1026 @@ private fun saveDriverToFirestore(
         .set(driverData)
         .addOnSuccessListener { onComplete() }
         .addOnFailureListener { onComplete() }
+}
+
+@Composable
+fun UnableToVerifyDuplicateDrivingID(navController: NavController) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Duplicate Driving ID Detected",
+            fontWeight = FontWeight.Bold,
+            fontSize = 24.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Image(
+            painter = painterResource(id = R.drawable.error), // Replace with your error image resource
+            contentDescription = "Error Icon",
+            modifier = Modifier.size(100.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Your Driving ID couldn't be verified at the moment. Please ensure the driving ID is typed correctly and try again later. \n\n SHARide only allows driving ID that are not currently registered on our platform, Contact our customer service for assistance.",
+            fontSize = 16.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(modifier = Modifier.height(34.dp))
+
+        // "Try Again" Button
+        Button(
+            onClick = {
+                navController.navigate("driversignup1")
+            }, // Navigate to the verification screen
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+        ) {
+            Text(text = "Try Again", color = Color.White)
+        }
+        //Spacer(modifier = Modifier.height(1.dp))
+
+        // "Contact Customer Service" Button
+        TextButton(
+            onClick = {
+                navController.navigate("driverCustomerService")
+                },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = "Contact Customer Service", color = Color.Blue, fontSize = 16.sp)
+        }
+    }
+}
+
+@Composable
+fun DuplicateVehicle(navController: NavController) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Duplicate Vehicle Detected",
+            fontWeight = FontWeight.Bold,
+            fontSize = 24.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Image(
+            painter = painterResource(id = R.drawable.error), // Replace with your error image resource
+            contentDescription = "Error Icon",
+            modifier = Modifier.size(100.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Your Vehicle couldn't be verified at the moment. Please ensure the vehicle registration number is typed correctly and try again later. \n\n SHARide only allows vehicles that are not currently registered on our platform, Contact our customer service for assistance.",
+            fontSize = 16.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(modifier = Modifier.height(34.dp))
+
+        // "Try Again" Button
+        Button(
+            onClick = {
+                navController.navigate("addnewcar") // Navigate to the next screen
+            }, // Navigate to the verification screen
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+        ) {
+            Text(text = "Try Again", color = Color.White)
+        }
+        //Spacer(modifier = Modifier.height(1.dp))
+
+        // "Contact Customer Service" Button
+        TextButton(
+            onClick = {
+                navController.navigate("driverCustomerService")
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = "Contact Customer Service", color = Color.Blue, fontSize = 16.sp)
+        }
+    }
+}
+@Composable
+fun AddNewVehicle(navController: NavController) {
+    val context = LocalContext.current
+    val firebaseStorage = FirebaseStorage.getInstance()
+    val firestore = Firebase.firestore // Ensure Firebase Firestore is set up correctly
+
+    // User inputs
+    var carmake by remember { mutableStateOf("") }
+    var carmodel by remember { mutableStateOf("") }
+    var carcolor by remember { mutableStateOf("") }
+    var registrationnum by remember { mutableStateOf("") }
+
+    // Image upload URIs
+    var carfronturi by remember { mutableStateOf<Uri?>(null) }
+    var carbackuri by remember { mutableStateOf<Uri?>(null) }
+
+    // Generate a unique case ID
+    val caseId = UUID.randomUUID().toString()
+
+    // Dialog visibility state
+    var showDialog by remember { mutableStateOf(false) }
+    val firebaseAuth = FirebaseAuth.getInstance()
+
+    // Get logged-in user's ID
+    val userId = firebaseAuth.currentUser?.uid ?: "unknown_user"
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()), // Enable scrolling
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Title
+        Spacer(modifier = Modifier.height(56.dp))
+
+        Text("3. Add New Vehicle",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("Please Fill in all the field to register your vehicle")
+        Spacer(modifier = Modifier.height(36.dp))
+
+        // Personal Details
+        Text("1. Vehicle Details",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = carmake,
+            onValueChange = { carmake = it.uppercase() },
+            label = { Text("Car Make (Eg.Perodua) ") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = carmodel,
+            onValueChange = { carmodel = it.uppercase() },
+            label = { Text("Car Model (Eg. Axia)") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = carcolor,
+            onValueChange = { carcolor = it.uppercase() },
+            label = { Text("Car Colour (Eg. Black)") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = registrationnum,
+            onValueChange = { registrationnum = it.uppercase() },
+            label = { Text("Registration Number (Eg. VJQ 9999)") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if(carmake.isNotEmpty() && carmodel.isNotEmpty() && carcolor.isNotEmpty() && registrationnum.isNotEmpty()){
+            Text(text = "Done",
+                fontWeight = FontWeight.Bold,
+                color = Color.Black,
+                modifier = Modifier
+                    .background(color = Color.Green)
+                    .padding(10.dp)
+                    .fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Upload ID
+        Text("2. Upload Your Vehicle Photo",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text("Please take photos with your registered car for verification purpose, make sure car registration number plate is fully exposed with your car together ", modifier = Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(text = "Front of the vehicle", fontWeight = FontWeight.Bold)
+        Image(
+            painter = painterResource(id = R.drawable.car_front),
+            contentDescription = "Car Front Image",
+            modifier = Modifier
+                .fillMaxWidth()
+                .size(200.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Please Make Sure:\n" +
+                "1.No obstacle or blur image of the vehicle\n" +
+                "2.The Whole Registration Number is visible and center in the picture ",
+            modifier = Modifier.fillMaxWidth())
+        UploadIdButton { uri ->
+            carfronturi =  uri
+        }
+        if (carfronturi != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(color = Color.Green),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Done",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f) // Ensures the "Done" text takes available space
+                )
+
+                IconButton(onClick = { carfronturi = null }) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Reset",
+                        tint = Color.Black
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(text = "Back of the vehicle", fontWeight = FontWeight.Bold)
+        Image(
+            painter = painterResource(id = R.drawable.car_back),
+            contentDescription = "Car Back Image",
+            modifier = Modifier
+                .fillMaxWidth()
+                .size(200.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Please Make Sure:\n" +
+                "1.No obstacle or blur image of the vehicle\n" +
+                "2.The Whole Registration Number is visible and center in the picture ",
+            modifier = Modifier.fillMaxWidth())
+        UploadIdButton { uri ->
+            carbackuri =  uri
+        }
+        if (carbackuri != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(color = Color.Green),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Done",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f) // Ensures the "Done" text takes available space
+                )
+
+                IconButton(onClick = { carbackuri = null }) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Reset",
+                        tint = Color.Black
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+//      Submit Button
+        Button(
+            onClick = {
+                showDialog = true
+
+                if(carmake.isNotEmpty() && carmodel.isNotEmpty() && carcolor.isNotEmpty() && registrationnum.isNotEmpty() && carfronturi != null && carbackuri != null){
+                    firestore.collection("Vehicle")
+                        .whereEqualTo("CarRegistrationNumber", registrationnum)
+                        .get()
+                        .addOnSuccessListener { querySnapshot ->
+                            if (querySnapshot.isEmpty) {
+                                // Upload lesen and profile picture to Firebase Storage
+                                val carfrontUrl =
+                                    firebaseStorage.reference.child("Vehicle Photo/$caseId/car_front.jpg")
+                                val carbackUrl =
+                                    firebaseStorage.reference.child("Vehicle Photo/$caseId/car_back.jpg")
+
+                                // Upload Front
+                                carfronturi?.let {
+                                    carfrontUrl.putFile(it).addOnSuccessListener {
+                                        carfrontUrl.downloadUrl.addOnSuccessListener { fronturl ->
+                                            // Upload Back
+                                            carbackuri?.let { it1 ->
+                                                carbackUrl.putFile(it1).addOnSuccessListener {
+                                                    carbackUrl.downloadUrl.addOnSuccessListener { backUrl ->
+                                                        // Save details to Firestore
+                                                        val userData = hashMapOf(
+                                                            "caseId" to caseId,
+                                                            "CarMake" to carmake,
+                                                            "CarModel" to carmodel,
+                                                            "CarColour" to carcolor,
+                                                            "CarRegistrationNumber" to registrationnum,
+                                                            "CarFrontPhoto" to fronturl.toString(),
+                                                            "CarBackPhoto" to backUrl.toString(),
+                                                            "status" to "Active",
+                                                            "UserID" to userId
+                                                        )
+                                                        firestore.collection("Vehicle")
+                                                            .document(caseId)
+                                                            .set(userData)
+                                                            .addOnSuccessListener {
+                                                                // Update driver collection with the required changes
+                                                                firestore.collection("driver")
+                                                                    .document(userId)
+                                                                    .update(
+                                                                        mapOf(
+                                                                            "vehicleId" to caseId, // Update vehicleid to caseId
+                                                                            "vehiclePlate" to registrationnum // Update vehicleplate to CarRegistrationNumber
+                                                                        )
+                                                                    )
+                                                                    .addOnSuccessListener {
+                                                                        showDialog = false
+                                                                        Toast.makeText(
+                                                                            context,
+                                                                            "Submitted Successfully",
+                                                                            Toast.LENGTH_SHORT
+                                                                        ).show()
+                                                                        navController.navigate("driversuccess")
+                                                                    }
+                                                                    .addOnFailureListener { e ->
+                                                                        showDialog = false
+                                                                        Toast.makeText(
+                                                                            context,
+                                                                            "Error: ${e.message}",
+                                                                            Toast.LENGTH_SHORT
+                                                                        ).show()
+                                                                    }
+                                                            }
+                                                            .addOnFailureListener { e ->
+                                                                showDialog = false
+                                                                Toast.makeText(
+                                                                    context,
+                                                                    "Error: ${e.message}",
+                                                                    Toast.LENGTH_SHORT
+                                                                ).show()
+                                                            }
+                                                    }
+                                                }.addOnFailureListener { e ->
+                                                    showDialog = false
+                                                    Toast.makeText(
+                                                        context,
+                                                        "Error uploading selfie: ${e.message}",
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                }
+                                            }
+                                        }
+                                    }.addOnFailureListener { e ->
+                                        showDialog = false
+                                        Toast.makeText(
+                                            context,
+                                            "Error uploading ID: ${e.message}",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                            } else {
+                                showDialog = false
+                                navController.navigate("duplicatecar")
+                            }
+                        }
+                }else{
+                    showDialog = false
+                    Toast.makeText(context, "Please fill up all the details", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+        ) {
+            Text("Submit")
+        }
+
+        // Show Loading Dialog
+        LoadingDialog(text= "Uploading..." , showDialog = showDialog, onDismiss = { showDialog = false })
+    }
+}
+
+@Composable
+fun DriverSuccess(navController: NavController) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Registered Successful",
+            fontWeight = FontWeight.Bold,
+            fontSize = 24.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Image(
+            painter = painterResource(id = R.drawable.completed_icon), // Replace with your error image resource
+            contentDescription = "Complete Icon",
+            modifier = Modifier.size(150.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Thanks for being a part of SHARide Community, you are ready to go as a driver!",
+            fontSize = 16.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(modifier = Modifier.height(34.dp))
+
+        // "Try Again" Button
+        Button(
+            onClick = {
+                //navController.navigate("intro")
+            }, // Navigate to the verification screen
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+        ) {
+            Text(text = "Done", color = Color.White)
+        }
+    }
+}
+
+@Composable
+fun DriverCustomerService(navController: NavController) {
+    val context = LocalContext.current
+    val firebaseStorage = FirebaseStorage.getInstance()
+    val firestore = Firebase.firestore // Ensure Firebase Firestore is set up correctly
+
+    // User inputs
+    var name by remember { mutableStateOf("") }
+    var driverid by remember { mutableStateOf("") }
+    var selfieUri by remember { mutableStateOf<Uri?>(null) }
+    var IDUri by remember { mutableStateOf<Uri?>(null) }
+    var carmake by remember { mutableStateOf("") }
+    var carmodel by remember { mutableStateOf("") }
+    var carcolor by remember { mutableStateOf("") }
+    var registrationnum by remember { mutableStateOf("") }
+
+    // Image upload URIs
+    var carfronturi by remember { mutableStateOf<Uri?>(null) }
+    var carbackuri by remember { mutableStateOf<Uri?>(null) }
+
+    // Generate a unique case ID
+    val caseId = UUID.randomUUID().toString()
+
+    // Dialog visibility state
+    var showDialog by remember { mutableStateOf(false) }
+    val firebaseAuth = FirebaseAuth.getInstance()
+
+    // Get logged-in user's ID
+    val userId = firebaseAuth.currentUser?.uid ?: "unknown_user"
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()), // Enable scrolling
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Title
+        Spacer(modifier = Modifier.height(56.dp))
+
+        Text("Manual Verification",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("Please Fill in all the field to submit the form.")
+
+        Spacer(modifier = Modifier.height(36.dp))
+
+        // Personal Details
+        Text("1. Driver Details",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it.uppercase() },
+            label = { Text("Your Name") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = driverid,
+            onValueChange = { driverid = it.uppercase() },
+            label = { Text("Your Driving ID (Eg.030101141999)") },
+            modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done, keyboardType = KeyboardType.Decimal),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
+        )
+        Spacer(modifier = Modifier.height(38.dp))
+
+        // Personal Details
+        Text("2. Upload Driving Lesen",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(text = "Please Upload the front of your Driving Lesen for verification purpose")
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Image(
+            painter = painterResource(id = R.drawable.drivinglesen),
+            contentDescription = "Driving ID image",
+            modifier = Modifier
+                .fillMaxWidth()
+                .size(200.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Please Make Sure:\n" +
+                "1.No obstacle or blur image of the driving lesen\n" +
+                "2.The Whole Face and ID is visible and center in the picture ",
+            modifier = Modifier.fillMaxWidth())
+        UploadIdButton { uri ->
+            IDUri =  uri
+        }
+        if (IDUri != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(color = Color.Green)
+                    .padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Done",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f) // Ensures the "Done" text takes available space
+                )
+
+                IconButton(onClick = { IDUri = null }) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Reset",
+                        tint = Color.Black
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(38.dp))
+
+        // Personal Details
+        Text("3. Selfie with your Driving Lesen",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(text = "Please take a selfie with your Driving Lesen for verification purpose, make sure your face is fully exposed with your Driving Lesen together ")
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Image(
+            painter = painterResource(id = R.drawable.selfie_driver),
+            contentDescription = "TARUMT ID image",
+            modifier = Modifier
+                .fillMaxWidth()
+                .size(200.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Please Make Sure:\n" +
+                "1.No obstacle or blur image of the selfie\n" +
+                "2.The Whole Face and ID is visible and center in the picture ",
+            modifier = Modifier.fillMaxWidth())
+        UploadIdButton { uri ->
+            selfieUri =  uri
+        }
+        if (selfieUri != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(color = Color.Green)
+                    .padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Done",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f) // Ensures the "Done" text takes available space
+                )
+
+                IconButton(onClick = { selfieUri = null }) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Reset",
+                        tint = Color.Black
+                    )
+                }
+            }
+        }
+
+        // Personal Details
+        Text("4. Vehicle Details",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = carmake,
+            onValueChange = { carmake = it.uppercase() },
+            label = { Text("Car Make (Eg.Perodua) ") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = carmodel,
+            onValueChange = { carmodel = it.uppercase() },
+            label = { Text("Car Model (Eg. Axia)") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = carcolor,
+            onValueChange = { carcolor = it.uppercase() },
+            label = { Text("Car Colour (Eg. Black)") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = registrationnum,
+            onValueChange = { registrationnum = it.uppercase() },
+            label = { Text("Registration Number (Eg. VJQ 9999)") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if(carmake.isNotEmpty() && carmodel.isNotEmpty() && carcolor.isNotEmpty() && registrationnum.isNotEmpty()){
+            Text(text = "Done",
+                fontWeight = FontWeight.Bold,
+                color = Color.Black,
+                modifier = Modifier
+                    .background(color = Color.Green)
+                    .padding(10.dp)
+                    .fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Upload ID
+        Text("5. Upload Your Vehicle Photo",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text("Please take photos with your registered car for verification purpose, make sure car registration number plate is fully exposed with your car together ", modifier = Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(text = "Front of the vehicle", fontWeight = FontWeight.Bold)
+        Image(
+            painter = painterResource(id = R.drawable.car_front),
+            contentDescription = "Car Front Image",
+            modifier = Modifier
+                .fillMaxWidth()
+                .size(200.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Please Make Sure:\n" +
+                "1.No obstacle or blur image of the vehicle\n" +
+                "2.The Whole Registration Number is visible and center in the picture ",
+            modifier = Modifier.fillMaxWidth())
+        UploadIdButton { uri ->
+            carfronturi =  uri
+        }
+        if (carfronturi != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(color = Color.Green),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Done",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f) // Ensures the "Done" text takes available space
+                )
+
+                IconButton(onClick = { carfronturi = null }) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Reset",
+                        tint = Color.Black
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(text = "Back of the vehicle", fontWeight = FontWeight.Bold)
+        Image(
+            painter = painterResource(id = R.drawable.car_back),
+            contentDescription = "Car Back Image",
+            modifier = Modifier
+                .fillMaxWidth()
+                .size(200.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Please Make Sure:\n" +
+                "1.No obstacle or blur image of the vehicle\n" +
+                "2.The Whole Registration Number is visible and center in the picture ",
+            modifier = Modifier.fillMaxWidth())
+        UploadIdButton { uri ->
+            carbackuri =  uri
+        }
+        if (carbackuri != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(color = Color.Green),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Done",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f) // Ensures the "Done" text takes available space
+                )
+
+                IconButton(onClick = { carbackuri = null }) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Reset",
+                        tint = Color.Black
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+//      Submit Button
+        Button(
+            onClick = {
+                showDialog = true
+
+                if(IDUri != null && name.isNotEmpty() && driverid.isNotEmpty() && selfieUri != null && carmake.isNotEmpty() && carmodel.isNotEmpty() && carcolor.isNotEmpty() && registrationnum.isNotEmpty() && carfronturi != null && carbackuri != null){
+                    // Upload lesen and profile picture to Firebase Storage
+                    val driverIDUrl =
+                        firebaseStorage.reference.child("Driver Case/$caseId/driver_id.jpg")
+                    val driverselfieUrl =
+                        firebaseStorage.reference.child("Driver Case/$caseId/selfie.jpg")
+                    val carfrontUrl =
+                        firebaseStorage.reference.child("Driver Case/$caseId/car_front.jpg")
+                    val carbackUrl =
+                        firebaseStorage.reference.child("Driver Case/$caseId/car_back.jpg")
+
+                    // Upload Front
+                    carfronturi?.let {
+                        carfrontUrl.putFile(it).addOnSuccessListener {
+                            carfrontUrl.downloadUrl.addOnSuccessListener { fronturl ->
+                                // Upload Back
+                                carbackuri?.let { it1 ->
+                                    carbackUrl.putFile(it1).addOnSuccessListener {
+                                        carbackUrl.downloadUrl.addOnSuccessListener { backUrl ->
+                                            driverselfieUrl.putFile(selfieUri!!).addOnSuccessListener {
+                                                driverselfieUrl.downloadUrl.addOnSuccessListener { selfieUrl ->
+                                                    driverIDUrl.putFile(IDUri!!).addOnSuccessListener {
+                                                        driverIDUrl.downloadUrl.addOnSuccessListener { idcardurl ->
+                                                            // Save details to Firestore
+                                                            val userData = hashMapOf(
+                                                                "caseId" to caseId,
+                                                                "driverName" to name,
+                                                                "driverId" to driverid,
+                                                                "IDPhoto" to idcardurl.toString(),
+                                                                "driverSelfie" to selfieUrl.toString(),
+                                                                "CarMake" to carmake,
+                                                                "CarModel" to carmodel,
+                                                                "CarColour" to carcolor,
+                                                                "CarRegistrationNumber" to registrationnum,
+                                                                "CarFrontPhoto" to fronturl.toString(),
+                                                                "CarBackPhoto" to backUrl.toString(),
+                                                                "status" to "",
+                                                                "remark" to "",
+                                                                "UserID" to userId
+                                                            )
+                                                            firestore.collection("Driver Case")
+                                                                .document(caseId)
+                                                                .set(userData)
+                                                                .addOnSuccessListener {
+                                                                    showDialog = false
+                                                                    Toast.makeText(
+                                                                        context,
+                                                                        "Submitted Successfully",
+                                                                        Toast.LENGTH_SHORT
+                                                                    ).show()
+                                                                    navController.navigate("ReportSubmitted/home")
+                                                                }.addOnFailureListener { e ->
+                                                                    showDialog = false
+                                                                    Toast.makeText(
+                                                                        context,
+                                                                        "Error: ${e.message}",
+                                                                        Toast.LENGTH_SHORT
+                                                                    ).show()
+                                                                }
+                                                        }.addOnFailureListener { e ->
+                                                            showDialog = false
+                                                            Toast.makeText(
+                                                                context,
+                                                                "Error: ${e.message}",
+                                                                Toast.LENGTH_SHORT
+                                                            ).show()
+                                                        }
+                                                    }.addOnFailureListener { e ->
+                                                        showDialog = false
+                                                        Toast.makeText(
+                                                            context,
+                                                            "Error: ${e.message}",
+                                                            Toast.LENGTH_SHORT
+                                                        ).show()
+                                                    }
+
+
+                                                }.addOnFailureListener { e ->
+                                                    showDialog = false
+                                                    Toast.makeText(
+                                                        context,
+                                                        "Error: ${e.message}",
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                }
+                                            }.addOnFailureListener { e ->
+                                                showDialog = false
+                                                Toast.makeText(
+                                                    context,
+                                                    "Error uploading Driver ID: ${e.message}",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        }.addOnFailureListener { e ->
+                                            showDialog = false
+                                            Toast.makeText(
+                                                context,
+                                                "Error download Car Back Pic Link: ${e.message}",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }.addOnFailureListener { e ->
+                                        showDialog = false
+                                        Toast.makeText(
+                                            context,
+                                            "Error uploading Car Back Pic: ${e.message}",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                            }
+                        }.addOnFailureListener { e ->
+                            showDialog = false
+                            Toast.makeText(
+                                context,
+                                "Error uploading Car Front Pic: ${e.message}",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                }else{
+                    showDialog = false
+                    Toast.makeText(context, "Please fill up all the details", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+        ) {
+            Text("Submit")
+        }
+
+        // Show Loading Dialog
+        LoadingDialog(text= "Uploading..." , showDialog = showDialog, onDismiss = { showDialog = false })
+    }
 }
