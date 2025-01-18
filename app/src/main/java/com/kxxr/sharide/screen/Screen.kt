@@ -127,6 +127,9 @@ fun AppNavHost(firebaseAuth: FirebaseAuth, networkViewModel: NetworkViewModel) {
             composable("driversuccess") { DriverSuccess(navController) }
             composable("duplicatecar") { DuplicateVehicle(navController)}
             composable("driverCustomerService") { DriverCustomerService(navController) }
+
+            //profile
+            composable("profile") { ProfileScreen(firebaseAuth, navController) }
         }
     }
 }
