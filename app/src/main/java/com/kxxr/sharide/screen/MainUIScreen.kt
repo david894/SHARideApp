@@ -294,14 +294,15 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
             Text(text = "Student ID: $studentId", color = Color.White,fontSize = 18.sp, fontWeight = FontWeight.Medium)
             Text(text = "Email: ${currentUser?.email.orEmpty()}", color = Color.White,fontSize = 18.sp, fontWeight = FontWeight.Medium)
         }
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(top = 280.dp)
+                .padding(bottom = 150.dp)
                 .verticalScroll(rememberScrollState()), // Enable scrolling
                 horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // **Middle Functional Cards**
-            Spacer(modifier = Modifier.height(280.dp))
 
             Column(
                 modifier = Modifier.fillMaxWidth()
@@ -309,6 +310,7 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
                 ProfileCard(title = "Reset Password", onClick = { /* Navigate */ })
                 ProfileCard(title = "Enable 2FA Login", onClick = { /* Navigate */ })
                 ProfileCard(title = "Edit Phone Number", onClick = { /* Navigate */ })
+
             }
 
             Spacer(modifier = Modifier.height(50.dp)) // Pushes Log Out button to bottom
