@@ -10,6 +10,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -32,6 +33,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,7 +44,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -292,17 +296,17 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
 
             Text(text = "$userName", fontSize = 20.sp, color = Color.White ,fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 10.dp))
             Text(text = "Student ID: $studentId", color = Color.White,fontSize = 18.sp, fontWeight = FontWeight.Medium)
-            Text(text = "Email: ${currentUser?.email.orEmpty()}", color = Color.White,fontSize = 18.sp, fontWeight = FontWeight.Medium)
         }
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 280.dp)
-                .padding(bottom = 150.dp)
                 .verticalScroll(rememberScrollState()), // Enable scrolling
                 horizontalAlignment = Alignment.CenterHorizontally
         ) {
+
+            Text(text = "Settings", color = Color.Gray, fontSize = 20.sp, modifier = Modifier.fillMaxWidth().padding(8.dp))
 
             Column(
                 modifier = Modifier.fillMaxWidth()
@@ -330,6 +334,9 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
             ) {
                 Text(text = "Log Out", color = Color.White, fontSize = 16.sp)
             }
+
+            Spacer(modifier = Modifier.height(150.dp)) // Pushes Log Out button to bottom
+
         }
     }
 
@@ -360,92 +367,73 @@ fun ProfileCard(title: String, onClick: () -> Unit) {
 }
 
 @Composable
-fun BottomNavBar(screen:String,navController: NavController) {
-    BottomAppBar(
-        containerColor = Color.White,
-        contentColor = Color.White,
+fun BottomNavBar(screen: String, navController: NavController) {
+    Box(
         modifier = Modifier
-            .border(1.dp, Color.Gray)
-            .padding(10.dp)
+            .fillMaxWidth()
+            .padding(bottom = 36.dp), // Moves the navbar slightly above the bottom edge
+        contentAlignment = Alignment.Center
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceAround
+        Surface(
+            modifier = Modifier
+                .width(300.dp) // Adjust width to make it smaller
+                .height(78.dp) // Control height
+                .padding(8.dp)
+                .clip(RoundedCornerShape(30.dp)) // Rounded edges like a pebble
+                .shadow(12.dp, RoundedCornerShape(30.dp))
+                .border(1.dp,Color.LightGray,RoundedCornerShape(30.dp)), // Floating shadow effect
+            color = Color.White, // Background color
+            tonalElevation = 8.dp // More elevation for a lifted effect
         ) {
-            // Complete Task Button
-            Button(
-                onClick = {
-                    navController.navigate("home")
-                },
+            Row(
                 modifier = Modifier
-                    .size(100.dp) ,
-                // Adjust size as needed
-                shape = RoundedCornerShape(8.dp), // Adjust corner radius as needed
-                contentPadding = PaddingValues(3.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    if(screen == "home") Color.hsl(195F, 0.6F, 0.89F) else Color.White
-                ) // Customize color
-
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp), // Adds spacing inside
+                horizontalArrangement = Arrangement.SpaceAround,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Image(
-                        painter = painterResource(id = R.drawable.home_ico),
-                        contentDescription = "Home",
-                        modifier = Modifier.size(40.dp)
-                    )
-                    Spacer(modifier = Modifier.height(4.dp)) // Add some space
-                    Text("Home", fontSize = 11.sp)
-                }
-            }
-            // eWallet Button
-            Button(
-                onClick = {
-                },
-                modifier = Modifier
-                    .size(100.dp), // Adjust size as needed
-                // Adjust size as needed
-                shape = RoundedCornerShape(8.dp), // Adjust corner radius as needed
-                contentPadding = PaddingValues(3.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    if(screen == "eWallet") Color.hsl(195F, 0.6F, 0.89F) else Color.White
-                ) // Customize color
-
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ewallet_ico),
-                        contentDescription = "eWallet",
-                        modifier = Modifier.size(40.dp)
-                    )
-                    Spacer(modifier = Modifier.height(4.dp)) // Add some space
-                    Text("eWallet", fontSize = 11.sp)
-                }
-            }
-            // Profile Button
-            Button(
-                onClick = {
-                    navController.navigate("profile")
-                },
-                modifier = Modifier
-                    .size(100.dp), // Adjust size as needed
-                // Adjust size as needed
-                shape = RoundedCornerShape(8.dp), // Adjust corner radius as needed
-                contentPadding = PaddingValues(3.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    if(screen == "profile") Color.hsl(195F, 0.6F, 0.89F) else Color.White
-                ) // Customize color
-
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Image(
-                        painter = painterResource(id = R.drawable.profile_ico),
-                        contentDescription = "eWallet",
-                        modifier = Modifier.size(40.dp)
-                    )
-                    Spacer(modifier = Modifier.height(4.dp)) // Add some space
-                    Text("Profile", fontSize = 11.sp)
-                }
+                BottomNavItem(
+                    icon = R.drawable.home_ico,
+                    label = "Home",
+                    isSelected = screen == "home",
+                    onClick = { navController.navigate("home") }
+                )
+                BottomNavItem(
+                    icon = R.drawable.ewallet_ico,
+                    label = "eWallet",
+                    isSelected = screen == "eWallet",
+                    onClick = { navController.navigate("ewallet") }
+                )
+                BottomNavItem(
+                    icon = R.drawable.profile_ico,
+                    label = "Profile",
+                    isSelected = screen == "profile",
+                    onClick = { navController.navigate("profile") }
+                )
             }
         }
+    }
+}
+
+// **Reusable Bottom Nav Item**
+@Composable
+fun BottomNavItem(icon: Int, label: String, isSelected: Boolean, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp)
+    ) {
+        Image(
+            painter = painterResource(id = icon),
+            contentDescription = label,
+            modifier = Modifier.size(30.dp),
+            colorFilter = if (isSelected) ColorFilter.tint(Color.Blue) else null
+        )
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            color = if (isSelected) Color.Blue else Color.Gray
+        )
     }
 }
