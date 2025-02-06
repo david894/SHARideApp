@@ -102,7 +102,7 @@ fun AppNavHost(firebaseAuth: FirebaseAuth, networkViewModel: NetworkViewModel) {
             composable("signupFailed") { UnableToVerifyScreen(navController) }
             composable("signupFailedFace") { UnableToVerifyFace(navController) }
             composable("duplicateID"){UnableToVerifyDuplicateID(navController)}
-            composable("home") {  HomeScreen(firebaseAuth, navController) }
+            composable("home") {  MyApp() }
             composable("customerServiceTARUMTID") { CustomerServiceScreen(navController) }
             composable("ReportSubmitted/{link}") { backStackEntry ->
                 val link = backStackEntry.arguments?.getString("link").orEmpty()
