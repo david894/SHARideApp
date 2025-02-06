@@ -70,8 +70,6 @@ dependencies {
     // Permission Handling (Accompanist no longer needed)
     implementation("com.google.accompanist:accompanist-permissions:0.31.1-alpha")
 
-
-
     implementation ("com.google.android.gms:play-services-auth:20.7.0")
     implementation ("com.google.mlkit:text-recognition:16.0.1")
     implementation ("com.google.mlkit:object-detection:17.0.0")
