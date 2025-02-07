@@ -295,7 +295,7 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
             Spacer(modifier = Modifier.height(126.dp))
 
             Text(text = "$userName", fontSize = 20.sp, color = Color.White ,fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 10.dp))
-            Text(text = "Student ID: $studentId", color = Color.White,fontSize = 18.sp, fontWeight = FontWeight.Medium)
+            Text(text = "ID: $studentId", color = Color.White,fontSize = 18.sp, fontWeight = FontWeight.Medium)
         }
 
         Column(

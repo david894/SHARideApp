@@ -132,7 +132,10 @@ fun AppNavHost(firebaseAuth: FirebaseAuth, networkViewModel: NetworkViewModel) {
 
             //home
             composable("home") {  MyApp(navController) }
-            //composable("permission_error") {  PermissionErrorScreen(navController) }
+
+            //ewallet
+            composable("ewallet") {  EWalletIntro(navController) }
+
         }
     }
 }
