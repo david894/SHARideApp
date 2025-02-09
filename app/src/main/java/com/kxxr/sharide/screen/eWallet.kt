@@ -52,18 +52,20 @@ import com.kxxr.sharide.R
 fun EWalletIntro(navController: NavController) {
     val context = LocalContext.current
     var showPinDialog by remember { mutableStateOf(false) }
+    var showConfirmPinDialog by remember { mutableStateOf(false) }
+    var firstPin by remember { mutableStateOf("") }
+    var errorPIN by remember { mutableStateOf(false) }
 
     Scaffold(
-        bottomBar = { BottomNavBar("eWallet",navController) }
-    ) {paddingValues ->
+        bottomBar = { BottomNavBar("eWallet", navController) }
+    ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Blue),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+            verticalArrangement = Arrangement.Center
         ) {
-
             Text(
                 text = "Welcome to \n\nSHARide eWallet",
                 fontWeight = FontWeight.Bold,
@@ -74,14 +76,14 @@ fun EWalletIntro(navController: NavController) {
             Spacer(modifier = Modifier.height(16.dp))
 
             Image(
-                painter = painterResource(id = R.drawable.ewallet_intro), // Replace with your error image resource
-                contentDescription = "Error Icon",
+                painter = painterResource(id = R.drawable.ewallet_intro),
+                contentDescription = "EWallet Intro",
                 modifier = Modifier.size(300.dp)
             )
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "Ditch the Cash, Glide with Ease \n\nSimplify Carpool Payments with Our New eWallet Payment system ",
+                text = "Ditch the Cash, Glide with Ease \n\nSimplify Carpool Payments with Our New eWallet Payment system",
                 fontSize = 21.sp,
                 textAlign = TextAlign.Center,
                 color = Color.White,
@@ -89,11 +91,11 @@ fun EWalletIntro(navController: NavController) {
             )
             Spacer(modifier = Modifier.height(54.dp))
 
-            // "Try Again" Button
+            // "Create PIN" Button
             Button(
                 onClick = {
                     showPinDialog = true
-                }, // Navigate to the verification screen
+                },
                 modifier = Modifier
                     .width(300.dp)
                     .height(50.dp),
@@ -105,24 +107,47 @@ fun EWalletIntro(navController: NavController) {
             Spacer(modifier = Modifier.height(66.dp))
         }
     }
-    // Show the PIN input dialog when triggered
+
+    // Step 1: User enters the first PIN
     if (showPinDialog) {
         PinInputDialog(
-            title = "Create PIN",
+            title = if(errorPIN){"Error! PIN do not match\n\nCreate PIN"}else{"Create PIN"},
             description = "Please create a 6-digit PIN to associate with your eWallet",
             onPinEntered = { enteredPin ->
-                // Handle PIN submission
-                Toast.makeText( context,"$enteredPin", Toast.LENGTH_SHORT).show()
-                println("Entered PIN: $enteredPin")
+                firstPin = enteredPin
                 showPinDialog = false
-                // TODO: Save the PIN or navigate
+                showConfirmPinDialog = true // Move to confirmation step
             },
             onDismiss = {
                 showPinDialog = false
             }
         )
     }
+
+    // Step 2: User confirms the PIN
+    if (showConfirmPinDialog) {
+        PinInputDialog(
+            title = "Confirm PIN",
+            description = "Please re-enter your 6-digit PIN",
+            onPinEntered = { confirmedPin ->
+                if (confirmedPin == firstPin) {
+                    Toast.makeText(context, "PIN set successfully! $confirmedPin", Toast.LENGTH_SHORT).show()
+                    println("PIN Set: $confirmedPin")
+                    showConfirmPinDialog = false
+                } else {
+                    Toast.makeText(context, "PINs do not match! Try again.", Toast.LENGTH_SHORT).show()
+                    showConfirmPinDialog = false
+                    errorPIN = true
+                    showPinDialog = true // Restart PIN entry
+                }
+            },
+            onDismiss = {
+                showConfirmPinDialog = false
+            }
+        )
+    }
 }
+
 
 @Composable
 fun PinInputDialog(

@@ -99,6 +99,7 @@ fun AppNavHost(firebaseAuth: FirebaseAuth, networkViewModel: NetworkViewModel) {
 
                 SignUpScreen(navController, name, studentId, imagePath)
             }
+            composable("emailverify") { EmailVerify(navController) }
             composable("signupFailed") { UnableToVerifyScreen(navController) }
             composable("signupFailedFace") { UnableToVerifyFace(navController) }
             composable("duplicateID"){UnableToVerifyDuplicateID(navController)}
@@ -420,15 +421,56 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
                                                     firebaseUser.linkWithCredential(emailCredential)
                                                         .addOnCompleteListener { linkTask ->
                                                             if (linkTask.isSuccessful) {
-                                                                Toast.makeText(
-                                                                    context,
-                                                                    "Successfully linked Email/Password with Google.",
-                                                                    Toast.LENGTH_SHORT
-                                                                ).show()
-                                                                navController.navigate("home")
+                                                                val user = firebaseAuth.currentUser
+                                                                // Check if email is verified
+                                                                user?.reload()?.addOnSuccessListener {
+                                                                    if (user.isEmailVerified) {
+                                                                        showDialog = false
+                                                                        Toast.makeText(
+                                                                            context,
+                                                                            "Login successful!",
+                                                                            Toast.LENGTH_LONG
+                                                                        ).show()
+                                                                        // Navigate to the home screen
+                                                                        navController.navigate("home")
+                                                                    } else {
+                                                                        showDialog = false
+                                                                        firebaseAuth.signOut() // Sign out unverified user
+                                                                        Toast.makeText(
+                                                                            context,
+                                                                            "Please verify your email before logging in!",
+                                                                            Toast.LENGTH_LONG
+                                                                        ).show()
+                                                                        errormsg =
+                                                                            "Please verify your email before logging in!"
+                                                                    }
+                                                                }
                                                             } else {
                                                                 if (firebaseAuth.currentUser != null){
-                                                                    navController.navigate("home")
+                                                                    val user = firebaseAuth.currentUser
+                                                                    // Check if email is verified
+                                                                    user?.reload()?.addOnSuccessListener {
+                                                                        if (user.isEmailVerified) {
+                                                                            showDialog = false
+                                                                            Toast.makeText(
+                                                                                context,
+                                                                                "Login successful!",
+                                                                                Toast.LENGTH_LONG
+                                                                            ).show()
+                                                                            // Navigate to the home screen
+                                                                            navController.navigate("home")
+                                                                        } else {
+                                                                            showDialog = false
+                                                                            firebaseAuth.signOut() // Sign out unverified user
+                                                                            Toast.makeText(
+                                                                                context,
+                                                                                "Please verify your email before logging in!",
+                                                                                Toast.LENGTH_LONG
+                                                                            ).show()
+                                                                            errormsg =
+                                                                                "Please verify your email before logging in!"
+                                                                        }
+                                                                    }
                                                                 }else{
                                                                     Toast.makeText(
                                                                         context,
@@ -444,12 +486,30 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
                                                     firebaseUser.linkWithCredential(emailCredential)
                                                         .addOnCompleteListener { linkTask ->
                                                             if (linkTask.isSuccessful) {
-                                                                Toast.makeText(
-                                                                    context,
-                                                                    "Successfully linked Email/Password with Google.",
-                                                                    Toast.LENGTH_SHORT
-                                                                ).show()
-                                                                navController.navigate("home")
+                                                                val user = firebaseAuth.currentUser
+                                                                // Check if email is verified
+                                                                user?.reload()?.addOnSuccessListener {
+                                                                    if (user.isEmailVerified) {
+                                                                        showDialog = false
+                                                                        Toast.makeText(
+                                                                            context,
+                                                                            "Login successful!",
+                                                                            Toast.LENGTH_LONG
+                                                                        ).show()
+                                                                        // Navigate to the home screen
+                                                                        navController.navigate("home")
+                                                                    } else {
+                                                                        showDialog = false
+                                                                        firebaseAuth.signOut() // Sign out unverified user
+                                                                        Toast.makeText(
+                                                                            context,
+                                                                            "Please verify your email before logging in!",
+                                                                            Toast.LENGTH_LONG
+                                                                        ).show()
+                                                                        errormsg =
+                                                                            "Please verify your email before logging in!"
+                                                                    }
+                                                                }
                                                             } else {
                                                                 Toast.makeText(
                                                                     context,
@@ -460,12 +520,30 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
                                                         }
                                                 } else {
                                                     // Already linked, allow sign-in
-                                                    Toast.makeText(
-                                                        context,
-                                                        "Google Sign-In successful. Email/Password already linked.",
-                                                        Toast.LENGTH_SHORT
-                                                    ).show()
-                                                    navController.navigate("home")
+                                                    val user = firebaseAuth.currentUser
+                                                    // Check if email is verified
+                                                    user?.reload()?.addOnSuccessListener {
+                                                        if (user.isEmailVerified) {
+                                                            showDialog = false
+                                                            Toast.makeText(
+                                                                context,
+                                                                "Login successful!",
+                                                                Toast.LENGTH_LONG
+                                                            ).show()
+                                                            // Navigate to the home screen
+                                                            navController.navigate("home")
+                                                        } else {
+                                                            showDialog = false
+                                                            firebaseAuth.signOut() // Sign out unverified user
+                                                            Toast.makeText(
+                                                                context,
+                                                                "Please verify your email before logging in!",
+                                                                Toast.LENGTH_LONG
+                                                            ).show()
+                                                            errormsg =
+                                                                "Please verify your email before logging in!"
+                                                        }
+                                                    }
                                                 }
                                             }
                                             .addOnFailureListener { e ->
@@ -617,10 +695,24 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
                     firebaseAuth.signInWithEmailAndPassword(email, password)
                         .addOnCompleteListener { task ->
                             if (task.isSuccessful) {
-                                showDialog = false
-                                Toast.makeText(context, "Login successful!", Toast.LENGTH_LONG).show()
-                                // Navigate to the next screen
-                                navController.navigate("home")
+                                val user = firebaseAuth.currentUser
+                                // Check if email is verified
+                                user?.reload()?.addOnSuccessListener {
+                                    if (user.isEmailVerified) {
+                                        showDialog = false
+                                        Toast.makeText(context, "Login successful!", Toast.LENGTH_LONG).show()
+                                        // Navigate to the home screen
+                                        navController.navigate("home")
+                                    } else {
+                                        showDialog = false
+                                        firebaseAuth.signOut() // Sign out unverified user
+                                        Toast.makeText(context, "Please verify your email before logging in!", Toast.LENGTH_LONG).show()
+                                        errormsg = "Please verify your email before logging in!"
+                                    }
+                                }?.addOnFailureListener { e ->
+                                    showDialog = false
+                                    Toast.makeText(context, "Error checking email verification: ${e.message}", Toast.LENGTH_LONG).show()
+                                }
                             } else {
                                 showDialog = false
                                 // Check if the error is due to invalid credentials caused by linking with Google
@@ -1024,6 +1116,7 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
     var password by remember { mutableStateOf("") }
     var gender by remember { mutableStateOf("M") } // Default to "M"
     var isEmailValid by remember { mutableStateOf(true) }
+    var duplicateEmail by remember { mutableStateOf(false) }
     var isPhoneValid by remember { mutableStateOf(true) }
     var userName by remember { mutableStateOf(name) }
     var userid by remember { mutableStateOf(studentId.replace('O', '0')) }
@@ -1118,7 +1211,9 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
         if (!isEmailValid) {
             Text(text = "Only email ending with tarc.edu.my is accepted", color = Color.Red, fontSize = 12.sp)
         }
-
+        if (duplicateEmail) {
+            Text(text = "Error! This Email has been registered before, Try Again!", color = Color.Red, fontSize = 12.sp)
+        }
         // Phone Number Field
         OutlinedTextField(
             value = phoneNumber,
@@ -1215,86 +1310,177 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
                 // Validate form inputs
                 if (email.isNotEmpty() && isEmailValid && phoneNumber.isNotEmpty() && isPhoneValid && userName.isNotEmpty() && userid.isNotEmpty() && password.isNotEmpty() && profilePicture != null) {
                     showDialog = true
+                    // Check if the email is already registered
+                    firebaseAuth.fetchSignInMethodsForEmail(email)
+                        .addOnCompleteListener { task ->
+                            if (task.isSuccessful) {
+                                val signInMethods = task.result?.signInMethods
+                                if (signInMethods.isNullOrEmpty()) {
+                                    // Email is NOT registered, now check studentId in Firestore
+                                    // Check for duplicate studentId in Firestore
+                                    firestore.collection("users")
+                                        .whereEqualTo("studentId", userid)
+                                        .get()
+                                        .addOnSuccessListener { querySnapshot ->
+                                            if (querySnapshot.isEmpty) {
 
-                    // Check for duplicate studentId in Firestore
-                    firestore.collection("users")
-                        .whereEqualTo("studentId", userid)
-                        .get()
-                        .addOnSuccessListener { querySnapshot ->
-                            if (querySnapshot.isEmpty) {
-                                // No duplicate studentId, proceed with sign-up
-                                firebaseAuth.createUserWithEmailAndPassword(email, password)
-                                    .addOnCompleteListener { task ->
-                                        if (task.isSuccessful) {
-                                            // Get the Firebase user ID
-                                            val firebaseUserId = task.result?.user?.uid
+                                                // No duplicate studentId, proceed with sign-up
+                                                firebaseAuth.createUserWithEmailAndPassword(
+                                                    email,
+                                                    password
+                                                )
+                                                    .addOnCompleteListener { task ->
+                                                        if (task.isSuccessful) {
+                                                            // Get the Firebase user ID
+                                                            val firebaseUserId =
+                                                                task.result?.user?.uid
 
-                                            // Upload profile picture to Firebase Storage
-                                            val storageReference = FirebaseStorage.getInstance()
-                                                .reference
-                                                .child("ProfilePic/$firebaseUserId.png")
+                                                            val firebaseUser = task.result?.user
 
-                                            val byteArrayOutputStream = ByteArrayOutputStream()
-                                            profilePicture.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
-                                            val profilePicData = byteArrayOutputStream.toByteArray()
+                                                            // Send email verification
+                                                            firebaseUser?.sendEmailVerification()
+                                                                ?.addOnSuccessListener {
+                                                                    Toast.makeText(
+                                                                        context,
+                                                                        "Verification email sent!",
+                                                                        Toast.LENGTH_SHORT
+                                                                    ).show()
+                                                                }?.addOnFailureListener { e ->
+                                                                Toast.makeText(
+                                                                    context,
+                                                                    "Failed to send verification email: ${e.message}",
+                                                                    Toast.LENGTH_SHORT
+                                                                ).show()
+                                                            }
+                                                            
+                                                            // Upload profile picture to Firebase Storage
+                                                            val storageReference =
+                                                                FirebaseStorage.getInstance()
+                                                                    .reference
+                                                                    .child("ProfilePic/$firebaseUserId.png")
 
-                                            val uploadTask = storageReference.putBytes(profilePicData)
-                                            uploadTask.addOnSuccessListener {
-                                                // Get the download URL for the uploaded profile picture
-                                                storageReference.downloadUrl.addOnSuccessListener { uri ->
-                                                    val profileImageUrl = uri.toString()
+                                                            val byteArrayOutputStream =
+                                                                ByteArrayOutputStream()
+                                                            profilePicture.compress(
+                                                                Bitmap.CompressFormat.PNG,
+                                                                100,
+                                                                byteArrayOutputStream
+                                                            )
+                                                            val profilePicData =
+                                                                byteArrayOutputStream.toByteArray()
 
-                                                    // Save user data to Firestore
-                                                    val userData = hashMapOf(
-                                                        "firebaseUserId" to firebaseUserId, // Firebase Authentication user ID
-                                                        "name" to userName,
-                                                        "studentId" to userid,
-                                                        "email" to email,
-                                                        "phoneNumber" to phoneNumber,
-                                                        "gender" to gender,
-                                                        "profileImageUrl" to profileImageUrl // Save URL of the uploaded image
-                                                    )
-                                                    firestore.collection("users")
-                                                        .add(userData)
-                                                        .addOnSuccessListener {
+                                                            val uploadTask =
+                                                                storageReference.putBytes(
+                                                                    profilePicData
+                                                                )
+                                                            uploadTask.addOnSuccessListener {
+                                                                // Get the download URL for the uploaded profile picture
+                                                                storageReference.downloadUrl.addOnSuccessListener { uri ->
+                                                                    val profileImageUrl =
+                                                                        uri.toString()
+
+                                                                    // Save user data to Firestore
+                                                                    val userData = hashMapOf(
+                                                                        "firebaseUserId" to firebaseUserId, // Firebase Authentication user ID
+                                                                        "name" to userName,
+                                                                        "studentId" to userid,
+                                                                        "email" to email,
+                                                                        "phoneNumber" to phoneNumber,
+                                                                        "gender" to gender,
+                                                                        "profileImageUrl" to profileImageUrl // Save URL of the uploaded image
+                                                                    )
+                                                                    firestore.collection("users")
+                                                                        .add(userData)
+                                                                        .addOnSuccessListener {
+                                                                            showDialog = false
+                                                                            Toast.makeText(
+                                                                                context,
+                                                                                "User Registered Successfully",
+                                                                                Toast.LENGTH_SHORT
+                                                                            ).show()
+                                                                            firebaseAuth.signOut()
+                                                                            navController.navigate("emailverify")
+                                                                        }
+                                                                        .addOnFailureListener { e ->
+                                                                            showDialog = false
+                                                                            Toast.makeText(
+                                                                                context,
+                                                                                "Error saving user data: ${e.message}",
+                                                                                Toast.LENGTH_SHORT
+                                                                            ).show()
+                                                                        }
+                                                                }.addOnFailureListener { e ->
+                                                                    showDialog = false
+                                                                    Toast.makeText(
+                                                                        context,
+                                                                        "Error getting image URL: ${e.message}",
+                                                                        Toast.LENGTH_SHORT
+                                                                    ).show()
+                                                                }
+                                                            }.addOnFailureListener { e ->
+                                                                showDialog = false
+                                                                Toast.makeText(
+                                                                    context,
+                                                                    "Error uploading profile picture: ${e.message}",
+                                                                    Toast.LENGTH_SHORT
+                                                                ).show()
+                                                            }
+                                                        } else {
                                                             showDialog = false
-                                                            Toast.makeText(context, "User Registered Successfully", Toast.LENGTH_SHORT).show()
-                                                            navController.navigate("home")
+                                                            // Show error if Firebase Authentication failed
+                                                            Toast.makeText(
+                                                                context,
+                                                                "Error: ${task.exception?.message}",
+                                                                Toast.LENGTH_SHORT
+                                                            ).show()
                                                         }
-                                                        .addOnFailureListener { e ->
-                                                            showDialog = false
-                                                            Toast.makeText(context, "Error saving user data: ${e.message}", Toast.LENGTH_SHORT).show()
-                                                        }
-                                                }.addOnFailureListener { e ->
-                                                    showDialog = false
-                                                    Toast.makeText(context, "Error getting image URL: ${e.message}", Toast.LENGTH_SHORT).show()
-                                                }
-                                            }.addOnFailureListener { e ->
+                                                    }
+                                            } else {
                                                 showDialog = false
-                                                Toast.makeText(context, "Error uploading profile picture: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                // Duplicate studentId found
+                                                navController.navigate("duplicateID")
+                                                Toast.makeText(
+                                                    context,
+                                                    "Student ID already exists. Please use a different ID.",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
                                             }
-                                        } else {
-                                            showDialog = false
-                                            // Show error if Firebase Authentication failed
-                                            Toast.makeText(context, "Error: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
                                         }
-                                    }
+                                        .addOnFailureListener { e ->
+                                            showDialog = false
+
+                                            // Handle Firestore query failure
+                                            Toast.makeText(
+                                                context,
+                                                "Error checking Student ID: ${e.message}",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        "Please fill in all fields correctly",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+
                             } else {
                                 showDialog = false
-
-                                // Duplicate studentId found
-                                navController.navigate("duplicateID")
-                                Toast.makeText(context, "Student ID already exists. Please use a different ID.", Toast.LENGTH_SHORT).show()
+                                duplicateEmail = true
+                                Toast.makeText(
+                                    context,
+                                    "Email already registered",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             }
-                        }
-                        .addOnFailureListener { e ->
+                        }.addOnFailureListener { e ->
                             showDialog = false
-
-                            // Handle Firestore query failure
-                            Toast.makeText(context, "Error checking Student ID: ${e.message}", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                context,
+                                "Error checking email: ${e.message}",
+                                Toast.LENGTH_SHORT
+                            ).show()
                         }
-                } else {
-                    Toast.makeText(context, "Please fill in all fields correctly", Toast.LENGTH_SHORT).show()
                 }
             },
             modifier = Modifier
@@ -1421,6 +1607,53 @@ fun UnableToVerifyFace(navController: NavController) {
         }
     }
 }
+@Composable
+fun EmailVerify(navController: NavController) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Account Registered!",
+            fontWeight = FontWeight.Bold,
+            fontSize = 24.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Image(
+            painter = painterResource(id = R.drawable.completed_icon), // Replace with your error image resource
+            contentDescription = "Complete Icon",
+            modifier = Modifier.size(100.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Your Account has been successfully registered, please verify your email to continue, Thank You. ",
+            fontSize = 16.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(modifier = Modifier.height(34.dp))
+
+        // "Try Again" Button
+        Button(
+            onClick = {
+                navController.navigate("login")
+            }, // Navigate to the verification screen
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+        ) {
+            Text(text = "Login", color = Color.White)
+        }
+    }
+}
+
 @Composable
 fun UnableToVerifyDuplicateID(navController: NavController) {
     Column(
