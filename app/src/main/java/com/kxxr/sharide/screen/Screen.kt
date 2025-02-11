@@ -132,7 +132,7 @@ fun AppNavHost(firebaseAuth: FirebaseAuth, networkViewModel: NetworkViewModel) {
             composable("profile") { ProfileScreen(firebaseAuth, navController) }
 
             //home
-            composable("home") {  MyApp(navController) }
+            composable("home") {  HomePage(navController) }
 
             //ewallet
             composable("ewallet") {  EWalletIntro(navController) }

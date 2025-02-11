@@ -19,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -41,17 +42,9 @@ import com.google.maps.android.compose.*
 import kotlinx.coroutines.launch
 import com.kxxr.sharide.R
 
-//class MainActivity : ComponentActivity() {
-//    override fun onCreate(savedInstanceState: Bundle?) {
-//        super.onCreate(savedInstanceState)
-//        setContent {
-//            MyApp()
-//        }
-//    }
-//}
-
+// Main home screen(driver and passenger
 @Composable
-fun MyApp(navController: NavController) {
+fun HomePage(navController: NavController) {
     MaterialTheme {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -62,6 +55,7 @@ fun MyApp(navController: NavController) {
     }
 }
 
+// Map screen and settle location permissions
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun MapScreen(navController: NavController) {
@@ -70,13 +64,16 @@ fun MapScreen(navController: NavController) {
     var isPermissionRequested by remember { mutableStateOf(false) }
 
     when {
+        // If permission is granted, show the map
         locationPermissionState.status.isGranted -> {
-            ShowGoogleMap(navController)
+            ShowDriverScreen(navController)
         }
+        // If permission was denied, show error screen
         isPermissionRequested && !locationPermissionState.status.isGranted -> {
             PermissionErrorScreen(context)
         }
         else -> {
+            // Request permission on first launch
             LaunchedEffect(Unit) {
                 if (!isPermissionRequested) {
                     isPermissionRequested = true
@@ -87,14 +84,16 @@ fun MapScreen(navController: NavController) {
     }
 }
 
+// Displays driver screen with map,driver location,reminder list, create ride...
 @Composable
-fun ShowGoogleMap(navController: NavController?) {
+fun ShowDriverScreen(navController: NavController?) {
     val context = LocalContext.current
     val fusedLocationProviderClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var userLocation by remember { mutableStateOf<LatLng?>(null) }
     val cameraPositionState = rememberCameraPositionState()
     val coroutineScope = rememberCoroutineScope()
 
+    // Get user's last known location
     LaunchedEffect(Unit) {
         fusedLocationProviderClient.lastLocation.addOnSuccessListener { location ->
             location?.let {
@@ -103,12 +102,12 @@ fun ShowGoogleMap(navController: NavController?) {
             }
         }
     }
-    // Ensure navController is non-null
-    val safeNavController = navController ?: return // will Exit if navController null
+    // will Exit if navController null
+    val safeNavController = navController ?: return
 
-    // **Scaffold Layout for Bottom Navigation**
+    // Scaffold Layout for Bottom Navigation
     Scaffold(
-        bottomBar = { BottomNavBar("home", navController) } // Add Bottom Navigation Bar
+        bottomBar = { BottomNavBar("home", navController) } // Bottom Navigation Bar
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -132,10 +131,17 @@ fun ShowGoogleMap(navController: NavController?) {
                 }
             }
 
-
-
-            // Ride Reminder Section
-            RideReminder()
+            // Ride Reminder
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)) // Rounded Corners
+                    .background(Color.White)
+                    .border(1.dp, Color.Gray, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                    .padding(top = 16.dp)
+            ) {
+                RideReminder()
+            }
 
             // Create Ride Button
             Button(
@@ -152,6 +158,8 @@ fun ShowGoogleMap(navController: NavController?) {
     }
 }
 
+
+// Profile header with user info and icons
 @Composable
 fun ProfileHeader() {
     Row(
@@ -174,18 +182,18 @@ fun ProfileHeader() {
         )
         Spacer(modifier = Modifier.weight(1f)) // Push icons to the right
         Image(
-            painter = painterResource(id = R.drawable.car_ico),
+            painter = painterResource(id = R.drawable.car_front),
             contentDescription = "Car",
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(40.dp)
         )
         Spacer(modifier = Modifier.width(8.dp))
         Icon(
             painter = painterResource(id = R.drawable.notification_ico),
             contentDescription = "Notifications",
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(40.dp)
         )
     }
-    }
+}
 
 
 // Need to update logic for reminder (Problem Xr)
@@ -195,42 +203,49 @@ fun RideReminder() {
         Spacer(modifier = Modifier.height(16.dp)) // Add space above the title
         Text(text = "Reminder", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
         Spacer(modifier = Modifier.height(8.dp))
-        RideItem("Ride 3", "1 hr 30 min left", Color(0xFF0075FD)) // Blue
-        RideItem("Ride 2", "Completed", Color(0xFF008000)) // Green
-        RideItem("Ride 1", "Cancelled", Color(0xFFFF4444)) // Red
+        RideItem("Ride 3", "1 hr 30 min left", Color(0xFF0075FD))
+        RideItem("Ride 2", "Completed", Color(0xFF008000))
+        RideItem("Ride 1", "Cancelled", Color(0xFFFF4444))
     }
 }
 
-
 @Composable
-fun RideItem(rideName: String, status: String, statusColor: Color) {
-    Box(
+fun RideItem(title: String, status: String, statusColor: Color) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
-            .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
-            .background(Color.White, RoundedCornerShape(8.dp))
-            .padding(16.dp)
+            .background(Color.White, shape = RoundedCornerShape(8.dp))
+            .border(1.dp, Color.Gray, shape = RoundedCornerShape(8.dp))
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        // Car Icon on the Left
+        Image(
+            painter = painterResource(id = R.drawable.car_front),
+            contentDescription = "Car Icon",
+            modifier = Modifier
+                .size(40.dp)
+                .padding(end = 8.dp)
+        )
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        }
+
+        // Status Box on the Right
+        Box(
+            modifier = Modifier
+                .background(statusColor, shape = RoundedCornerShape(4.dp))
+                .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
-            Text(text = rideName, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-            Text(
-                text = status,
-                fontSize = 14.sp,
-                color = Color.White,
-                modifier = Modifier
-                    .background(statusColor, RoundedCornerShape(4.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            )
+            Text(text = status, color = Color.White, fontSize = 14.sp)
         }
     }
 }
 
 
+// Error screen when location permission is denied
 @Composable
 fun PermissionErrorScreen(context: Context) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
