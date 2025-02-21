@@ -1112,10 +1112,14 @@ fun saveBitmapToCache(context: Context, bitmap: Bitmap, fileName: String): Strin
 @Composable
 fun SignUpScreen(navController: NavController, name: String, studentId: String, imagePath: String) {
     var email by remember { mutableStateOf("") }
+    var reEmail by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var rePassword by remember { mutableStateOf("") }
     var gender by remember { mutableStateOf("M") } // Default to "M"
     var isEmailValid by remember { mutableStateOf(true) }
+    var isReEmailValid by remember { mutableStateOf(false) }
+    var isRePasswordValid by remember { mutableStateOf(true) }
     var duplicateEmail by remember { mutableStateOf(false) }
     var isPhoneValid by remember { mutableStateOf(true) }
     var userName by remember { mutableStateOf(name) }
@@ -1214,6 +1218,30 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
         if (duplicateEmail) {
             Text(text = "Error! This Email has been registered before, Try Again!", color = Color.Red, fontSize = 12.sp)
         }
+        OutlinedTextField(
+            value = reEmail,
+            onValueChange = {
+                reEmail = it
+                if (reEmail == email){
+                    isReEmailValid = true
+                }else{
+                    isReEmailValid = false
+                }
+            },
+            label = { Text("Retype Email") },
+            modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done, keyboardType = KeyboardType.Email),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
+        )
+        if (reEmail.isNotEmpty() && !isReEmailValid) {
+            Text(text = "Email doesn't Match, Try Again !", color = Color.Red, fontSize = 12.sp)
+        }
+
         // Phone Number Field
         OutlinedTextField(
             value = phoneNumber,
@@ -1257,6 +1285,35 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
         )
         Text(text = "Contain at least 6 alphabet")
 
+        // Password Field
+        OutlinedTextField(
+            value = rePassword,
+            onValueChange = {
+                rePassword = it
+                if(rePassword == password){
+                    isRePasswordValid = true
+                }else{
+                    isRePasswordValid = false
+                }
+            },
+            label = { Text("Retype Password") },
+            trailingIcon ={
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Image(painter = painterResource(id = R.drawable.hide ), contentDescription = "password visibility",modifier = Modifier.size(24.dp))
+                }
+            },
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Blue, // Blue border when focused
+                unfocusedBorderColor = Color.Gray,
+                cursorColor = Color.Blue,
+                focusedLabelColor = Color.Blue,
+            )
+        )
+        if (rePassword.isNotEmpty() && !isRePasswordValid) {
+            Text(text = "Password doesn't Match, Try Again !", color = Color.Red, fontSize = 12.sp)
+        }
         Spacer(modifier = Modifier.height(16.dp))
 
         // Gender Selection (Switch)
@@ -1308,7 +1365,10 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
         Button(
             onClick = {
                 // Validate form inputs
-                if (email.isNotEmpty() && isEmailValid && phoneNumber.isNotEmpty() && isPhoneValid && userName.isNotEmpty() && userid.isNotEmpty() && password.isNotEmpty() && profilePicture != null) {
+                if (email.isNotEmpty() && isEmailValid && phoneNumber.isNotEmpty() && isPhoneValid
+                    && userName.isNotEmpty() && userid.isNotEmpty() && password.isNotEmpty() && profilePicture != null
+                    && isReEmailValid && isRePasswordValid)
+                {
                     showDialog = true
                     // Check if the email is already registered
                     firebaseAuth.fetchSignInMethodsForEmail(email)
@@ -1481,6 +1541,8 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
                                 Toast.LENGTH_SHORT
                             ).show()
                         }
+                }else{
+                    Toast.makeText(context, "Please fill in all fields correctly", Toast.LENGTH_SHORT).show()
                 }
             },
             modifier = Modifier
