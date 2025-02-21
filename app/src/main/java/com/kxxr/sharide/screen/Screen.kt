@@ -133,6 +133,10 @@ fun AppNavHost(firebaseAuth: FirebaseAuth, networkViewModel: NetworkViewModel) {
 
             //home
             composable("home") {  HomePage(navController) }
+            // The Create Ride Screen
+            composable("create_ride") {
+                CreateRideScreen(navController)
+            }
 
             //ewallet
             composable("ewallet") {  EWalletIntro(navController) }
