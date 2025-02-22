@@ -97,6 +97,7 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.firebase.storage.ktx)
+    implementation(libs.places)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -106,6 +107,8 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation("androidx.compose.material:material-icons-extended:1.5.0")
     implementation("androidx.compose.material:material-icons-extended:1.5.4")
+    implementation("com.google.android.libraries.places:places:3.3.0")
+
 
 
 }

@@ -137,6 +137,8 @@ fun AppNavHost(firebaseAuth: FirebaseAuth, networkViewModel: NetworkViewModel) {
             composable("create_ride") {
                 CreateRideScreen(navController)
             }
+            composable("search_location") { SearchLocationScreen(navController, isSelectingDestination = false) }
+            composable("search_destination") { SearchLocationScreen(navController, isSelectingDestination = true) }
 
             //ewallet
             composable("ewallet") {  EWalletIntro(navController) }

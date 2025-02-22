@@ -20,6 +20,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.SHARide"
         tools:targetApi="31">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -34,6 +35,8 @@
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyAYFHXZLaqAKMiPvxHKw45xRrlm95Vng7U" />
+
+
 
     </application>
 </manifest>

@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.google.android.libraries.places.api.Places
 import com.google.firebase.auth.FirebaseAuth
 import com.kxxr.sharide.logic.NetworkViewModel
 import com.kxxr.sharide.screen.AppNavHost
@@ -30,6 +31,12 @@ import dagger.hilt.android.HiltAndroidApp
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize Google Places API
+        if (!Places.isInitialized()) {
+            Places.initialize(applicationContext, "AIzaSyAYFHXZLaqAKMiPvxHKw45xRrlm95Vng7U")
+        }
+
         enableEdgeToEdge()
         setContent {
             ShareRideApp()
