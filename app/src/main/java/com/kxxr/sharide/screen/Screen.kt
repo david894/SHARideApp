@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -76,14 +77,18 @@ import java.io.FileOutputStream
 import java.util.UUID
 
 @Composable
-fun AppNavHost(firebaseAuth: FirebaseAuth, networkViewModel: NetworkViewModel) {
+fun AppNavHost(
+    firebaseAuth: FirebaseAuth,
+    firestore: FirebaseFirestore,
+    networkViewModel: NetworkViewModel
+) {
     val navController = rememberNavController()
     val isConnected by networkViewModel.isConnected.collectAsState(initial = true) // Observe connectivity
 
     if (!isConnected) {
         // Show the "No Internet Connection" screen
         NoInternetScreen(onRetry = { })
-    }else{
+    } else {
         // Determine the start destination based on user login status
         val startDestination = if (firebaseAuth.currentUser != null) "home" else "intro"
 
@@ -102,14 +107,14 @@ fun AppNavHost(firebaseAuth: FirebaseAuth, networkViewModel: NetworkViewModel) {
             composable("emailverify") { EmailVerify(navController) }
             composable("signupFailed") { UnableToVerifyScreen(navController) }
             composable("signupFailedFace") { UnableToVerifyFace(navController) }
-            composable("duplicateID"){UnableToVerifyDuplicateID(navController)}
+            composable("duplicateID") { UnableToVerifyDuplicateID(navController) }
             composable("customerServiceTARUMTID") { CustomerServiceScreen(navController) }
             composable("ReportSubmitted/{link}") { backStackEntry ->
                 val link = backStackEntry.arguments?.getString("link").orEmpty()
-                ReportSubmitted(navController,link)
+                ReportSubmitted(navController, link)
             }
 
-            // Add more screens like SignUp if needed
+            // Driver Signup
             composable("driverintro") { DriverIntroScreen(navController) }
             composable("driversignup") { DriverSignupIntroScreen(navController) }
             composable("driversignup1") { DriverIdVerificationScreen(navController) }
@@ -120,33 +125,39 @@ fun AppNavHost(firebaseAuth: FirebaseAuth, networkViewModel: NetworkViewModel) {
                 val lesen = Uri.decode(backStackEntry.arguments?.getString("lesen").orEmpty())
                 val imagePath = Uri.decode(backStackEntry.arguments?.getString("imagePath").orEmpty())
 
-                DriverSignUpScreen(navController = navController, drivingid = drivingid, lesen = lesen, imagePath = imagePath)
+                DriverSignUpScreen(navController, drivingid, lesen, imagePath)
             }
-            composable("duplicateDrivingID"){UnableToVerifyDuplicateDrivingID(navController)}
-            composable("addnewcar"){ AddNewVehicle(navController) }
+            composable("duplicateDrivingID") { UnableToVerifyDuplicateDrivingID(navController) }
+            composable("addnewcar") { AddNewVehicle(navController) }
             composable("driversuccess") { DriverSuccess(navController) }
-            composable("duplicatecar") { DuplicateVehicle(navController)}
+            composable("duplicatecar") { DuplicateVehicle(navController) }
             composable("driverCustomerService") { DriverCustomerService(navController) }
 
-            //profile
+            // Profile
             composable("profile") { ProfileScreen(firebaseAuth, navController) }
 
-            //home
-            composable("home") {  HomePage(navController) }
-            // The Create Ride Screen
-            composable("create_ride") {
-                CreateRideScreen(navController)
-            }
+            // Home (Updated to pass FirebaseAuth & Firestore)
+            composable("home") { HomePage(navController, firebaseAuth, firestore) }
+
+            // Ride & Location
+            composable("create_ride") { CreateRideScreen(navController) }
+            composable("search_location") { SearchLocationScreen(navController, isSelectingDestination = false) }
+            composable("search_destination") { SearchLocationScreen(navController, isSelectingDestination = true) }
+            // Ride & Location
+            composable("create_ride") { CreateRideScreen(navController) }
             composable("search_location") { SearchLocationScreen(navController, isSelectingDestination = false) }
             composable("search_destination") { SearchLocationScreen(navController, isSelectingDestination = true) }
 
-            //ewallet
-            composable("ewallet") {  EWalletIntro(navController) }
-            composable("security_question") {  SetSecurityQuestionsScreen(navController) }
+            composable("matching_screen") { MatchingScreen(navController)
+            }
 
+            // eWallet
+            composable("ewallet") { EWalletIntro(navController) }
+            composable("security_question") { SetSecurityQuestionsScreen(navController) }
         }
     }
 }
+
 
 @Composable
 fun isConnectedToInternet(): Boolean {

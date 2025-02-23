@@ -53,6 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -108,13 +109,14 @@ fun saveRideToFirebase(rideId: String, date: String, time: String, currentLocati
         .addOnFailureListener { e -> println("Error storing ride: \${e.message}") }
 }
 
-
 @Composable
 fun CreateRideScreen(navController: NavController) {
     val firestore = FirebaseFirestore.getInstance()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    var date by remember { mutableStateOf("Select Date") } // New state for date
+    // State variables
+    var date by remember { mutableStateOf("Select Date") }
     var time by remember { mutableStateOf("Now") }
     var location by remember { mutableStateOf("") }
     var destination by remember { mutableStateOf("") }
@@ -124,35 +126,17 @@ fun CreateRideScreen(navController: NavController) {
     var capacity by remember { mutableStateOf(1) }
     var rideId by remember { mutableStateOf("") }
 
-    val lifecycleOwner = LocalLifecycleOwner.current
-
-    // 🔹 Observe selected location from SearchLocationScreen
-    LaunchedEffect(navController) {
-        navController.currentBackStackEntry?.savedStateHandle
-            ?.getLiveData<Pair<String, LatLng>>("selected_location")
-            ?.observe(lifecycleOwner) { (selectedAddress, selectedLatLng) ->
-                location = selectedAddress
-                locationLatLng = selectedLatLng
-            }
-
-        navController.currentBackStackEntry?.savedStateHandle
-            ?.getLiveData<Pair<String, LatLng>>("selected_destination")
-            ?.observe(lifecycleOwner) { (selectedAddress, selectedLatLng) ->
-                destination = selectedAddress
-                destinationLatLng = selectedLatLng
-            }
-    }
+    ObserveSelectedLocations(navController, lifecycleOwner, { loc, latLng ->
+        location = loc
+        locationLatLng = latLng
+    }, { dest, latLng ->
+        destination = dest
+        destinationLatLng = latLng
+    })
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Create Ride", fontWeight = FontWeight.Bold, color = Color.White) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0075FD))
-            )
-        },
-        bottomBar = {
-            BottomNavBar("create_ride", navController)
-        }
+        topBar = { CreateRideTopBar() },
+        bottomBar = { BottomNavBar("create_ride", navController) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -162,233 +146,262 @@ fun CreateRideScreen(navController: NavController) {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // CARD CONTAINING ALL RIDE DETAILS
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                elevation = CardDefaults.cardElevation(6.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
+            RideDetailsCard(
+                navController,
+                context,
+                date, { date = it },
+                time, { time = it },
+                location,
+                destination, { destination = it },
+                routePreference, { routePreference = it },
+                capacity, { capacity = it }
+            )
 
-                    // DATE PICKER
-                    Column {
-                        Text("Select Date", fontWeight = FontWeight.SemiBold)
-                        OutlinedTextField(
-                            value = date,
-                            onValueChange = { },
-                            readOnly = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            trailingIcon = {
-                                IconButton(onClick = {
-                                    showDatePicker(context) { selectedDate ->
-                                        date = selectedDate
-                                    }
-                                }) {
-                                    Icon(
-                                        Icons.Outlined.DateRange,
-                                        contentDescription = "Pick Date",
-                                        tint = Color(0xFF0075FD)
-                                    )
-                                }
-                            }
-                        )
-                    }
-
-                    // TIME PICKER
-                    Column {
-                        Text("Select Time", fontWeight = FontWeight.SemiBold)
-                        OutlinedTextField(
-                            value = time,
-                            onValueChange = { },
-                            readOnly = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            trailingIcon = {
-                                IconButton(onClick = {
-                                    showTimePicker(context) { selectedTime ->
-                                        time = selectedTime
-                                    }
-                                }) {
-                                    Icon(
-                                        Icons.Outlined.AccessTime,
-                                        contentDescription = "Pick Time",
-                                        tint = Color(0xFF0075FD)
-                                    )
-                                }
-                            }
-                        )
-                    }
-                    // LOCATION & DESTINATION INPUT
-                    Column {
-                        Text("Current Location", fontWeight = FontWeight.SemiBold)
-                        OutlinedTextField(
-                            value = location,
-                            onValueChange = {}, // 🔹 User cannot manually input location
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("Fetching location...") },
-                            colors = TextFieldDefaults.outlinedTextFieldColors(),
-                            readOnly = true, // 🔹 Make it read-only
-                            trailingIcon = {
-                                IconButton(onClick = {
-                                    navController.navigate("search_location") // 🔹 Open SearchLocationScreen
-                                }) {
-                                    Icon(
-                                        imageVector = Icons.Default.LocationOn,
-                                        contentDescription = "Select Location"
-                                    )
-                                }
-                            }
-                        )
-
-                        Text(
-                            "Select Destination",
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                        OutlinedTextField(
-                            value = destination,
-                            onValueChange = {
-                                destination = it
-                            }, // 🔹 User can input destination manually
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("Enter destination") },
-                            colors = TextFieldDefaults.outlinedTextFieldColors(),
-                            trailingIcon = {
-                                IconButton(onClick = {
-                                    navController.navigate("search_destination") // 🔹 Open SearchLocationScreen for destination
-                                }) {
-                                    Icon(
-                                        imageVector = Icons.Default.LocationOn,
-                                        contentDescription = "Select Destination"
-                                    )
-                                }
-                            }
-                        )
-                    }
-
-
-                    // Define the available route preferences
-                    val routePreferences =
-                        listOf("Shortest Time", "Shortest Distance", "Highest Passenger Count")
-
-                    // State to manage dropdown visibility
-                    var expanded by remember { mutableStateOf(false) }
-
-                    Column {
-                        Text("Route Preference", fontWeight = FontWeight.SemiBold)
-
-                        OutlinedTextField(
-                            value = routePreference,
-                            onValueChange = { },
-                            readOnly = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            trailingIcon = {
-                                IconButton(onClick = {
-                                    expanded = true
-                                }) {  // Toggle dropdown visibility
-                                    Icon(
-                                        Icons.Default.ArrowDropDown,
-                                        contentDescription = "Select Route Preference",
-                                        tint = Color(0xFF0075FD)
-                                    )
-                                }
-                            }
-                        )
-
-                        // Dropdown Menu
-                        DropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            routePreferences.forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option) },
-                                    onClick = {
-                                        routePreference = option  // Update selected value
-                                        expanded = false  // Close the dropdown
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    // CAPACITY SELECTION
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Capacity", fontWeight = FontWeight.SemiBold)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(
-                                onClick = { if (capacity > 1) capacity-- }, // Prevent capacity from going below 1
-                                modifier = Modifier.size(40.dp),
-                                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Blue)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Remove, // Changed from Close to Remove
-                                    contentDescription = "Decrease Capacity",
-                                    tint = Color.White
-                                )
-                            }
-
-                            Text(
-                                text = capacity.toString(),
-                                modifier = Modifier.padding(horizontal = 8.dp),
-                                fontSize = 18.sp
-                            )
-
-                            IconButton(
-                                onClick = { if (capacity < 3) capacity++ }, // Ensure max capacity is 3
-                                modifier = Modifier.size(40.dp),
-                                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Blue)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = "Increase Capacity",
-                                    tint = Color.White
-                                )
-                            }
-                        }
-                    }
-
-                    // CONFIRM RIDE BUTTON
-                    Button(
-                        onClick = {
-                            val rideData = mapOf(
-                                "rideId" to rideId,
-                                "date" to date,
-                                "time" to time,
-                                "location" to location,
-                                "destination" to destination,
-                                "routePreference" to routePreference,
-                                "capacity" to capacity
-                            )
-                            firestore.collection("rides").add(rideData)
-                                .addOnSuccessListener { documentReference ->
-                                    rideId = documentReference.id
-                                }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0075FD)),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            "Confirm Ride",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-                }
+            ConfirmRideButton(navController,firestore, rideId, date, time, location, destination, routePreference, capacity) {
+                rideId = it
             }
         }
     }
 }
 
+@Composable
+fun ObserveSelectedLocations(
+    navController: NavController,
+    lifecycleOwner: LifecycleOwner,
+    onLocationSelected: (String, LatLng) -> Unit,
+    onDestinationSelected: (String, LatLng) -> Unit
+) {
+    LaunchedEffect(navController) {
+        navController.currentBackStackEntry?.savedStateHandle
+            ?.getLiveData<Pair<String, LatLng>>("selected_location")
+            ?.observe(lifecycleOwner) { (selectedAddress, selectedLatLng) ->
+                onLocationSelected(selectedAddress, selectedLatLng)
+            }
+
+        navController.currentBackStackEntry?.savedStateHandle
+            ?.getLiveData<Pair<String, LatLng>>("selected_destination")
+            ?.observe(lifecycleOwner) { (selectedAddress, selectedLatLng) ->
+                onDestinationSelected(selectedAddress, selectedLatLng)
+            }
+    }
+}
+
+@Composable
+fun CreateRideTopBar() {
+    TopAppBar(
+        title = { Text("Create Ride", fontWeight = FontWeight.Bold, color = Color.White) },
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0075FD))
+    )
+}
+
+@Composable
+fun RideDetailsCard(
+    navController: NavController,
+    context: Context,
+    date: String, onDateChange: (String) -> Unit,
+    time: String, onTimeChange: (String) -> Unit,
+    location: String,
+    destination: String, onDestinationChange: (String) -> Unit,
+    routePreference: String, onRoutePreferenceChange: (String) -> Unit,
+    capacity: Int, onCapacityChange: (Int) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(6.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            DateTimePicker(context, date, onDateChange, time, onTimeChange)
+            LocationFields(navController, location, destination, onDestinationChange)
+            RoutePreferenceDropdown(routePreference, onRoutePreferenceChange)
+            CapacitySelector(capacity, onCapacityChange)
+        }
+    }
+}
+@Composable
+fun DateTimePicker(
+    context: Context,
+    date: String, onDateChange: (String) -> Unit,
+    time: String, onTimeChange: (String) -> Unit
+) {
+    Column {
+        Text("Select Date", fontWeight = FontWeight.SemiBold)
+        OutlinedTextField(
+            value = date,
+            onValueChange = { },
+            readOnly = true,
+            modifier = Modifier.fillMaxWidth(),
+            trailingIcon = {
+                IconButton(onClick = { showDatePicker(context, onDateChange) }) {
+                    Icon(Icons.Outlined.DateRange, contentDescription = "Pick Date", tint = Color(0xFF0075FD))
+                }
+            }
+        )
+    }
+
+    Column {
+        Text("Select Time", fontWeight = FontWeight.SemiBold)
+        OutlinedTextField(
+            value = time,
+            onValueChange = { },
+            readOnly = true,
+            modifier = Modifier.fillMaxWidth(),
+            trailingIcon = {
+                IconButton(onClick = { showTimePicker(context, onTimeChange) }) {
+                    Icon(Icons.Outlined.AccessTime, contentDescription = "Pick Time", tint = Color(0xFF0075FD))
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun LocationFields(
+    navController: NavController,
+    location: String,
+    destination: String, onDestinationChange: (String) -> Unit
+) {
+    Column {
+        Text("Current Location", fontWeight = FontWeight.SemiBold)
+        OutlinedTextField(
+            value = location,
+            onValueChange = {},
+            modifier = Modifier.fillMaxWidth(),
+            readOnly = true,
+            trailingIcon = {
+                IconButton(onClick = { navController.navigate("search_location") }) {
+                    Icon(Icons.Default.LocationOn, contentDescription = "Select Location")
+                }
+            }
+        )
+
+        Text("Select Destination", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+        OutlinedTextField(
+            value = destination,
+            onValueChange = onDestinationChange,
+            modifier = Modifier.fillMaxWidth(),
+            trailingIcon = {
+                IconButton(onClick = { navController.navigate("search_destination") }) {
+                    Icon(Icons.Default.LocationOn, contentDescription = "Select Destination")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun RoutePreferenceDropdown(routePreference: String, onRoutePreferenceChange: (String) -> Unit) {
+    val routePreferences = listOf("Shortest Time", "Shortest Distance", "Highest Passenger Count")
+    var expanded by remember { mutableStateOf(false) }
+
+    Column {
+        Text("Route Preference", fontWeight = FontWeight.SemiBold)
+        OutlinedTextField(
+            value = routePreference,
+            onValueChange = { },
+            readOnly = true,
+            modifier = Modifier.fillMaxWidth(),
+            trailingIcon = {
+                IconButton(onClick = { expanded = true }) {
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Route Preference", tint = Color(0xFF0075FD))
+                }
+            }
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            routePreferences.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option) },
+                    onClick = {
+                        onRoutePreferenceChange(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ConfirmRideButton(
+    navController: NavController,
+    firestore: FirebaseFirestore,
+    rideId: String,
+    date: String,
+    time: String,
+    location: String,
+    destination: String,
+    routePreference: String,
+    capacity: Int,
+    onRideIdChange: (String) -> Unit
+) {
+    Button(
+        onClick = {
+            val rideData = mapOf(
+                "rideId" to rideId,
+                "date" to date,
+                "time" to time,
+                "location" to location,
+                "destination" to destination,
+                "routePreference" to routePreference,
+                "capacity" to capacity
+            )
+            firestore.collection("rides").add(rideData).addOnSuccessListener {
+                onRideIdChange(it.id)
+                navController.navigate("matching_screen") // Navigate to MatchingScreen
+            }
+        },
+        modifier = Modifier.fillMaxWidth(),
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0075FD)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Text("Confirm Ride", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+    }
+}
+
+@Composable
+fun CapacitySelector(capacity: Int, onCapacityChanged: (Int) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("Capacity", fontWeight = FontWeight.SemiBold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(
+                onClick = { if (capacity > 1) onCapacityChanged(capacity - 1) },
+                modifier = Modifier.size(40.dp),
+                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Blue)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Remove,
+                    contentDescription = "Decrease Capacity",
+                    tint = Color.White
+                )
+            }
+
+            Text(
+                text = capacity.toString(),
+                modifier = Modifier.padding(horizontal = 8.dp),
+                fontSize = 18.sp
+            )
+
+            IconButton(
+                onClick = { if (capacity < 3) onCapacityChanged(capacity + 1) },
+                modifier = Modifier.size(40.dp),
+                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Blue)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Increase Capacity",
+                    tint = Color.White
+                )
+            }
+        }
+    }
+}
 
 fun showTimePicker(context: Context, onTimeSelected: (String) -> Unit) {
     val calendar = Calendar.getInstance()

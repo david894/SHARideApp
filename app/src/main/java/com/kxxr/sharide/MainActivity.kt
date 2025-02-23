@@ -19,6 +19,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.android.libraries.places.api.Places
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.kxxr.sharide.logic.NetworkViewModel
 import com.kxxr.sharide.screen.AppNavHost
 import com.kxxr.sharide.screen.IntroScreen
@@ -43,7 +44,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
 @Composable
 fun ShareRideApp() {
     // Get the NetworkViewModel instance using hiltViewModel
@@ -54,13 +54,15 @@ fun ShareRideApp() {
 
     MaterialTheme {
         if (isConnected) {
-            AppNavHost(FirebaseAuth.getInstance(), networkViewModel)
+            // Pass FirebaseAuth and FirebaseFirestore
+            AppNavHost(FirebaseAuth.getInstance(), FirebaseFirestore.getInstance(), networkViewModel)
         } else {
             // Show a no-internet connection screen
             NoInternetScreen(onRetry = { /* Retry logic, if needed */ })
         }
     }
 }
+
 
 
 

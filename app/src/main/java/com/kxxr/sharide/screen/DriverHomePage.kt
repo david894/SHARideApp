@@ -4,12 +4,15 @@ package com.kxxr.sharide.screen
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -28,26 +32,32 @@ import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.model.LatLng
+import com.google.firebase.Firebase
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.firestore
+import com.google.firebase.storage.FirebaseStorage
 import com.google.maps.android.compose.*
 import com.kxxr.sharide.R
 
 // Main home screen(driver and passenger
 @Composable
-fun HomePage(navController: NavController) {
+fun HomePage(navController: NavController, firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
     MaterialTheme {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            MapScreen(navController)
+            MapScreen(navController, firebaseAuth, firestore)
         }
     }
 }
 
+
 // Map screen and settle location permissions
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun MapScreen(navController: NavController) {
+fun MapScreen(navController: NavController, firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
     val context = LocalContext.current
     val locationPermissionState = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
     var isPermissionRequested by remember { mutableStateOf(false) }
@@ -55,7 +65,7 @@ fun MapScreen(navController: NavController) {
     when {
         // If permission is granted, show the map
         locationPermissionState.status.isGranted -> {
-            ShowDriverScreen(navController)
+            ShowDriverScreen(navController, firebaseAuth, firestore)
         }
         // If permission was denied, show error screen
         isPermissionRequested && !locationPermissionState.status.isGranted -> {
@@ -73,9 +83,10 @@ fun MapScreen(navController: NavController) {
     }
 }
 
+
 // Displays driver screen with map,driver location,reminder list, create ride...
 @Composable
-fun ShowDriverScreen(navController: NavController?) {
+fun ShowDriverScreen(navController: NavController?, firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
     val context = LocalContext.current
     val fusedLocationProviderClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var userLocation by remember { mutableStateOf<LatLng?>(null) }
@@ -91,7 +102,7 @@ fun ShowDriverScreen(navController: NavController?) {
             }
         }
     }
-    // will Exit if navController null
+    // Exit if navController is null
     val safeNavController = navController ?: return
 
     // Scaffold Layout for Bottom Navigation
@@ -101,10 +112,10 @@ fun ShowDriverScreen(navController: NavController?) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues) // to Prevents overlapping
+                .padding(paddingValues) // Prevents overlapping
         ) {
-            // Profile Section
-            ProfileHeader()
+            // Profile Section (Passing Firebase instances)
+            ProfileHeader(firebaseAuth, firestore)
 
             // Google Map
             Box(modifier = Modifier.weight(1f)) {
@@ -134,7 +145,7 @@ fun ShowDriverScreen(navController: NavController?) {
 
             // Create Ride Button
             Button(
-                onClick = {navController.navigate("create_ride") }, // Navigate to Create Ride Screen
+                onClick = { navController.navigate("create_ride") }, // Navigate to Create Ride Screen
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp)
@@ -148,34 +159,55 @@ fun ShowDriverScreen(navController: NavController?) {
 }
 
 
+
 // Profile header with user info and icons
+
 @Composable
-fun ProfileHeader() {
+fun ProfileHeader(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
+    val userName = fetchUserName(firebaseAuth, firestore)
+    val profileBitmap = fetchProfileImage(firebaseAuth)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)  // fixed height for heading consistency
+            .height(56.dp)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Image(
+        profileBitmap?.let {
+            Image(
+                bitmap = it.asImageBitmap(),
+                contentDescription = "Profile Picture",
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+            )
+        } ?: Image(
             painter = painterResource(id = R.drawable.profile_ico),
             contentDescription = "Profile Picture",
-            modifier = Modifier.size(40.dp)
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
         )
+
         Spacer(modifier = Modifier.width(8.dp))
+
         Text(
-            text = "Hi John",
+            text = "Hi $userName",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold
         )
-        Spacer(modifier = Modifier.weight(1f)) // Push icons to the right
+
+        Spacer(modifier = Modifier.weight(1f))
+
         Image(
             painter = painterResource(id = R.drawable.car_front),
             contentDescription = "Car",
             modifier = Modifier.size(40.dp)
         )
+
         Spacer(modifier = Modifier.width(8.dp))
+
         Icon(
             painter = painterResource(id = R.drawable.notification_ico),
             contentDescription = "Notifications",
@@ -253,4 +285,53 @@ fun PermissionErrorScreen(context: Context) {
             Text(text = "Go to Settings", color = Color.White)
         }
     }
+}
+
+@Composable
+fun fetchUserName(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore): String {
+    var userName by remember { mutableStateOf("") }
+    val currentUser = firebaseAuth.currentUser
+
+    LaunchedEffect(Unit) {
+        currentUser?.uid?.let { userId ->
+            firestore.collection("users")
+                .whereEqualTo("firebaseUserId", userId)
+                .get()
+                .addOnSuccessListener { querySnapshot ->
+                    val document = querySnapshot.documents.firstOrNull()
+                    userName = document?.getString("name").orEmpty()
+                }
+                .addOnFailureListener {
+                    userName = "Unknown"
+                }
+        }
+    }
+    return userName
+}
+
+@Composable
+fun fetchProfileImage(firebaseAuth: FirebaseAuth): Bitmap? {
+    var profileBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    val currentUser = firebaseAuth.currentUser
+
+    LaunchedEffect(Unit) {
+        currentUser?.uid?.let { userId ->
+            Firebase.firestore.collection("users")
+                .whereEqualTo("firebaseUserId", userId)
+                .get()
+                .addOnSuccessListener { querySnapshot ->
+                    val document = querySnapshot.documents.firstOrNull()
+                    val profileImageUrl = document?.getString("profileImageUrl").orEmpty()
+
+                    if (profileImageUrl.isNotEmpty()) {
+                        val storageReference = FirebaseStorage.getInstance().getReferenceFromUrl(profileImageUrl)
+                        storageReference.getBytes(1024 * 1024)
+                            .addOnSuccessListener { bytes ->
+                                profileBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                            }
+                    }
+                }
+        }
+    }
+    return profileBitmap
 }
