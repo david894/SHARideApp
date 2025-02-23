@@ -142,6 +142,7 @@ fun AppNavHost(firebaseAuth: FirebaseAuth, networkViewModel: NetworkViewModel) {
 
             //ewallet
             composable("ewallet") {  EWalletIntro(navController) }
+            composable("security_question") {  SetSecurityQuestionsScreen(navController) }
 
         }
     }
@@ -216,7 +217,7 @@ fun NoInternetScreen(onRetry: () -> Unit) {
 @Composable
 fun IntroScreen(navController: NavController) {
     val images = listOf(
-        painterResource(id = R.drawable.intro1), // Replace with your image resource IDs
+        painterResource(id = R.drawable.intro1),
         painterResource(id = R.drawable.intro2),
         painterResource(id = R.drawable.intro3)
     )

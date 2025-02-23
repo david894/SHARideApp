@@ -1,3 +1,13 @@
 <resources>
     <string name="app_name">SHARide</string>
+    <string-array name="security_questions">
+        <item>What city were you born in?</item>
+        <item>What is your mother maiden name?</item>
+        <item>What was the name of your first pet?</item>
+        <item>What was the name of your elementary school?</item>
+        <item>What is the middle name of your oldest cousin?</item>
+        <item>What was the make of your first car?</item>
+        <item>What is your favorite movie?</item>
+        <item>What was the name of your favorite childhood character?</item>
+    </string-array>
 </resources>
