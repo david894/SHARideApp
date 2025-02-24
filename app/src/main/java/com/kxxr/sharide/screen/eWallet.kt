@@ -7,7 +7,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,11 +51,7 @@ import java.security.MessageDigest
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.*
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -64,6 +59,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.*
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.text.input.KeyboardType
 
@@ -77,7 +77,26 @@ fun EWalletIntro(navController: NavController) {
     var firstPin by remember { mutableStateOf("") }
     var errorPIN by remember { mutableStateOf(false) }
     var showDialog by remember { mutableStateOf(false) }
+    val userId = FirebaseAuth.getInstance().currentUser?.uid
+    val firestore = FirebaseFirestore.getInstance()
 
+    // Fetch data from Firestore
+    LaunchedEffect(Unit) {
+        showDialog = true
+
+        // Fetch balance
+        if (userId != null) {
+            firestore.collection("eWallet").document(userId).get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+                        navController.navigate("ewalletDashboard")
+                        showDialog = false
+                    }else{
+                        showDialog = false
+                    }
+                }
+        }
+    }
     Scaffold(
         bottomBar = { BottomNavBar("eWallet", navController) }
     ) { paddingValues ->
@@ -320,33 +339,48 @@ fun storeEWalletData(
 
     if (userId != null) {
         val hashedPin = hashPin(pin)
+        // Reference to Firestore
+        val firestore = FirebaseFirestore.getInstance()
+        val documentRef = firestore.collection("eWallet").document(userId)
 
-        // Data to be stored in Firestore
-        val eWalletData = hashMapOf(
-            "userId" to userId,
-            "pinCode" to hashedPin,
-            "securityQuestion1" to securityQuestion1,
-            "securityAnswer1" to securityAnswer1,
-            "securityQuestion2" to securityQuestion2,
-            "securityAnswer2" to securityAnswer2,
-            "securityQuestion3" to securityQuestion3,
-            "securityAnswer3" to securityAnswer3
-        )
+        // Check if document exists first
+        documentRef.get()
+            .addOnSuccessListener { documentSnapshot ->
+                if (documentSnapshot.exists()) {
+                    // Document already exists, return an error
+                    onFailure(Exception("eWallet account already exists for this user."))
+                } else {
+                    // Document does not exist, proceed with creating a new one
+                    val eWalletData = hashMapOf(
+                        "userId" to userId,
+                        "pinCode" to hashedPin,
+                        "balance" to 0.00,
+                        "securityQuestion1" to securityQuestion1,
+                        "securityAnswer1" to securityAnswer1,
+                        "securityQuestion2" to securityQuestion2,
+                        "securityAnswer2" to securityAnswer2,
+                        "securityQuestion3" to securityQuestion3,
+                        "securityAnswer3" to securityAnswer3
+                    )
 
-        // Upload data to Firestore
-        FirebaseFirestore.getInstance().collection("eWallet")
-            .document(userId)
-            .set(eWalletData)
-            .addOnSuccessListener {
-                onSuccess()
+                    // Store data in Firestore
+                    documentRef.set(eWalletData)
+                        .addOnSuccessListener {
+                            onSuccess()
+                        }
+                        .addOnFailureListener { e ->
+                            onFailure(e)
+                        }
+                }
             }
             .addOnFailureListener { e ->
-                onFailure(e)
+                onFailure(Exception("Failed to check for existing document: ${e.message}"))
             }
     } else {
         onFailure(Exception("User not authenticated"))
     }
 }
+
 fun hashAnswer(answer: String): String {
     val digest = MessageDigest.getInstance("SHA-256")
     val hashBytes = digest.digest(answer.toByteArray())
@@ -534,3 +568,203 @@ fun SecurityQuestionDropdown(
         }
     }
 }
+
+@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
+@Composable
+fun EWalletDashboardScreen(navController: NavController) {
+    val userId = FirebaseAuth.getInstance().currentUser?.uid
+    val context = LocalContext.current
+    val firestore = FirebaseFirestore.getInstance()
+
+    // State to hold balance and transactions
+    var balance by remember { mutableStateOf(0.0) }
+    var transactions by remember { mutableStateOf<List<Transaction>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(false) }
+
+    // Fetch data from Firestore
+    LaunchedEffect(Unit) {
+        isLoading = true
+
+        // Fetch balance
+        if (userId != null) {
+            firestore.collection("eWallet").document(userId).get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+                        balance = document.getDouble("balance") ?: 0.0
+                    }
+                }
+        }
+
+        // Fetch transaction history
+        if (userId != null) {
+            firestore.collection("Transaction").document(userId).get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+                        val data = document.data?.map { (key, value) ->
+                            val transactionData = value as Map<*, *>
+                            Transaction(
+                                date = transactionData["date"].toString(),
+                                description = transactionData["description"].toString(),
+                                amount = transactionData["amount"].toString().toDouble()
+                            )
+                        } ?: emptyList()
+                        transactions = data
+                    }
+                    isLoading = false
+                }
+        }
+    }
+
+    Scaffold(
+        bottomBar = { BottomNavBar("eWallet", navController) }
+    ) { paddingValues ->
+        // UI Layout
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(280.dp)
+                .background(Color.Blue)
+                .padding(16.dp)
+        ) {
+            Spacer(modifier = Modifier.height(54.dp))
+            Text("eWallet", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
+
+            // Display Balance
+            Text(
+                text = "RM %.2f".format(balance),
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .padding(vertical = 25.dp)
+                    .fillMaxWidth()
+            )
+
+        }
+
+        Column (
+            modifier = Modifier
+                .width(600.dp)
+                .height(350.dp)
+                .padding(top = 200.dp, start = 25.dp, end = 25.dp)
+                .background(Color.White)
+                .clip(RoundedCornerShape(15.dp))
+        ){
+            // Action Buttons
+            Row(
+                modifier = Modifier
+                    .width(600.dp)
+                    .height(350.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+
+                ) {
+                ActionButton("TOP UP\n","topup") { /* Navigate */ }
+                ActionButton("Change Payment PIN","change_pin") { /* Navigate */ }
+                ActionButton("Security Question","security") { /* Navigate */ }
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 350.dp)
+        ) {
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Transaction History Section
+            Text("Transaction History", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+
+           if (transactions.isEmpty()) {
+                Text("No Transaction History", color = Color.Gray)
+            } else {
+                transactions.forEach { transaction ->
+                    TransactionItem(transaction)
+                }
+            }
+
+        }
+    }
+    // Show Loading Dialog
+    LoadingDialog(text = "Loading...", showDialog = isLoading, onDismiss = { isLoading = false })
+
+}
+
+@Composable
+fun ActionButton(label: String, img: String, onClick: () -> Unit) {
+    val context = LocalContext.current
+    val imageResId = remember(img) {
+        context.resources.getIdentifier(img, "drawable", context.packageName)
+    }
+
+    Column(
+        modifier = Modifier
+            .padding(8.dp)
+            .width(100.dp) // Set a fixed width for consistent alignment
+            .clickable { onClick() },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Box ensures the image stays aligned consistently
+        Box(
+            modifier = Modifier
+                .size(70.dp) // Fixed size for image box
+                .padding(bottom = 5.dp) // Space between image and text
+                .shadow(4.dp, shape = RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.White),
+            contentAlignment = Alignment.Center
+        ) {
+            if (imageResId != 0) {
+                Image(
+                    painter = painterResource(id = imageResId),
+                    contentDescription = label,
+                    modifier = Modifier.size(48.dp) // Image size inside the box
+                )
+            } else {
+                Text("Image Not Found", color = Color.Red, fontSize = 10.sp)
+            }
+        }
+        Spacer(modifier = Modifier.height(5.dp))
+        // Text expands downward without affecting the image alignment
+        Text(
+            label,
+            color = Color.Black,
+            textAlign = TextAlign.Center,
+            fontSize = 14.sp,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+    
+}
+
+@Composable
+fun TransactionItem(transaction: Transaction) {
+    val color = if (transaction.amount >= 0) Color.Green else Color.Red
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        elevation = CardDefaults.cardElevation(4.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(transaction.description, fontWeight = FontWeight.Bold)
+                Text(transaction.date, color = Color.Gray, fontSize = 12.sp)
+            }
+            Text(
+                text = if (transaction.amount >= 0) "+ RM %.2f".format(transaction.amount) else "- RM %.2f".format(-transaction.amount),
+                color = color,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+
+// Data class for transaction
+data class Transaction(val date: String, val description: String, val amount: Double)

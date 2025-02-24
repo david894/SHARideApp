@@ -154,6 +154,8 @@ fun AppNavHost(
             // eWallet
             composable("ewallet") { EWalletIntro(navController) }
             composable("security_question") { SetSecurityQuestionsScreen(navController) }
+            composable("ewalletDashboard") { EWalletDashboardScreen(navController) }
+
         }
     }
 }
