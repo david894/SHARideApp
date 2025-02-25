@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +40,7 @@ import com.google.firebase.firestore.firestore
 import com.google.firebase.storage.FirebaseStorage
 import com.google.maps.android.compose.*
 import com.kxxr.sharide.R
+import kotlinx.coroutines.tasks.await
 
 // Main home screen(driver and passenger
 @Composable
@@ -61,11 +63,11 @@ fun MapScreen(navController: NavController, firebaseAuth: FirebaseAuth, firestor
     val context = LocalContext.current
     val locationPermissionState = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
     var isPermissionRequested by remember { mutableStateOf(false) }
-
+    var isDriver by remember { mutableStateOf(false) }
     when {
         // If permission is granted, show the map
         locationPermissionState.status.isGranted -> {
-            ShowDriverScreen(navController, firebaseAuth, firestore)
+            ShowDriverScreen(navController, firebaseAuth, firestore,isDriver, onRoleChange = { isDriver = it })
         }
         // If permission was denied, show error screen
         isPermissionRequested && !locationPermissionState.status.isGranted -> {
@@ -86,20 +88,22 @@ fun MapScreen(navController: NavController, firebaseAuth: FirebaseAuth, firestor
 
 // Displays driver screen with map,driver location,reminder list, create ride...
 @Composable
-fun ShowDriverScreen(navController: NavController?, firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
+fun ShowDriverScreen(navController: NavController?, firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore, isDriver: Boolean, onRoleChange: (Boolean) -> Unit) {
     val context = LocalContext.current
     val fusedLocationProviderClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var userLocation by remember { mutableStateOf<LatLng?>(null) }
     val cameraPositionState = rememberCameraPositionState()
     val coroutineScope = rememberCoroutineScope()
 
-    // Get user's last known location
     LaunchedEffect(Unit) {
-        fusedLocationProviderClient.lastLocation.addOnSuccessListener { location ->
-            location?.let {
-                userLocation = LatLng(it.latitude, it.longitude)
+        try {
+            val location = fusedLocationProviderClient.lastLocation.await()
+            if (location != null) {
+                userLocation = LatLng(location.latitude, location.longitude)
                 cameraPositionState.position = com.google.android.gms.maps.model.CameraPosition.fromLatLngZoom(userLocation!!, 15f)
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
     // Exit if navController is null
@@ -114,10 +118,8 @@ fun ShowDriverScreen(navController: NavController?, firebaseAuth: FirebaseAuth, 
                 .fillMaxSize()
                 .padding(paddingValues) // Prevents overlapping
         ) {
-            // Profile Section (Passing Firebase instances)
-            ProfileHeader(firebaseAuth, firestore)
 
-            // Google Map
+            ProfileHeader(firebaseAuth, firestore, isDriver, onRoleChange)
             Box(modifier = Modifier.weight(1f)) {
                 GoogleMap(
                     modifier = Modifier.fillMaxSize(),
@@ -125,34 +127,26 @@ fun ShowDriverScreen(navController: NavController?, firebaseAuth: FirebaseAuth, 
                     properties = MapProperties(isMyLocationEnabled = true),
                     uiSettings = MapUiSettings(zoomControlsEnabled = true, myLocationButtonEnabled = true)
                 ) {
-                    userLocation?.let {
-                        Marker(state = MarkerState(position = it), title = "You are here")
-                    }
+                    userLocation?.let { Marker(state = MarkerState(position = it), title = "You are here") }
                 }
             }
-
-            // Ride Reminder
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)) // Rounded Corners
-                    .background(Color.White)
-                    .border(1.dp, Color.Gray, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                    .padding(top = 16.dp)
-            ) {
+            if (isDriver) {
                 RideReminder()
-            }
-
-            // Create Ride Button
-            Button(
-                onClick = { navController.navigate("create_ride") }, // Navigate to Create Ride Screen
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .height(50.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0075FD))
-            ) {
-                Text(text = "Create Ride", color = Color.White, fontSize = 18.sp)
+                Button(
+                    onClick = { navController.navigate("create_ride") },
+                    modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0075FD))
+                ) {
+                    Text(text = "Create Ride", color = Color.White, fontSize = 18.sp)
+                }
+            } else {
+                Button(
+                    onClick = {  navController.navigate("") },
+                    modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0075FD))
+                ) {
+                    Text(text = "Search Ride", color = Color.White, fontSize = 18.sp)
+                }
             }
         }
     }
@@ -161,9 +155,13 @@ fun ShowDriverScreen(navController: NavController?, firebaseAuth: FirebaseAuth, 
 
 
 // Profile header with user info and icons
-
 @Composable
-fun ProfileHeader(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
+fun ProfileHeader(
+    firebaseAuth: FirebaseAuth,
+    firestore: FirebaseFirestore,
+    isDriver: Boolean,
+    onRoleChange: (Boolean) -> Unit
+) {
     val userName = fetchUserName(firebaseAuth, firestore)
     val profileBitmap = fetchProfileImage(firebaseAuth)
 
@@ -200,14 +198,31 @@ fun ProfileHeader(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
 
         Spacer(modifier = Modifier.weight(1f))
 
+        // Car/Passenger icon
+        val roleIcon = if (isDriver) R.drawable.car_front else R.drawable.profile_ico
         Image(
-            painter = painterResource(id = R.drawable.car_front),
-            contentDescription = "Car",
+            painter = painterResource(id = roleIcon),
+            contentDescription = if (isDriver) "Driver Mode" else "Passenger Mode",
             modifier = Modifier.size(40.dp)
         )
 
         Spacer(modifier = Modifier.width(8.dp))
 
+        // Switch with custom color (moved to the right)
+        Switch(
+            checked = isDriver,
+            onCheckedChange = { onRoleChange(it) },
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = Color(0xFF0075FD),
+                uncheckedThumbColor = Color.White,
+                uncheckedTrackColor = Color.Gray
+            )
+        )
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        // Notification icon
         Icon(
             painter = painterResource(id = R.drawable.notification_ico),
             contentDescription = "Notifications",
@@ -215,6 +230,8 @@ fun ProfileHeader(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
         )
     }
 }
+
+
 
 
 // Need to update logic for reminder (Problem Xr)

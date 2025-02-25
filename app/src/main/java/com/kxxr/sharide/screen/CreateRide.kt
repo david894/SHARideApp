@@ -56,7 +56,7 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.firebase.firestore.FirebaseFirestore
 import java.util.Calendar
 import com.google.firebase.auth.FirebaseAuth
-
+import com.google.firebase.firestore.FieldValue
 
 
 
@@ -291,6 +291,7 @@ fun RoutePreferenceDropdown(routePreference: String, onRoutePreferenceChange: (S
     }
 }
 
+
 @Composable
 fun ConfirmRideButton(
     navController: NavController,
@@ -317,7 +318,8 @@ fun ConfirmRideButton(
                 "location" to location,
                 "destination" to destination,
                 "routePreference" to routePreference,
-                "capacity" to capacity
+                "capacity" to capacity,
+                "timestamp" to FieldValue.serverTimestamp() // Add server timestamp
             )
 
             rideRef.set(rideData).addOnSuccessListener {
@@ -332,6 +334,7 @@ fun ConfirmRideButton(
         Text("Confirm Ride", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
     }
 }
+
 
 
 

@@ -1,59 +1,68 @@
 package com.kxxr.sharide.screen
 
-import android.util.Log
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.MyLocation
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
-
 
 @Composable
 fun MatchingScreen(navController: NavController) {
     var location by remember { mutableStateOf("Loading...") }
     var destination by remember { mutableStateOf("Loading...") }
     var rideId by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val user = FirebaseAuth.getInstance().currentUser
     val userId = user?.uid ?: ""
 
-    // Fetch the latest ride ID
     LaunchedEffect(userId) {
-        fetchLatestRideId(userId) { latestRideId ->
+        fetchLatestRideId(userId, { latestRideId ->
             rideId = latestRideId
-            latestRideId?.let {
-                fetchRideDetails(it) { loc, dest ->
+            if (latestRideId != null) {
+                fetchRideDetails(latestRideId, { loc, dest ->
                     location = loc
                     destination = dest
-                }
+                    isLoading = false
+                }, { error ->
+                    errorMessage = error
+                    isLoading = false
+                })
+            } else {
+                errorMessage = "No rides found."
+                isLoading = false
             }
-        }
+        }, { error ->
+            errorMessage = error
+            isLoading = false
+        })
     }
 
-    MatchingScreenContent(location, destination)
+    MatchingScreenContent(location, destination, isLoading, errorMessage)
 }
 
 @Composable
-fun MatchingScreenContent(location: String, destination: String) {
+fun MatchingScreenContent(location: String, destination: String, isLoading: Boolean, errorMessage: String?) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -61,18 +70,25 @@ fun MatchingScreenContent(location: String, destination: String) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(16.dp))
-        LocationBox(location, Icons.Default.LocationOn)
-        Spacer(modifier = Modifier.height(8.dp))
-        LocationBox(destination, Icons.Default.MyLocation)
-        Spacer(modifier = Modifier.weight(1f))
-        MatchingIndicator()
-        Spacer(modifier = Modifier.weight(1f))
-        MatchingText()
-        Spacer(modifier = Modifier.height(16.dp))
+
+        if (isLoading) {
+            CircularProgressIndicator(color = Color.White)
+        } else if (errorMessage != null) {
+            Text(errorMessage, color = Color.Red, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        } else {
+            LocationBox(location, Icons.Default.LocationOn)
+            Spacer(modifier = Modifier.height(8.dp))
+            LocationBox(destination, Icons.Default.MyLocation)
+            Spacer(modifier = Modifier.weight(1f))
+            MatchingIndicator()
+            Spacer(modifier = Modifier.weight(1f))
+            MatchingText()
+            Spacer(modifier = Modifier.height(16.dp))
+        }
     }
 }
 
-fun fetchLatestRideId(userId: String, onResult: (String?) -> Unit) {
+fun fetchLatestRideId(userId: String, onSuccess: (String?) -> Unit, onFailure: (String) -> Unit) {
     val firestore = FirebaseFirestore.getInstance()
 
     firestore.collection("rides")
@@ -82,22 +98,17 @@ fun fetchLatestRideId(userId: String, onResult: (String?) -> Unit) {
         .get()
         .addOnSuccessListener { documents ->
             if (!documents.isEmpty) {
-                val rideId = documents.documents[0].id
-                Log.d("FirestoreDebug", "Fetched rideId: $rideId") // 🔥 Add this log
-                onResult(rideId)
+                onSuccess(documents.documents[0].id)
             } else {
-                Log.e("FirestoreDebug", "No rides found for user: $userId") // 🚨 Log error
-                onResult(null)
+                onSuccess(null)
             }
         }
         .addOnFailureListener { e ->
-            Log.e("FirestoreDebug", "Failed to fetch rides", e) // 🚨 Log error
-            onResult(null)
+            onFailure("Failed to fetch rides: ${e.message}")
         }
 }
 
-
-fun fetchRideDetails(rideId: String, onResult: (String, String) -> Unit) {
+fun fetchRideDetails(rideId: String, onSuccess: (String, String) -> Unit, onFailure: (String) -> Unit) {
     val firestore = FirebaseFirestore.getInstance()
 
     firestore.collection("rides").document(rideId).get()
@@ -105,17 +116,15 @@ fun fetchRideDetails(rideId: String, onResult: (String, String) -> Unit) {
             if (document.exists()) {
                 val location = document.getString("location") ?: "Unknown Location"
                 val destination = document.getString("destination") ?: "Unknown Destination"
-                onResult(location, destination)
+                onSuccess(location, destination)
             } else {
-                onResult("No Data", "No Data")
+                onFailure("Ride data not found.")
             }
         }
-        .addOnFailureListener {
-            onResult("Error fetching location", "Error fetching destination")
+        .addOnFailureListener { e ->
+            onFailure("Error fetching ride details: ${e.message}")
         }
 }
-
-
 
 @Composable
 fun LocationBox(location: String, icon: ImageVector) {
@@ -155,8 +164,8 @@ fun MatchingIndicator() {
     val infiniteTransition = rememberInfiniteTransition()
 
     val circle1Size by infiniteTransition.animateFloat(
-        initialValue = 100f,  // Start bigger
-        targetValue = 400f,  // Increase max size
+        initialValue = 100f,
+        targetValue = 400f,
         animationSpec = infiniteRepeatable(
             animation = tween(1200, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
@@ -182,8 +191,7 @@ fun MatchingIndicator() {
     )
 
     Box(
-        modifier = Modifier
-            .size(500.dp), // Increase container size to fit larger circles
+        modifier = Modifier.size(500.dp),
         contentAlignment = Alignment.Center
     ) {
         Box(
@@ -207,8 +215,9 @@ fun MatchingIndicator() {
         Icon(
             imageVector = Icons.Default.LocationOn,
             contentDescription = "Location Pin",
-            modifier = Modifier.size(80.dp), // Bigger pin size
+            modifier = Modifier.size(80.dp),
             tint = Color.Red,
         )
     }
 }
+
