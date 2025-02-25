@@ -4,10 +4,8 @@ package com.kxxr.sharide.screen
 
 import android.app.TimePickerDialog
 import android.content.Context
-import android.location.Geocoder
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,10 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material3.Button
@@ -36,8 +34,6 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -56,65 +52,21 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
-import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.LatLng
-import com.google.firebase.Firebase
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.firestore
-import java.io.IOException
 import java.util.Calendar
-import com.google.android.gms.location.*
-import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.libraries.places.api.Places
-import com.google.maps.android.compose.*
+import com.google.firebase.auth.FirebaseAuth
 
 
-// Setapak central location & radius constraint
-val setapakCenter = LatLng(3.187308, 101.703697)
-const val RADIUS_METERS = 6000.0 // 6km radius
 
-fun isWithinSetapak(userLocation: LatLng?): Boolean {
-    userLocation ?: return false
-    val results = FloatArray(1)
-    android.location.Location.distanceBetween(
-        userLocation.latitude, userLocation.longitude,
-        setapakCenter.latitude, setapakCenter.longitude,
-        results
-    )
-    return results[0] <= RADIUS_METERS
-}
 
-// save ride to firebase method
-fun saveRideToFirebase(rideId: String, date: String, time: String, currentLocation: LatLng, destination: LatLng, routePreference: String, capacity: Int) {
-    val db = Firebase.firestore
-    val rideData = hashMapOf(
-        "rideId" to rideId,
-        "date" to date,  // Add date field
-        "time" to time,
-        "currentLocation" to hashMapOf(
-            "latitude" to currentLocation.latitude,
-            "longitude" to currentLocation.longitude
-        ),
-        "destination" to hashMapOf(
-            "latitude" to destination.latitude,
-            "longitude" to destination.longitude
-        ),
-        "routePreference" to routePreference,
-        "capacity" to capacity
-    )
-
-    db.collection("rides").document(rideId)
-        .set(rideData)
-        .addOnSuccessListener { println("Ride successfully stored in Firebase!") }
-        .addOnFailureListener { e -> println("Error storing ride: \${e.message}") }
-}
 
 @Composable
 fun CreateRideScreen(navController: NavController) {
     val firestore = FirebaseFirestore.getInstance()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-
+    val userId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
     // State variables
     var date by remember { mutableStateOf("Select Date") }
     var time by remember { mutableStateOf("Now") }
@@ -135,7 +87,7 @@ fun CreateRideScreen(navController: NavController) {
     })
 
     Scaffold(
-        topBar = { CreateRideTopBar() },
+        topBar = { CreateRideTopBar(navController) },
         bottomBar = { BottomNavBar("create_ride", navController) }
     ) { paddingValues ->
         Column(
@@ -157,9 +109,18 @@ fun CreateRideScreen(navController: NavController) {
                 capacity, { capacity = it }
             )
 
-            ConfirmRideButton(navController,firestore, rideId, date, time, location, destination, routePreference, capacity) {
-                rideId = it
-            }
+            ConfirmRideButton(
+                navController = navController,
+                firestore = firestore,
+                date = date,
+                time = time,
+                location = location,
+                destination = destination,
+                routePreference = routePreference,
+                capacity = capacity,
+                userId = userId,
+                onRideIdChange = { rideId = it }
+            )
         }
     }
 }
@@ -187,12 +148,18 @@ fun ObserveSelectedLocations(
 }
 
 @Composable
-fun CreateRideTopBar() {
+fun CreateRideTopBar(navController: NavController) {
     TopAppBar(
-        title = { Text("Create Ride", fontWeight = FontWeight.Bold, color = Color.White) },
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0075FD))
+        title = { Text("Create Ride", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White) },
+        navigationIcon = {
+            IconButton(onClick = { navController.popBackStack() }) { // Navigates back
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0075FD)) // Blue background
     )
 }
+
 
 @Composable
 fun RideDetailsCard(
@@ -328,19 +295,23 @@ fun RoutePreferenceDropdown(routePreference: String, onRoutePreferenceChange: (S
 fun ConfirmRideButton(
     navController: NavController,
     firestore: FirebaseFirestore,
-    rideId: String,
     date: String,
     time: String,
     location: String,
     destination: String,
     routePreference: String,
     capacity: Int,
+    userId: String,
     onRideIdChange: (String) -> Unit
 ) {
     Button(
         onClick = {
+            val rideRef = firestore.collection("rides").document() // Auto-generate ride ID
+            val rideId = rideRef.id
+
             val rideData = mapOf(
                 "rideId" to rideId,
+                "driverId" to userId, // Store userId as driverId
                 "date" to date,
                 "time" to time,
                 "location" to location,
@@ -348,8 +319,9 @@ fun ConfirmRideButton(
                 "routePreference" to routePreference,
                 "capacity" to capacity
             )
-            firestore.collection("rides").add(rideData).addOnSuccessListener {
-                onRideIdChange(it.id)
+
+            rideRef.set(rideData).addOnSuccessListener {
+                onRideIdChange(rideId) // Update rideId in UI state
                 navController.navigate("matching_screen") // Navigate to MatchingScreen
             }
         },
@@ -360,6 +332,8 @@ fun ConfirmRideButton(
         Text("Confirm Ride", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
     }
 }
+
+
 
 @Composable
 fun CapacitySelector(capacity: Int, onCapacityChanged: (Int) -> Unit) {

@@ -143,10 +143,7 @@ fun AppNavHost(
             composable("create_ride") { CreateRideScreen(navController) }
             composable("search_location") { SearchLocationScreen(navController, isSelectingDestination = false) }
             composable("search_destination") { SearchLocationScreen(navController, isSelectingDestination = true) }
-            // Ride & Location
-            composable("create_ride") { CreateRideScreen(navController) }
-            composable("search_location") { SearchLocationScreen(navController, isSelectingDestination = false) }
-            composable("search_destination") { SearchLocationScreen(navController, isSelectingDestination = true) }
+
 
             composable("matching_screen") { MatchingScreen(navController)
             }
