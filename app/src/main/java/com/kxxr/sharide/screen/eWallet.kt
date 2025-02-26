@@ -52,12 +52,14 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -66,6 +68,9 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.text.input.KeyboardType
+import com.google.firebase.Timestamp
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
@@ -395,11 +400,11 @@ fun SetSecurityQuestionsScreen(navController: NavController) {
     val selectedQuestions = remember { mutableStateListOf<String?>(null, null, null) }
     val answers = remember { mutableStateListOf("", "", "") }
     val context = LocalContext.current
+    var showDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
             .background(Color.White),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -439,6 +444,7 @@ fun SetSecurityQuestionsScreen(navController: NavController) {
         Button(
             onClick = {
                 if (selectedQuestions.all { it != null } && answers.all { it.isNotBlank() }) {
+                    showDialog = true
                     val userId = FirebaseAuth.getInstance().currentUser?.uid
                     if (userId != null) {
                         // Prepare questions and securely hashed answers
@@ -462,13 +468,16 @@ fun SetSecurityQuestionsScreen(navController: NavController) {
                             .update(dataToUpdate as Map<String, Any>)
                             .addOnSuccessListener {
                                 Toast.makeText(context, "Security questions set successfully!", Toast.LENGTH_SHORT).show()
-                                navController.navigate("home") // Navigate to home after saving
+                                showDialog = false
+                                navController.navigate("ewallet") // Navigate to home after saving
                             }
                             .addOnFailureListener { exception ->
+                                showDialog = false
                                 Toast.makeText(context, "Failed to save: ${exception.message}", Toast.LENGTH_SHORT).show()
                             }
                     }
                 } else {
+                    showDialog = false
                     Toast.makeText(context, "Please answer all questions.", Toast.LENGTH_SHORT).show()
                 }
             },
@@ -481,6 +490,8 @@ fun SetSecurityQuestionsScreen(navController: NavController) {
             Text(text = "Submit", color = Color.White, fontSize = 18.sp)
         }
     }
+    // Show Loading Dialog
+    LoadingDialog(text = "Uploading...", showDialog = showDialog, onDismiss = { showDialog = false })
 }
 
 @Composable
@@ -489,8 +500,16 @@ fun AnswerTextField(answer: String, onAnswerChanged: (String) -> Unit) {
         value = answer,
         onValueChange = onAnswerChanged,
         label = { Text("Your Answer...") },
-        modifier = Modifier.fillMaxWidth(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 20.dp)
+            //.shadow(5.dp, shape = RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color.White, shape = RoundedCornerShape(8.dp))
+        ,
+        shape = RoundedCornerShape(8.dp), // Rounded corners for the text field
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+
     )
 }
 
@@ -503,11 +522,11 @@ fun SecurityQuestionDropdown(
     onQuestionSelected: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 18.dp) // Add spacing between dropdowns
+            .padding(start = 20.dp, end = 20.dp)
+            .padding(vertical = 8.dp) // Add spacing between dropdowns
     ) {
         Text(
             text = "Question ${questionIndex + 1}",
@@ -524,12 +543,16 @@ fun SecurityQuestionDropdown(
                 modifier = Modifier
                     .menuAnchor() // Correctly anchors the dropdown
                     .fillMaxWidth()
-                    .background(Color.LightGray, shape = RoundedCornerShape(8.dp))
+                    .shadow(5.dp, shape = RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.White, shape = RoundedCornerShape(8.dp))
                     .clickable { expanded = true }
                     .padding(12.dp)
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.White),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
@@ -549,9 +572,10 @@ fun SecurityQuestionDropdown(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },
                 modifier = Modifier
+                    .padding(start = 20.dp, end = 20.dp)
+                    .background(Color.White)
                     .fillMaxWidth()
                     .heightIn(max = 300.dp)
-                    .background(Color.White)
             ) {
                 questions.forEach { question ->
                     DropdownMenuItem(
@@ -597,18 +621,23 @@ fun EWalletDashboardScreen(navController: NavController) {
 
         // Fetch transaction history
         if (userId != null) {
-            firestore.collection("Transaction").document(userId).get()
+            firestore.collection("Transaction")
+                .whereEqualTo("userId", userId) // Filter by userId field inside the document
+                .get()
                 .addOnSuccessListener { document ->
-                    if (document.exists()) {
-                        val data = document.data?.map { (key, value) ->
-                            val transactionData = value as Map<*, *>
+                    if (!document.isEmpty) {
+                        val data = document.map { documents ->
+                            val transactionData = documents.data
                             Transaction(
                                 date = transactionData["date"].toString(),
                                 description = transactionData["description"].toString(),
                                 amount = transactionData["amount"].toString().toDouble()
                             )
-                        } ?: emptyList()
+                        }
                         transactions = data
+                    } else {
+                        // No transactions found for this user
+                        transactions = emptyList()
                     }
                     isLoading = false
                 }
@@ -627,7 +656,7 @@ fun EWalletDashboardScreen(navController: NavController) {
                 .padding(16.dp)
         ) {
             Spacer(modifier = Modifier.height(54.dp))
-            Text("eWallet", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text("SHARide eWallet", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(start = 10.dp))
 
             // Display Balance
             Text(
@@ -648,19 +677,20 @@ fun EWalletDashboardScreen(navController: NavController) {
                 .width(600.dp)
                 .height(350.dp)
                 .padding(top = 200.dp, start = 25.dp, end = 25.dp)
-                .background(Color.White)
+                .shadow(5.dp, shape = RoundedCornerShape(15.dp))
                 .clip(RoundedCornerShape(15.dp))
+                .background(Color.White)
         ){
             // Action Buttons
             Row(
                 modifier = Modifier
                     .width(600.dp)
-                    .height(350.dp),
+                    .height(300.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
 
                 ) {
-                ActionButton("TOP UP\n","topup") { /* Navigate */ }
+                ActionButton("TOP UP\n","topup") { navController.navigate("topup")}
                 ActionButton("Change Payment PIN","change_pin") { /* Navigate */ }
                 ActionButton("Security Question","security") { /* Navigate */ }
             }
@@ -674,10 +704,12 @@ fun EWalletDashboardScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(24.dp))
 
             // Transaction History Section
-            Text("Transaction History", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            Text("Transaction History", fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.padding(15.dp))
 
            if (transactions.isEmpty()) {
-                Text("No Transaction History", color = Color.Gray)
+                Text("No Transaction History", color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(15.dp))
             } else {
                 transactions.forEach { transaction ->
                     TransactionItem(transaction)
@@ -745,11 +777,15 @@ fun TransactionItem(transaction: Transaction) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        elevation = CardDefaults.cardElevation(4.dp)
+            .padding(8.dp),
+        elevation = CardDefaults.cardElevation(4.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .background(Color.White),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column {
@@ -765,6 +801,205 @@ fun TransactionItem(transaction: Transaction) {
     }
 }
 
-
 // Data class for transaction
 data class Transaction(val date: String, val description: String, val amount: Double)
+
+@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
+@Composable
+fun TopUpScreen(navController: NavController) {
+    var balance by remember { mutableStateOf(0.00)}
+    var isLoading by remember { mutableStateOf(false) }
+    var topUpPin by remember { mutableStateOf("") }
+
+    val userId = FirebaseAuth.getInstance().currentUser?.uid
+    val context = LocalContext.current
+    val firestore = FirebaseFirestore.getInstance()
+
+    // Fetch data from Firestore
+    LaunchedEffect(Unit) {
+        isLoading = true
+
+        // Fetch balance
+        if (userId != null) {
+            firestore.collection("eWallet").document(userId).get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+                        balance = document.getDouble("balance") ?: 0.0
+                        isLoading = false
+                    }else{
+                        isLoading = false
+                    }
+                }
+        }
+    }
+    Scaffold(
+        bottomBar = { BottomNavBar("eWallet", navController) }
+    ) { paddingValues ->
+        // UI Layout
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(280.dp)
+                .background(Color.Blue)
+                .padding(16.dp)
+        ) {
+            Spacer(modifier = Modifier.height(54.dp))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clickable { navController.navigate("ewalletDashboard") }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Text(
+                    text = "TOP UP",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+
+            // Display Balance
+            Text(
+                text = "Current Balance",
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .padding(vertical = 10.dp)
+                    .padding(top = 40.dp)
+                    .fillMaxWidth()
+            )
+            Text(
+                text = "RM %.2f".format(balance),
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+            )
+
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 280.dp)
+        ) {
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Transaction History Section
+            Text("Please Enter Your Reload PIN", fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.padding(15.dp))
+
+            OutlinedTextField(
+                value = topUpPin,
+                onValueChange = { topUpPin = it },
+                label = { Text("Enter Top Up Pin...") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+
+            Image(
+                painter = painterResource(id = R.drawable.reload_pin),
+                contentDescription = "Reload PIN",
+                modifier = Modifier.size(350.dp)
+                    .align(Alignment.CenterHorizontally), // Image size inside the box
+            )
+
+            // Top-Up Button
+            Button(
+                onClick = {
+//                    isLoading = true
+//                    validateTopUpPin(
+//                        firestore = firestore,
+//                        userId = userId,
+//                        pin = topUpPin,
+//                        onSuccess = { amount ->
+//                            balance += amount
+//                            recordTransaction(firestore, userId, amount)
+//                            isLoading = false
+//                        },
+//                        onFailure = {
+//                            isLoading = false
+//                            // Handle invalid PIN
+//                        }
+//                    )
+                }, modifier = Modifier
+                    .width(300.dp)
+                    .height(50.dp)
+                    .align(Alignment.CenterHorizontally)
+                    .padding(horizontal = 40.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+            ){
+                Text("Top Up", color = Color.White)
+            }
+        }
+
+    }
+    // Show Loading Dialog
+    LoadingDialog(text = "Loading...", showDialog = isLoading, onDismiss = { isLoading = false })
+
+}
+
+fun validateTopUpPin(
+    firestore: FirebaseFirestore,
+    userId: String,
+    pin: String,
+    onSuccess: (Double) -> Unit,
+    onFailure: () -> Unit
+) {
+    firestore.collection("TopUP")
+        .whereEqualTo("topupPin", pin)
+        .get()
+        .addOnSuccessListener { documents ->
+            if (!documents.isEmpty) {
+                val document = documents.documents.first()
+                val amount = document.getDouble("amount") ?: 0.0
+
+                // Valid PIN found, update user balance
+                updateUserBalance(firestore, userId, amount)
+                onSuccess(amount)
+            } else {
+                onFailure() // Invalid PIN
+            }
+        }
+        .addOnFailureListener {
+            onFailure()
+        }
+}
+
+fun updateUserBalance(firestore: FirebaseFirestore, userId: String, amount: Double) {
+    val userRef = firestore.collection("Users").document(userId)
+    userRef.get().addOnSuccessListener { document ->
+        if (document.exists()) {
+            val currentBalance = document.getDouble("balance") ?: 0.0
+            userRef.update("balance", currentBalance + amount)
+        }
+    }
+}
+
+fun recordTransaction(firestore: FirebaseFirestore, userId: String, amount: Double) {
+    val currentDate = Timestamp.now()
+    val formattedDate = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(currentDate.toDate())
+
+    val transaction = hashMapOf(
+        "userId" to userId,
+        "date" to formattedDate,
+        "amount" to "+${"%.2f".format(amount)}",
+        "description" to "Top Up"
+    )
+
+    firestore.collection("Transaction").add(transaction)
+}
