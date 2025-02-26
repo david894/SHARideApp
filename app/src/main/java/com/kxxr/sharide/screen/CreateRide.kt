@@ -353,7 +353,7 @@ fun ConfirmRideButton(
 
             rideRef.set(rideData).addOnSuccessListener {
                 onRideIdChange(rideId) // Update rideId in UI state
-                navController.navigate("matching_screen") // Navigate to MatchingScreen
+                navController.navigate("home") // Navigate to MatchingScreen
             }
         },
         modifier = Modifier.fillMaxWidth(),

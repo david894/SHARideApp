@@ -49,7 +49,7 @@ fun MatchingScreen(navController: NavController) {
                     isLoading = false
                 })
             } else {
-                errorMessage = "No rides found."
+                errorMessage = "No search found."
                 isLoading = false
             }
         }, { error ->
@@ -91,8 +91,8 @@ fun MatchingScreenContent(location: String, destination: String, isLoading: Bool
 fun fetchLatestRideId(userId: String, onSuccess: (String?) -> Unit, onFailure: (String) -> Unit) {
     val firestore = FirebaseFirestore.getInstance()
 
-    firestore.collection("rides")
-        .whereEqualTo("driverId", userId)
+    firestore.collection("searchs")
+        .whereEqualTo("passengerId", userId)
         .orderBy("timestamp", Query.Direction.DESCENDING)
         .limit(1)
         .get()
@@ -111,18 +111,18 @@ fun fetchLatestRideId(userId: String, onSuccess: (String?) -> Unit, onFailure: (
 fun fetchRideDetails(rideId: String, onSuccess: (String, String) -> Unit, onFailure: (String) -> Unit) {
     val firestore = FirebaseFirestore.getInstance()
 
-    firestore.collection("rides").document(rideId).get()
+    firestore.collection("searchs").document(rideId).get()
         .addOnSuccessListener { document ->
             if (document.exists()) {
                 val location = document.getString("location") ?: "Unknown Location"
                 val destination = document.getString("destination") ?: "Unknown Destination"
                 onSuccess(location, destination)
             } else {
-                onFailure("Ride data not found.")
+                onFailure("Search data not found.")
             }
         }
         .addOnFailureListener { e ->
-            onFailure("Error fetching ride details: ${e.message}")
+            onFailure("Error fetching search details: ${e.message}")
         }
 }
 

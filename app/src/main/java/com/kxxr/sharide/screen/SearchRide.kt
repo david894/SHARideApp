@@ -76,12 +76,11 @@ fun SearchRideScreen(navController: NavController) {
     var destination by remember { mutableStateOf("") }
     var locationLatLng by remember { mutableStateOf<LatLng?>(null) }
     var destinationLatLng by remember { mutableStateOf<LatLng?>(null) }
-    var routePreference by remember { mutableStateOf("Selecting Preference") }
     var capacity by remember { mutableStateOf(1) }
-    var rideId by remember { mutableStateOf("") }
-    var petPreference by remember { mutableStateOf("No") }
-    var genderPreference by remember { mutableStateOf("Both") }
-    var vehicleType by remember { mutableStateOf("SUV") }
+    var searchId by remember { mutableStateOf("") }
+    var petPreference by remember { mutableStateOf("Select pet Preference") }
+    var genderPreference by remember { mutableStateOf("Select gender Preference") }
+    var vehicleType by remember { mutableStateOf("Vehicle Type") }
     ObserveSelectedLocations(navController, lifecycleOwner, { loc, latLng ->
         location = loc
         locationLatLng = latLng
@@ -89,6 +88,11 @@ fun SearchRideScreen(navController: NavController) {
         destination = dest
         destinationLatLng = latLng
     })
+
+    // Reset capacity when vehicleType changes
+    LaunchedEffect(vehicleType) {
+        capacity = 1
+    }
 
     Scaffold(
         topBar = { CreateSearchTopBar(navController) },
@@ -111,11 +115,11 @@ fun SearchRideScreen(navController: NavController) {
                 time, { time = it },
                 location,
                 destination, { destination = it },
-
                 capacity, { capacity = it } ,
-                petPreference, { routePreference = it },
-                genderPreference, { routePreference = it },
-                vehicleType, { routePreference = it },
+                onCapacityReset = { capacity = 1 },
+                petPreference, { petPreference = it },
+                genderPreference, { genderPreference = it },
+                vehicleType, { vehicleType = it },
             )
 
             ConfirmSearchButton(
@@ -125,10 +129,12 @@ fun SearchRideScreen(navController: NavController) {
                 time = time,
                 location = location,
                 destination = destination,
-                routePreference = routePreference,
+                petPreference = petPreference,
+                genderPreference = petPreference,
+                vehicleType = vehicleType,
                 capacity = capacity,
                 userId = userId,
-                onRideIdChange = { rideId = it }
+                onSearchIdChange = { searchId = it }
             )
         }
     }
@@ -159,6 +165,7 @@ fun SearchRideDetailsCard(
     location: String,
     destination: String, onDestinationChange: (String) -> Unit,
     capacity: Int, onCapacityChange: (Int) -> Unit,
+    onCapacityReset: () -> Unit,
     petPreference: String, onPetPreferenceChange: (String) -> Unit,
     genderPreference: String, onGenderPreferenceChange: (String) -> Unit,
     VehicleType:  String, onVehicleTypeChange: (String) -> Unit,
@@ -177,7 +184,7 @@ fun SearchRideDetailsCard(
             petPreferenceDropdown(petPreference, onPetPreferenceChange)
             genderPreferenceDropdown(genderPreference, onGenderPreferenceChange)
             VehicleDropdown(VehicleType, onVehicleTypeChange)
-            CapacitySelector(capacity, onCapacityChange)
+            CapacitySelectorCarSeated(VehicleType, capacity, onCapacityChange, onCapacityReset)
         }
     }
 }
@@ -229,7 +236,7 @@ fun genderPreferenceDropdown(genderPreference: String, onGenderPreferenceChange:
             modifier = Modifier.fillMaxWidth(),
             trailingIcon = {
                 IconButton(onClick = { expanded = true }) {
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Driver Gender Preference", tint = Color(0xFF0075FD))
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Gender Preference", tint = Color(0xFF0075FD))
                 }
             }
         )
@@ -249,7 +256,7 @@ fun genderPreferenceDropdown(genderPreference: String, onGenderPreferenceChange:
 
 @Composable
 fun VehicleDropdown(VehicleType: String, onVehicleTypeChange: (String) -> Unit) {
-    val routePreferences = listOf("SUV", "Sedan")
+    val routePreferences = listOf("5-seated", "7-seated")
     var expanded by remember { mutableStateOf(false) }
 
     Column {
@@ -287,22 +294,35 @@ fun ConfirmSearchButton(
     time: String,
     location: String,
     destination: String,
-    routePreference: String,
+    petPreference: String,
+    genderPreference: String,
+    vehicleType: String,
     capacity: Int,
     userId: String,
-    onRideIdChange: (String) -> Unit
+    onSearchIdChange: (String) -> Unit
 ) {
     val context = LocalContext.current
 
-    val isValidRide = remember(date, time, location, destination, routePreference) {
+    val isValidSearch = remember(date, time, location, destination, petPreference, genderPreference, vehicleType) {
         date != "Select Date" &&
                 time != "Now" &&
                 location.isNotBlank() &&
                 destination.isNotBlank() &&
-                routePreference != "Selecting Preference"
+                petPreference != "Select pet Preference" &&
+                genderPreference != "Select gender Preference"
     }
+
     Button(
         onClick = {
+            if (!isValidSearch) {
+                Toast.makeText(
+                    context,
+                    "Please fill in all required fields before searching for a ride.",
+                    Toast.LENGTH_SHORT
+                ).show()
+                return@Button
+            }
+
             if (location.trim() == destination.trim()) {
                 Toast.makeText(
                     context,
@@ -311,40 +331,100 @@ fun ConfirmSearchButton(
                 ).show()
                 return@Button
             }
-            if (!isValidRide) {
-                Toast.makeText(
-                    context,
-                    "Please fill in all required fields before creating a ride.",
-                    Toast.LENGTH_SHORT
-                ).show()
-                return@Button
-            }
-            val rideRef = firestore.collection("rides").document() // Auto-generate ride ID
-            val rideId = rideRef.id
 
-            val rideData = mapOf(
-                "rideId" to rideId,
-                "driverId" to userId, // Store userId as driverId
+            val searchRef = firestore.collection("searchs").document() // Auto-generate search ID
+            val searchId = searchRef.id
+
+            val searchData = mapOf(
+                "searchId" to searchId,
+                "passengerId" to userId, // Store userId as passengerId
                 "date" to date,
                 "time" to time,
                 "location" to location,
                 "destination" to destination,
-                "routePreference" to routePreference,
+                "petPreference" to petPreference,
+                "genderPreference" to genderPreference,
+                "vehicleType" to vehicleType,
                 "capacity" to capacity,
                 "timestamp" to FieldValue.serverTimestamp() // Add server timestamp
             )
 
-            rideRef.set(rideData).addOnSuccessListener {
-                onRideIdChange(rideId) // Update rideId in UI state
-                navController.navigate("matching_screen") // Navigate to MatchingScreen
-            }
+            searchRef.set(searchData)
+                .addOnSuccessListener {
+                    onSearchIdChange(searchId) // Update searchId in UI state
+                    navController.navigate("matching_screen") // Navigate to MatchingScreen
+                }
+                .addOnFailureListener { e ->
+                    Toast.makeText(context, "Failed to create search: ${e.message}", Toast.LENGTH_LONG).show()
+                }
         },
         modifier = Modifier.fillMaxWidth(),
         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0075FD)),
         shape = RoundedCornerShape(12.dp)
     ) {
-        Text("Confirm Ride", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Text("Confirm Search", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
     }
 }
+
+@Composable
+fun CapacitySelectorCarSeated(
+    vehicleType: String,
+    capacity: Int,
+    onCapacityChanged: (Int) -> Unit,
+    onCapacityReset: () -> Unit
+) {
+    val maxCapacity = when (vehicleType) {
+        "5-seated" -> 3
+        "7-seated" -> 5
+        else -> 1
+    }
+
+    LaunchedEffect(vehicleType) {
+        onCapacityReset() // Reset capacity when vehicle type changes
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("Capacity", fontWeight = FontWeight.SemiBold)
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(
+                onClick = { if (capacity > 1) onCapacityChanged(capacity - 1) },
+                modifier = Modifier.size(40.dp),
+                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Blue)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Remove,
+                    contentDescription = "Decrease Capacity",
+                    tint = Color.White
+                )
+            }
+
+            Text(
+                text = capacity.toString(),
+                modifier = Modifier.padding(horizontal = 8.dp),
+                fontSize = 18.sp
+            )
+
+            IconButton(
+                onClick = { if (capacity < maxCapacity) onCapacityChanged(capacity + 1) },
+                modifier = Modifier.size(40.dp),
+                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Blue)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Increase Capacity",
+                    tint = Color.White
+                )
+            }
+        }
+    }
+}
+
+
+
 
 

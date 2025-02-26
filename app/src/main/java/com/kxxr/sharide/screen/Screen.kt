@@ -144,7 +144,7 @@ fun AppNavHost(
             composable("search_location") { SearchLocationScreen(navController, isSelectingDestination = false) }
             composable("search_destination") { SearchLocationScreen(navController, isSelectingDestination = true) }
 
-
+            composable("notification") { NotificationScreen(navController) }
             composable("matching_screen") { MatchingScreen(navController) }
             composable("search_ride") { SearchRideScreen(navController) }
             // eWallet
