@@ -120,7 +120,7 @@ fun ShowUserScreen(navController: NavController?, firebaseAuth: FirebaseAuth, fi
                 .padding(paddingValues) // Prevents overlapping
         ) {
 
-            ProfileHeader(firebaseAuth, firestore, isDriver, onRoleChange)
+            ProfileHeader(firebaseAuth, firestore, isDriver, onRoleChange, navController)
             Box(modifier = Modifier.weight(1f)) {
                 GoogleMap(
                     modifier = Modifier.fillMaxSize(),
@@ -161,7 +161,8 @@ fun ProfileHeader(
     firebaseAuth: FirebaseAuth,
     firestore: FirebaseFirestore,
     isDriver: Boolean,
-    onRoleChange: (Boolean) -> Unit
+    onRoleChange: (Boolean) -> Unit,
+    navController: NavController
 ) {
     val userName = fetchUserName(firebaseAuth, firestore)
     val profileBitmap = fetchProfileImage(firebaseAuth)
@@ -224,18 +225,16 @@ fun ProfileHeader(
         Spacer(modifier = Modifier.width(8.dp))
 
         // Notification icon
-        Icon(
-            painter = painterResource(id = R.drawable.notification_ico),
-            contentDescription = "Notifications",
-            modifier = Modifier.size(40.dp)
-        )
+        IconButton(onClick = { navController.navigate("notification") }) {
+            Icon(
+                painter = painterResource(id = R.drawable.notification_ico),
+                contentDescription = "Notifications",
+                modifier = Modifier.size(40.dp)
+            )
+        }
     }
 }
 
-
-
-
-// Need to update logic for reminder (Problem Xr)
 @Composable
 fun RideReminder(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
     val rides = remember { mutableStateListOf<Ride>() }
