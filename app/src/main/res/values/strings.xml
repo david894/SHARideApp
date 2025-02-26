@@ -10,4 +10,6 @@
         <item>What is your favorite movie?</item>
         <item>What was the name of your favorite childhood character?</item>
     </string-array>
+    <string name="max_pin_attempts">3</string>
+
 </resources>

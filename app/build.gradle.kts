@@ -100,6 +100,7 @@ dependencies {
     implementation(libs.androidx.camera.view)
     implementation(libs.firebase.storage.ktx)
     implementation(libs.places)
+    implementation(libs.androidx.room.common)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

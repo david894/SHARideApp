@@ -1,6 +1,7 @@
 package com.kxxr.sharide.screen
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.util.Base64
 import android.util.Log
 import android.widget.Toast
@@ -71,9 +72,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringArrayResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import com.google.firebase.Timestamp
 import com.google.rpc.context.AttributeContext.Resource
+import com.kxxr.sharide.db.PinAttemptManager
 import org.checkerframework.common.subtyping.qual.Bottom
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -170,6 +173,7 @@ fun EWalletIntro(navController: NavController) {
                 showPinDialog = false
                 showConfirmPinDialog = true // Move to confirmation step
             },
+            onClearPin = false,
             onDismiss = {
                 showPinDialog = false
             }
@@ -212,6 +216,7 @@ fun EWalletIntro(navController: NavController) {
                     showPinDialog = true // Restart PIN entry
                 }
             },
+            onClearPin = false,
             onDismiss = {
                 showConfirmPinDialog = false
             }
@@ -228,17 +233,23 @@ fun PinInputDialog(
     title: String,
     description: String,
     onPinEntered: (String) -> Unit,
+    onClearPin: Boolean,  // This will trigger a PIN reset
     onDismiss: () -> Unit
 ) {
     var pinCode by remember { mutableStateOf("") }
+
+    // Reset PIN when onClearPin changes
+    LaunchedEffect(onClearPin) {
+        pinCode = "" // Clear the PIN field
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(2.dp, Color.Black, RoundedCornerShape(16.dp)), // Black outline
+                .border(2.dp, Color.Black, RoundedCornerShape(16.dp)),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White), // White background
+            colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
         ) {
             Column(
@@ -270,8 +281,8 @@ fun PinInputDialog(
                         Box(
                             modifier = Modifier
                                 .size(40.dp)
-                                .border(2.dp, Color.Black, RoundedCornerShape(8.dp)) // Black border
-                                .background(Color.White), // White fill
+                                .border(2.dp, Color.Black, RoundedCornerShape(8.dp))
+                                .background(Color.White),
                             contentAlignment = Alignment.Center
                         ) {
                             if (index < pinCode.length) {
@@ -313,9 +324,9 @@ fun PinInputDialog(
                                         },
                                         modifier = Modifier
                                             .size(60.dp)
-                                            .border(2.dp, Color.Black, CircleShape), // Black outline
+                                            .border(2.dp, Color.Black, CircleShape),
                                         shape = CircleShape,
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color.White) // White fill
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color.White)
                                     ) {
                                         Text(key, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black)
                                     }
@@ -330,7 +341,10 @@ fun PinInputDialog(
             }
         }
     }
+
+
 }
+
 
 fun hashPin(pin: String): String {
     val digest = MessageDigest.getInstance("SHA-256")
@@ -697,7 +711,7 @@ fun EWalletDashboardScreen(navController: NavController) {
 
                 ) {
                 ActionButton("TOP UP\n","topup") { navController.navigate("topup")}
-                ActionButton("Change Payment PIN","change_pin") { /* Navigate */ }
+                ActionButton("Change Payment PIN","change_pin") { navController.navigate("changePIN") }
                 ActionButton("Security Question","security") { /* Navigate */ }
             }
         }
@@ -1140,7 +1154,9 @@ fun TopUpSuccessScreen(navController: NavController, topUpAmount: Double, newBal
                     onClick = { navController.navigate("ewalletDashboard") },
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                    modifier = Modifier.width(300.dp).height(50.dp)
+                    modifier = Modifier
+                        .width(300.dp)
+                        .height(50.dp)
                 ) {
                     Text(
                         text = "Done",
@@ -1152,3 +1168,291 @@ fun TopUpSuccessScreen(navController: NavController, topUpAmount: Double, newBal
         }
     }
 }
+
+@Composable
+fun ChangePaymentPIN(navController: NavController) {
+    val context = LocalContext.current
+    val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return
+
+    // Read max attempts from strings.xml
+    val maxAttempts = stringResource(id = R.string.max_pin_attempts).toInt()
+
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showPinDialog by remember { mutableStateOf(true) }
+    var attemptsLeft by remember { mutableStateOf(3 - PinAttemptManager.getAttempts(context)) }
+    var clearPinTrigger by remember { mutableStateOf(false) } // To trigger PIN reset
+
+    LaunchedEffect(Unit) {
+        if (PinAttemptManager.isLockedOut(context)) {
+            navController.navigate("resetPIN") // Redirect if already locked out
+        }
+    }
+
+    if (showPinDialog) {
+        PinInputDialog(
+            title = "Enter Current PIN",
+            description = buildString {
+                append("Please enter your current payment PIN to proceed.")
+                if (attemptsLeft < 3) {
+                    append("\n\nYou have $attemptsLeft attempts left.")
+                }
+            },
+            onPinEntered = { enteredPin ->
+                verifyCurrentPin(
+                    context = context,
+                    userId = userId,
+                    enteredPin = enteredPin,
+                    onSuccess = {
+                        PinAttemptManager.resetAttempts(context) // Reset attempt count
+                        showPinDialog = false
+                        navController.navigate("updatePIN") // Navigate to new PIN setup
+                    },
+                    onFailure = { error ->
+                        attemptsLeft = maxAttempts - PinAttemptManager.getAttempts(context) // Update attempts left
+                        errorMessage = error
+                        clearPinTrigger = !clearPinTrigger
+                    },
+                    onLockout = {
+                        navController.navigate("resetPIN") // Navigate to reset PIN screen
+                    }
+                )
+            },
+            onClearPin = clearPinTrigger,
+            onDismiss = { navController.popBackStack() }
+        )
+    }
+
+    errorMessage?.let { error ->
+        Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+        errorMessage = null
+    }
+}
+
+
+fun verifyCurrentPin(
+    context: Context,
+    userId: String,
+    enteredPin: String,
+    onSuccess: () -> Unit,
+    onFailure: (String) -> Unit,
+    onLockout: () -> Unit
+) {
+    val firestore = FirebaseFirestore.getInstance()
+    val hashedPin = hashPin(enteredPin)
+
+    firestore.collection("eWallet")
+        .document(userId)
+        .get()
+        .addOnSuccessListener { document ->
+            if (document.exists()) {
+                val storedHashedPin = document.getString("pinCode") ?: ""
+
+                if (storedHashedPin == hashedPin) {
+                    PinAttemptManager.resetAttempts(context) // Reset attempts on success
+                    onSuccess()
+                } else {
+                    PinAttemptManager.incrementAttempts(context) // Increment attempt count
+
+                    if (PinAttemptManager.isLockedOut(context)) {
+                        onLockout() // Lock the user out after 3 failed attempts
+                    } else {
+                        val attemptsLeft = 3 - PinAttemptManager.getAttempts(context)
+                        onFailure("Incorrect PIN. You have $attemptsLeft attempts left.")
+                    }
+                }
+            } else {
+                onFailure("User data not found.")
+            }
+        }
+        .addOnFailureListener { e ->
+            onFailure("Error: ${e.localizedMessage}")
+        }
+}
+
+@Composable
+fun ResetPinScreen(navController: NavController) {
+    val context = LocalContext.current
+    val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return
+
+    var securityQuestions by remember { mutableStateOf<List<String>>(emptyList()) }
+    var correctAnswers by remember { mutableStateOf<List<String>>(emptyList()) }
+    var userAnswers = remember { mutableStateListOf("", "", "") }
+    var showDialog by remember { mutableStateOf(false) }
+
+    val firestore = FirebaseFirestore.getInstance()
+
+    // Fetch security questions from Firestore
+    LaunchedEffect(userId) {
+        showDialog = true
+        firestore.collection("eWallet").document(userId).get()
+            .addOnSuccessListener { document ->
+                if (document.exists()) {
+                    securityQuestions = listOf(
+                        document.getString("securityQuestion1") ?: "",
+                        document.getString("securityQuestion2") ?: "",
+                        document.getString("securityQuestion3") ?: ""
+                    )
+                    correctAnswers = listOf(
+                        document.getString("securityAnswer1") ?: "",
+                        document.getString("securityAnswer2") ?: "",
+                        document.getString("securityAnswer3") ?: ""
+                    )
+                }
+                showDialog = false
+            }
+            .addOnFailureListener {
+                showDialog = false
+                Toast.makeText(context, "Error fetching security questions", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .background(Color.White),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Close Button
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            IconButton(onClick = { navController.navigate("ewalletDashboard") } ) {
+                Icon(Icons.Default.Close, contentDescription = "Close")
+            }
+        }
+        Text(
+            text = "Reset Payment PIN",
+            fontWeight = FontWeight.Bold,
+            fontSize = 24.sp,
+            color = Color.Black
+        )
+
+        Text(
+            text = "Answer your security questions to reset your PIN.",
+            fontSize = 16.sp,
+            color = Color.Gray,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(vertical = 8.dp)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        securityQuestions.forEachIndexed { index, question ->
+            Text(question, fontWeight = FontWeight.Bold)
+            AnswerTextField(
+                answer = userAnswers[index],
+                onAnswerChanged = { userAnswers[index] = it }
+            )
+            Spacer(modifier = Modifier.height(26.dp))
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = {
+                if (validateAnswers(userAnswers, correctAnswers)) {
+                    navController.navigate("updatePIN") // Navigate to PIN reset screen
+                } else {
+                    Toast.makeText(context, "Incorrect answers. Try again.", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+        ) {
+            Text(text = "Verify", color = Color.White, fontSize = 18.sp)
+        }
+    }
+
+    LoadingDialog(text = "Loading...", showDialog = showDialog, onDismiss = { showDialog = false })
+}
+
+fun validateAnswers(userAnswers: List<String>, correctAnswers: List<String>): Boolean {
+    return userAnswers.map { hashAnswer(it) } == correctAnswers
+}
+
+@Composable
+fun UpdatePinScreen(navController: NavController) {
+    val context = LocalContext.current
+    val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return
+    var showPinDialog by remember { mutableStateOf(true) }
+    var showConfirmPinDialog by remember { mutableStateOf(false) }
+    var firstPin by remember { mutableStateOf("") }
+    var errorPIN by remember { mutableStateOf(false) }
+    var showDialog by remember { mutableStateOf(false) }
+    var clearPIN by remember { mutableStateOf(false) }
+
+    // Step 1: User enters the first PIN
+    if (showPinDialog) {
+        PinInputDialog(
+            title = if (errorPIN) "Error! PINs do not match\n\nCreate PIN" else "Create PIN",
+            description = "Please create a 6-digit PIN for your eWallet",
+            onPinEntered = { enteredPin ->
+                firstPin = enteredPin
+                showPinDialog = false
+                showConfirmPinDialog = true // Move to confirmation step
+            },
+            onClearPin = clearPIN,
+            onDismiss = {
+                showPinDialog = false
+            }
+        )
+    }
+
+    // Step 2: User confirms the PIN
+    if (showConfirmPinDialog) {
+        PinInputDialog(
+            title = "Confirm PIN",
+            description = "Please re-enter your 6-digit PIN",
+            onPinEntered = { confirmedPin ->
+                if (confirmedPin == firstPin) {
+                    showDialog = true
+                    updateUserPin(userId, confirmedPin,
+                        onSuccess = {
+                            Toast.makeText(context, "PIN updated successfully!", Toast.LENGTH_SHORT).show()
+                            showDialog = false
+                            showConfirmPinDialog = false
+                            PinAttemptManager.resetAttempts(context) // Reset attempt count
+                            navController.navigate("ewalletDashboard") // Navigate after successful update
+                        },
+                        onFailure = { exception ->
+                            Toast.makeText(context, "Failed to update PIN: ${exception.message}", Toast.LENGTH_SHORT).show()
+                            showDialog = false
+                            showConfirmPinDialog = false
+                        }
+                    )
+                } else {
+                    Toast.makeText(context, "PINs do not match! Try again.", Toast.LENGTH_SHORT).show()
+                    showConfirmPinDialog = false
+                    errorPIN = true
+                    showPinDialog = true // Restart PIN entry
+                }
+            },
+            onClearPin = clearPIN,
+            onDismiss = {
+                showConfirmPinDialog = false
+            }
+        )
+    }
+
+    // Loading Dialog
+    LoadingDialog(text = "Updating PIN...", showDialog = showDialog, onDismiss = { showDialog = false })
+}
+
+fun updateUserPin(userId: String, newPin: String, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
+    val firestore = FirebaseFirestore.getInstance()
+    val hashedPin = hashPin(newPin) // Hash PIN before storing
+
+    val userRef = firestore.collection("eWallet").document(userId)
+
+    userRef.update("pinCode", hashedPin)
+        .addOnSuccessListener {
+            onSuccess()
+        }
+        .addOnFailureListener { exception ->
+            onFailure(exception)
+        }
+}
+

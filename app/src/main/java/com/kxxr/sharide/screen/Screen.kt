@@ -160,6 +160,10 @@ fun AppNavHost(
                 val balance = backStackEntry.arguments?.getString("balance")?.toDoubleOrNull() ?: 0.0
                 TopUpSuccessScreen(navController, topup, balance)
             }
+            composable("changePIN") { ChangePaymentPIN(navController) }
+            composable("resetPIN") { ResetPinScreen(navController) }
+            composable("updatePIN") { UpdatePinScreen(navController) }
+
         }
     }
 }
