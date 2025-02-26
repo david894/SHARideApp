@@ -81,7 +81,7 @@ fun SearchRideScreen(navController: NavController) {
     var petPreference by remember { mutableStateOf("Select pet Preference") }
     var genderPreference by remember { mutableStateOf("Select gender Preference") }
     var vehicleType by remember { mutableStateOf("Vehicle Type") }
-    ObserveSelectedLocations(navController, lifecycleOwner, { loc, latLng ->
+    ObserveSearchSelectedLocations(navController, lifecycleOwner, { loc, latLng ->
         location = loc
         locationLatLng = latLng
     }, { dest, latLng ->
@@ -140,6 +140,27 @@ fun SearchRideScreen(navController: NavController) {
     }
 }
 
+@Composable
+fun ObserveSearchSelectedLocations(
+    navController: NavController,
+    lifecycleOwner: LifecycleOwner,
+    onLocationSelected: (String, LatLng) -> Unit,
+    onDestinationSelected: (String, LatLng) -> Unit
+) {
+    LaunchedEffect(navController) {
+        navController.currentBackStackEntry?.savedStateHandle
+            ?.getLiveData<Pair<String, LatLng>>("selected_location")
+            ?.observe(lifecycleOwner) { (selectedAddress, selectedLatLng) ->
+                onLocationSelected(selectedAddress, selectedLatLng)
+            }
+
+        navController.currentBackStackEntry?.savedStateHandle
+            ?.getLiveData<Pair<String, LatLng>>("selected_destination")
+            ?.observe(lifecycleOwner) { (selectedAddress, selectedLatLng) ->
+                onDestinationSelected(selectedAddress, selectedLatLng)
+            }
+    }
+}
 
 
 @Composable
@@ -179,7 +200,7 @@ fun SearchRideDetailsCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            LocationFields(navController, location, destination, onDestinationChange)
+            SearchLocationFields(navController, location, destination, onDestinationChange)
             DateTimePicker(context, date, onDateChange, time, onTimeChange)
             petPreferenceDropdown(petPreference, onPetPreferenceChange)
             genderPreferenceDropdown(genderPreference, onGenderPreferenceChange)
@@ -188,7 +209,39 @@ fun SearchRideDetailsCard(
         }
     }
 }
-
+@Composable
+fun SearchLocationFields(
+    navController: NavController,
+    location: String,
+    destination: String,
+    onDestinationChange: (String) -> Unit
+) {
+    Column {
+        Text("Current Location", fontWeight = FontWeight.SemiBold)
+        OutlinedTextField(
+            value = location,
+            onValueChange = {},
+            modifier = Modifier.fillMaxWidth(),
+            readOnly = true,
+            trailingIcon = {
+                IconButton(onClick = { navController.navigate("search_location") }) {
+                    Icon(Icons.Default.LocationOn, contentDescription = "Select Location")
+                }
+            }
+        )
+        Text("Select Destination", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+        OutlinedTextField(
+            value = destination,
+            onValueChange = onDestinationChange,
+            modifier = Modifier.fillMaxWidth(),
+            trailingIcon = {
+                IconButton(onClick = { navController.navigate("search_destination") }) {
+                    Icon(Icons.Default.LocationOn, contentDescription = "Select Destination")
+                }
+            }
+        )
+    }
+}
 
 @Composable
 fun petPreferenceDropdown(petPreference: String, onPetPreferenceChange: (String) -> Unit) {
@@ -423,6 +476,7 @@ fun CapacitySelectorCarSeated(
         }
     }
 }
+
 
 
 

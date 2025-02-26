@@ -1,5 +1,8 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.kxxr.sharide.screen
 
+import android.content.Context
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,6 +25,9 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.NavController
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -29,50 +35,168 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FirebaseFirestore
 import com.kxxr.sharide.R
+import com.kxxr.sharide.db.NotificationDao
+import com.kxxr.sharide.db.NotificationDatabase
+import com.kxxr.sharide.db.NotificationEntity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotificationScreen(navController: NavController) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Notification", fontSize = 20.sp, fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.mediumTopAppBarColors(
-                    containerColor = Color.White
-                )
-            )
+fun NotificationScreen(
+    navController: NavController,
+    firebaseAuth: FirebaseAuth,
+    firestore: FirebaseFirestore,
+    context: Context // Pass context to access Room Database
+) {
+    val userId = firebaseAuth.currentUser?.uid ?: ""
+    val notifications = remember { mutableStateListOf<NotificationData>() }
+    val notificationDao = remember { NotificationDatabase.getDatabase(context).notificationDao() }
+
+    LaunchedEffect(userId) {
+        if (userId.isNotEmpty()) {
+            // Load notifications from local database first
+            val localNotifications = withContext(Dispatchers.IO) {
+                notificationDao.getAllNotifications()
+            }
+            notifications.clear()
+            notifications.addAll(localNotifications.map {
+                NotificationData(it.image, it.title, it.description, it.time)
+            })
+
+            // Sync with Firestore
+            observeRideNotifications(userId, firestore, notifications, notificationDao)
         }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
-        ) {
-            NotificationItem(
-                image = R.drawable.car_front,
-                title = "Ride Has Been Booked!",
-                description = "Asad has accepted your ride and will arrive at 10:38 am",
-                time = "30 min"
-            )
-            NotificationItem(
-                image = R.drawable.profile_ico,
-                title = "Message",
-                description = "Hi, I might be delayed by around 5 minutes due to heavy rain.",
-                time = "10 min"
-            )
-            NotificationItem(
-                image = R.drawable.profile_ico,
-                title = "Cancel Ride!",
-                description = "Hi John, your passenger for the ride scheduled on June 25, Friday at 10:41 has canceled their booking.",
-                time = "Now"
-            )
+    }
+
+    Scaffold(topBar = { NotificationTopBar(navController) }) { paddingValues ->
+        NotificationList(notifications, paddingValues)
+    }
+}
+
+/**
+ * Observes ride notifications in Firestore and updates the list.
+ */
+private fun observeRideNotifications(
+    userId: String,
+    firestore: FirebaseFirestore,
+    notifications: MutableList<NotificationData>,
+    notificationDao: NotificationDao
+) {
+    firestore.collection("rides")
+        .whereEqualTo("driverId", userId)
+        .addSnapshotListener { snapshots, error ->
+            if (error != null || snapshots == null) return@addSnapshotListener
+
+            val currentTime = System.currentTimeMillis()
+            val timeIntervals = listOf(6, 3, 1) // Hours before ride
+
+            val newNotifications = snapshots.documents.mapNotNull { doc ->
+                createNotificationIfNeeded(doc, currentTime, timeIntervals)
+            }
+
+            // Get existing notifications from local database
+            val existingNotifications = notifications.toList().toMutableList()
+
+            // Merge: Add only new notifications that don't already exist
+            newNotifications.forEach { newNotification ->
+                if (existingNotifications.none { it.title == newNotification.title && it.description == newNotification.description }) {
+                    existingNotifications.add(newNotification)
+                }
+            }
+
+            notifications.clear()
+            notifications.addAll(existingNotifications)
+
+            // Update local database asynchronously
+            kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+                newNotifications.forEach { notification ->
+                    val exists = notificationDao.getNotification(notification.title, notification.description) != null
+                    if (!exists) {
+                        notificationDao.insertNotification(
+                            NotificationEntity(
+                                image = notification.image,
+                                title = notification.title,
+                                description = notification.description,
+                                time = notification.time
+                            )
+                        )
+                    }
+                }
+            }
+        }
+}
+
+
+
+/**
+ * Checks if a notification should be created for a ride and returns it if needed.
+ */
+private fun createNotificationIfNeeded(doc: DocumentSnapshot, currentTime: Long, timeIntervals: List<Int>): NotificationData? {
+    val rideId = doc.id
+    val date = doc.getString("date") ?: return null
+    val time = doc.getString("time") ?: return null
+    val rideTimestamp = convertToTimestamp(date, time)
+
+    val timeLeftMillis = rideTimestamp - currentTime
+    val hoursLeft = (timeLeftMillis / (1000 * 60 * 60)).toInt()
+    val minutesLeft = ((timeLeftMillis % (1000 * 60 * 60)) / (1000 * 60)).toInt()
+
+    return if (hoursLeft in timeIntervals && minutesLeft == 0) {
+        NotificationData(
+            image = R.drawable.car_front,
+            title = "Upcoming Ride Reminder",
+            description = "Your ride (ID: $rideId) is in $hoursLeft hours!",
+            time = "$hoursLeft hours left"
+        )
+    } else {
+        null
+    }
+}
+
+/**
+ * Top App Bar for the notification screen.
+ */
+@Composable
+fun NotificationTopBar(navController: NavController) {
+    TopAppBar(
+        title = { Text("Notification", fontSize = 20.sp, fontWeight = FontWeight.Bold) },
+        navigationIcon = {
+            IconButton(onClick = { navController.popBackStack() }) {
+                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+            }
+        },
+        colors = TopAppBarDefaults.mediumTopAppBarColors(containerColor = Color.White)
+    )
+}
+
+/**
+ * Displays the list of notifications.
+ */
+@Composable
+fun NotificationList(notifications: List<NotificationData>, paddingValues: androidx.compose.foundation.layout.PaddingValues) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+            .padding(16.dp)
+    ) {
+        if (notifications.isEmpty()) {
+            Text(text = "No ride notifications", fontSize = 16.sp, color = Color.Gray)
+        } else {
+            notifications.forEach { notification ->
+                NotificationItem(
+                    image = notification.image,
+                    title = notification.title,
+                    description = notification.description,
+                    time = notification.time
+                )
+            }
         }
     }
 }
@@ -103,3 +227,10 @@ fun NotificationItem(image: Int, title: String, description: String, time: Strin
         }
     }
 }
+
+data class NotificationData(
+    val image: Int,
+    val title: String,
+    val description: String,
+    val time: String
+)

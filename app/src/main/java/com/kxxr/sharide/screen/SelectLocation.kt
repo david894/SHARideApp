@@ -28,7 +28,7 @@ import com.google.maps.android.SphericalUtil
 import com.google.maps.android.compose.*
 
 @Composable
-fun SearchLocationScreen(navController: NavController, isSelectingDestination: Boolean) {
+fun SearchLocationScreen(navController: NavController, locationType: Int) {
     var searchQuery by remember { mutableStateOf("") }
     var filteredSuggestions by remember { mutableStateOf(predefinedLocations) }
     var selectedLocation by remember { mutableStateOf<LatLng?>(null) }
@@ -76,7 +76,7 @@ fun SearchLocationScreen(navController: NavController, isSelectingDestination: B
                     }
                 }
             )
-            ConfirmLocationButton(navController, context, selectedLocation, isSelectingDestination)
+            ConfirmLocationButton(navController, context, selectedLocation, locationType)
         }
     }
 }
@@ -167,7 +167,7 @@ fun MapView(cameraPositionState: CameraPositionState, selectedLocation: LatLng?,
 }
 
 @Composable
-fun ConfirmLocationButton(navController: NavController, context: Context, selectedLocation: LatLng?, isSelectingDestination: Boolean) {
+fun ConfirmLocationButton(navController: NavController, context: Context, selectedLocation: LatLng?, locationType: Int) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.BottomCenter
@@ -177,7 +177,12 @@ fun ConfirmLocationButton(navController: NavController, context: Context, select
                 selectedLocation?.let { latLng ->
                     val matchedLocation = predefinedLocations.find { it.second == latLng }
                     if (matchedLocation != null) {
-                        val key = if (isSelectingDestination) "selected_destination" else "selected_location"
+                        val key = when (locationType) {
+                            0 -> "selected_location"
+                            1 -> "selected_stop"
+                            2 -> "selected_destination"
+                            else -> return@Button
+                        }
                         navController.previousBackStackEntry?.savedStateHandle?.set(key, matchedLocation.first to latLng)
                         navController.popBackStack()
                     } else {

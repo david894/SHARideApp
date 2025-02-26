@@ -4,19 +4,27 @@ package com.kxxr.sharide.screen
 
 import android.app.TimePickerDialog
 import android.content.Context
+import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AddLocation
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.outlined.AccessTime
@@ -38,6 +46,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,19 +81,29 @@ fun CreateRideScreen(navController: NavController) {
     var time by remember { mutableStateOf("Select Time") }
     var location by remember { mutableStateOf("") }
     var destination by remember { mutableStateOf("") }
+    var stop by remember { mutableStateOf("") }
     var locationLatLng by remember { mutableStateOf<LatLng?>(null) }
     var destinationLatLng by remember { mutableStateOf<LatLng?>(null) }
+    var stopLatLng by remember { mutableStateOf<LatLng?>(null) }
     var routePreference by remember { mutableStateOf("Selecting Preference") }
     var capacity by remember { mutableStateOf(1) }
     var rideId by remember { mutableStateOf("") }
 
-    ObserveSelectedLocations(navController, lifecycleOwner, { loc, latLng ->
-        location = loc
-        locationLatLng = latLng
-    }, { dest, latLng ->
-        destination = dest
-        destinationLatLng = latLng
-    })
+    ObserveSelectedLocations(navController, lifecycleOwner,
+        { loc, latLng ->
+            location = loc
+            locationLatLng = latLng
+        },
+        { stopName, latLng -> // Correctly update stop location
+            stop = stopName
+            stopLatLng = latLng
+        },
+        { dest, latLng ->
+            destination = dest
+            destinationLatLng = latLng
+        },
+    )
+
 
     Scaffold(
         topBar = { CreateRideTopBar(navController) },
@@ -93,6 +112,7 @@ fun CreateRideScreen(navController: NavController) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(paddingValues)
                 .padding(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.Center,
@@ -104,9 +124,10 @@ fun CreateRideScreen(navController: NavController) {
                 date, { date = it },
                 time, { time = it },
                 location,
+                stop,
                 destination, { destination = it },
                 routePreference, { routePreference = it },
-                capacity, { capacity = it }
+                capacity, { capacity = it },
             )
 
             ConfirmRideButton(
@@ -115,6 +136,7 @@ fun CreateRideScreen(navController: NavController) {
                 date = date,
                 time = time,
                 location = location,
+                stop = stop,
                 destination = destination,
                 routePreference = routePreference,
                 capacity = capacity,
@@ -130,6 +152,7 @@ fun ObserveSelectedLocations(
     navController: NavController,
     lifecycleOwner: LifecycleOwner,
     onLocationSelected: (String, LatLng) -> Unit,
+    onStopSelected: (String, LatLng) -> Unit,
     onDestinationSelected: (String, LatLng) -> Unit
 ) {
     LaunchedEffect(navController) {
@@ -138,12 +161,17 @@ fun ObserveSelectedLocations(
             ?.observe(lifecycleOwner) { (selectedAddress, selectedLatLng) ->
                 onLocationSelected(selectedAddress, selectedLatLng)
             }
-
+        navController.currentBackStackEntry?.savedStateHandle
+            ?.getLiveData<Pair<String, LatLng>>("selected_stop")
+            ?.observe(lifecycleOwner) { (selectedAddress, selectedLatLng) ->
+                onStopSelected(selectedAddress, selectedLatLng)
+            }
         navController.currentBackStackEntry?.savedStateHandle
             ?.getLiveData<Pair<String, LatLng>>("selected_destination")
             ?.observe(lifecycleOwner) { (selectedAddress, selectedLatLng) ->
                 onDestinationSelected(selectedAddress, selectedLatLng)
             }
+
     }
 }
 
@@ -168,9 +196,11 @@ fun CreateRideDetailsCard(
     date: String, onDateChange: (String) -> Unit,
     time: String, onTimeChange: (String) -> Unit,
     location: String,
+    stop: String,
     destination: String, onDestinationChange: (String) -> Unit,
     routePreference: String, onRoutePreferenceChange: (String) -> Unit,
-    capacity: Int, onCapacityChange: (Int) -> Unit
+    capacity: Int, onCapacityChange: (Int) -> Unit,
+
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -181,13 +211,14 @@ fun CreateRideDetailsCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            LocationFields(navController, location, destination, onDestinationChange)
+            LocationFields(navController, location, stop, destination, onDestinationChange)
             DateTimePicker(context, date, onDateChange, time, onTimeChange)
             RoutePreferenceDropdown(routePreference, onRoutePreferenceChange)
             CapacitySelector(capacity, onCapacityChange)
-        }
+            }
     }
 }
+
 
 @Composable
 fun DateTimePicker(
@@ -234,9 +265,12 @@ fun DateTimePicker(
 fun LocationFields(
     navController: NavController,
     location: String,
-    destination: String, onDestinationChange: (String) -> Unit
+    stop: String?,
+    destination: String,
+    onDestinationChange: (String) -> Unit
 ) {
-    Column {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Current Location Field
         Text("Current Location", fontWeight = FontWeight.SemiBold)
         OutlinedTextField(
             value = location,
@@ -250,19 +284,38 @@ fun LocationFields(
             }
         )
 
-        Text("Select Destination", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+        // Stop Location Field
+        Text("Add Stop(Optional)", fontWeight = FontWeight.SemiBold)
+        OutlinedTextField(
+            value = stop ?: " ", // Show "Add Stop" if stop is null
+            onValueChange = {},
+            modifier = Modifier.fillMaxWidth(),
+            readOnly = true,
+            trailingIcon = {
+                IconButton(onClick = { navController.navigate("search_stop") }) {
+                    Icon(Icons.Default.LocationOn, contentDescription = "Select Stop Location")
+                }
+            }
+        )
+
+        // Destination Field
+        Text("Select Destination", fontWeight = FontWeight.SemiBold)
         OutlinedTextField(
             value = destination,
             onValueChange = onDestinationChange,
             modifier = Modifier.fillMaxWidth(),
+            readOnly = true,
             trailingIcon = {
-                IconButton(onClick = { navController.navigate("search_destination") }) {
+                IconButton(onClick = { navController.navigate("search_destination") }) { // Fixed navigation destination
                     Icon(Icons.Default.LocationOn, contentDescription = "Select Destination")
                 }
             }
         )
     }
 }
+
+
+
 
 @Composable
 fun RoutePreferenceDropdown(routePreference: String, onRoutePreferenceChange: (String) -> Unit) {
@@ -303,6 +356,7 @@ fun ConfirmRideButton(
     date: String,
     time: String,
     location: String,
+    stop: String,
     destination: String,
     routePreference: String,
     capacity: Int,
@@ -311,7 +365,7 @@ fun ConfirmRideButton(
 ) {
     val context = LocalContext.current
 
-    val isValidRide = remember(date, time, location, destination, routePreference) {
+    val isValidRide = remember(date, time, stop, location, destination, routePreference) {
         date != "Select Date" &&
                 time != "Now" &&
                 location.isNotBlank() &&
@@ -320,10 +374,10 @@ fun ConfirmRideButton(
     }
     Button(
         onClick = {
-            if (location.trim() == destination.trim()) {
+            if (location.trim() == destination.trim() || location.trim() == stop?.trim() || destination.trim() == stop?.trim()) {
                 Toast.makeText(
                     context,
-                    "Location and Destination cannot be the same!",
+                    "Location, Stop, and Destination must be different!",
                     Toast.LENGTH_SHORT
                 ).show()
                 return@Button
@@ -345,11 +399,12 @@ fun ConfirmRideButton(
                 "date" to date,
                 "time" to time,
                 "location" to location,
+                "stop" to stop,
                 "destination" to destination,
                 "routePreference" to routePreference,
                 "capacity" to capacity,
                 "timestamp" to FieldValue.serverTimestamp() // Add server timestamp
-            )
+                )
 
             rideRef.set(rideData).addOnSuccessListener {
                 onRideIdChange(rideId) // Update rideId in UI state

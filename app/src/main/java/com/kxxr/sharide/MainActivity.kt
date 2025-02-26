@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.android.libraries.places.api.Places
@@ -40,6 +41,8 @@ class MainActivity : ComponentActivity() {
 }
 @Composable
 fun ShareRideApp() {
+    // Get the application context
+    val context = LocalContext.current
     // Get the NetworkViewModel instance using hiltViewModel
     val networkViewModel: NetworkViewModel = hiltViewModel()
 
@@ -49,7 +52,7 @@ fun ShareRideApp() {
     MaterialTheme {
         if (isConnected) {
             // Pass FirebaseAuth and FirebaseFirestore
-            AppNavHost(FirebaseAuth.getInstance(), FirebaseFirestore.getInstance(), networkViewModel)
+            AppNavHost(FirebaseAuth.getInstance(), FirebaseFirestore.getInstance(), networkViewModel,context)
         } else {
             // Show a no-internet connection screen
             NoInternetScreen(onRetry = { /* Retry logic, if needed */ })

@@ -12,6 +12,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -64,11 +66,20 @@ fun MapScreen(navController: NavController, firebaseAuth: FirebaseAuth, firestor
     val context = LocalContext.current
     val locationPermissionState = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
     var isPermissionRequested by remember { mutableStateOf(false) }
-    var isDriver by remember { mutableStateOf(false) }
+    // Retrieve isDriver state from SharedPreferences
+    var isDriver by remember {
+        mutableStateOf(getDriverPreference(context))
+    }
     when {
         // If permission is granted, show the map
         locationPermissionState.status.isGranted -> {
-            ShowUserScreen(navController, firebaseAuth, firestore,isDriver, onRoleChange = { isDriver = it })
+            ShowUserScreen(
+                navController, firebaseAuth, firestore, isDriver,
+                onRoleChange = {
+                    isDriver = it
+                    saveDriverPreference(context, it) // Save the preference when toggled
+                }
+            )
         }
         // If permission was denied, show error screen
         isPermissionRequested && !locationPermissionState.status.isGranted -> {
@@ -85,6 +96,17 @@ fun MapScreen(navController: NavController, firebaseAuth: FirebaseAuth, firestor
         }
     }
 }
+
+fun saveDriverPreference(context: Context, isDriver: Boolean) {
+    val sharedPreferences = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+    sharedPreferences.edit().putBoolean("isDriver", isDriver).apply()
+}
+
+fun getDriverPreference(context: Context): Boolean {
+    val sharedPreferences = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+    return sharedPreferences.getBoolean("isDriver", false) // Default to false (Passenger mode)
+}
+
 
 
 // Displays driver screen with map,driver location,reminder list, create ride...
@@ -243,9 +265,10 @@ fun RideReminder(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
     LaunchedEffect(userId) {
         if (userId.isNotEmpty()) {
             firestore.collection("rides")
-                .whereEqualTo("driverId", userId) // Filter only the user's rides
-                .get()
-                .addOnSuccessListener { documents ->
+                .whereEqualTo("driverId", userId) // Get rides for this driver
+                .addSnapshotListener { documents, error ->
+                    if (error != null || documents == null) return@addSnapshotListener
+
                     val currentTime = System.currentTimeMillis()
                     val rideList = documents.mapNotNull { doc ->
                         val date = doc.getString("date") ?: return@mapNotNull null
@@ -258,9 +281,11 @@ fun RideReminder(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
                         Ride(
                             id = doc.id,
                             status = status,
-                            timeLeftMillis = timeLeftMillis
+                            timeLeftMillis = timeLeftMillis,
+                            date = date,
+                            time = time
                         )
-                    }.sortedByDescending { it.timeLeftMillis } // Sort rides by time left
+                    }.sortedByDescending { it.timeLeftMillis } // Sort by upcoming rides
 
                     rides.clear()
                     rides.addAll(rideList)
@@ -276,16 +301,21 @@ fun RideReminder(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
         if (rides.isEmpty()) {
             Text(text = "No rides available", fontSize = 16.sp, color = Color.Gray)
         } else {
-            rides.forEachIndexed { index, ride ->
-                RideItem(
-                    title = "Ride ${index + 1}",
-                    status = ride.status,
-                    statusColor = getStatusColor(ride.status)
-                )
+            LazyColumn(
+                modifier = Modifier.heightIn(max = 200.dp) // Limit height to fit 3 items, enable scroll
+            ) {
+                items(rides) { ride ->
+                    RideItem(
+                        title = "Ride ${rides.indexOf(ride) + 1}",
+                        status = ride.status,
+                        statusColor = getStatusColor(ride.status)
+                    )
+                }
             }
         }
     }
 }
+
 
 fun convertToTimestamp(date: String, time: String): Long {
     val formatter = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())
@@ -352,7 +382,9 @@ fun RideItem(title: String, status: String, statusColor: Color) {
 data class Ride(
     val id: String,
     val status: String,
-    val timeLeftMillis: Long
+    val timeLeftMillis: Long,
+    val date: String,
+    val time: String
 )
 
 

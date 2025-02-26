@@ -80,7 +80,8 @@ import java.util.UUID
 fun AppNavHost(
     firebaseAuth: FirebaseAuth,
     firestore: FirebaseFirestore,
-    networkViewModel: NetworkViewModel
+    networkViewModel: NetworkViewModel,
+    context: Context
 ) {
     val navController = rememberNavController()
     val isConnected by networkViewModel.isConnected.collectAsState(initial = true) // Observe connectivity
@@ -141,10 +142,12 @@ fun AppNavHost(
 
             // Ride & Location
             composable("create_ride") { CreateRideScreen(navController) }
-            composable("search_location") { SearchLocationScreen(navController, isSelectingDestination = false) }
-            composable("search_destination") { SearchLocationScreen(navController, isSelectingDestination = true) }
+            composable("search_location") { SearchLocationScreen(navController, locationType = 0) }
+            composable("search_stop") { SearchLocationScreen(navController, locationType = 1) }
+            composable("search_destination") { SearchLocationScreen(navController, locationType = 2) }
 
-            composable("notification") { NotificationScreen(navController) }
+
+            composable("notification") { NotificationScreen(navController, firebaseAuth, firestore,context) }
             composable("matching_screen") { MatchingScreen(navController) }
             composable("search_ride") { SearchRideScreen(navController) }
             // eWallet
