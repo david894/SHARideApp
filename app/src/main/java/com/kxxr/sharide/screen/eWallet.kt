@@ -2,8 +2,10 @@ package com.kxxr.sharide.screen
 
 import android.annotation.SuppressLint
 import android.util.Base64
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -51,7 +53,9 @@ import java.security.MessageDigest
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.DropdownMenu
@@ -69,6 +73,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.text.input.KeyboardType
 import com.google.firebase.Timestamp
+import com.google.rpc.context.AttributeContext.Resource
+import org.checkerframework.common.subtyping.qual.Bottom
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -699,10 +705,9 @@ fun EWalletDashboardScreen(navController: NavController) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 350.dp)
+                .padding(top = 380.dp)
+                .verticalScroll(rememberScrollState()), // Enable scrolling
         ) {
-            Spacer(modifier = Modifier.height(24.dp))
-
             // Transaction History Section
             Text("Transaction History", fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.padding(15.dp))
 
@@ -716,6 +721,7 @@ fun EWalletDashboardScreen(navController: NavController) {
                 }
             }
 
+            Spacer(modifier = Modifier.height(130.dp))
         }
     }
     // Show Loading Dialog
@@ -903,7 +909,9 @@ fun TopUpScreen(navController: NavController) {
 
             OutlinedTextField(
                 value = topUpPin,
-                onValueChange = { topUpPin = it },
+                onValueChange = {
+                    topUpPin = it.filter { char -> char.isDigit() } // Allow only digits (0-9)
+                },
                 label = { Text("Enter Top Up Pin...") },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -911,31 +919,36 @@ fun TopUpScreen(navController: NavController) {
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
             )
 
+
             Image(
                 painter = painterResource(id = R.drawable.reload_pin),
                 contentDescription = "Reload PIN",
-                modifier = Modifier.size(350.dp)
+                modifier = Modifier
+                    .size(350.dp)
                     .align(Alignment.CenterHorizontally), // Image size inside the box
             )
 
             // Top-Up Button
             Button(
                 onClick = {
-//                    isLoading = true
-//                    validateTopUpPin(
-//                        firestore = firestore,
-//                        userId = userId,
-//                        pin = topUpPin,
-//                        onSuccess = { amount ->
-//                            balance += amount
-//                            recordTransaction(firestore, userId, amount)
-//                            isLoading = false
-//                        },
-//                        onFailure = {
-//                            isLoading = false
-//                            // Handle invalid PIN
-//                        }
-//                    )
+                    isLoading = true
+                    if (userId != null) {
+                        validateTopUpPin(
+                            userId = userId,
+                            pin = topUpPin,
+                            onSuccess = { amount ->
+                                balance += amount
+                                recordTransaction(userId, amount)
+                                navController.navigate("topupsuccess/$amount/$balance")
+                                isLoading = false
+                            },
+                            onFailure = { error ->
+                                isLoading = false
+                                topUpPin = ""
+                                Toast.makeText(context, "Oops! $error", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
                 }, modifier = Modifier
                     .width(300.dp)
                     .height(50.dp)
@@ -954,43 +967,90 @@ fun TopUpScreen(navController: NavController) {
 }
 
 fun validateTopUpPin(
-    firestore: FirebaseFirestore,
     userId: String,
     pin: String,
     onSuccess: (Double) -> Unit,
-    onFailure: () -> Unit
+    onFailure: (String) -> Unit
 ) {
-    firestore.collection("TopUP")
-        .whereEqualTo("topupPin", pin)
+    val firestore = FirebaseFirestore.getInstance()
+
+    firestore.collection("Topup")
+        .whereEqualTo("TopupPIN", pin)
         .get()
         .addOnSuccessListener { documents ->
             if (!documents.isEmpty) {
-                val document = documents.documents.first()
-                val amount = document.getDouble("amount") ?: 0.0
+                val document = documents.documents[0]
+                val amount = document.get("amount")?.toString()?.toDoubleOrNull() ?: 0.0
 
                 // Valid PIN found, update user balance
-                updateUserBalance(firestore, userId, amount)
+                updateUserBalance(userId, amount
+                    ,onSuccess = { message ->
+                        deleteReloadPIN(pin
+                            ,onSuccess = { message->
+                                onSuccess(amount)
+                            }
+                            ,onFailure={ error ->
+                                onFailure(error)
+                            }
+                        )
+                    }
+                    ,onFailure={ error ->
+                        onFailure(error)
+                    }
+                )
                 onSuccess(amount)
             } else {
-                onFailure() // Invalid PIN
+                onFailure("Invalid Reload PIN") // Invalid PIN
             }
         }
         .addOnFailureListener {
-            onFailure()
+            onFailure("Error Validating PIN")
         }
 }
 
-fun updateUserBalance(firestore: FirebaseFirestore, userId: String, amount: Double) {
-    val userRef = firestore.collection("Users").document(userId)
+fun updateUserBalance(userId: String, amount: Double,onSuccess: (String) -> Unit,onFailure: (String) -> Unit) {
+    val firestore = FirebaseFirestore.getInstance()
+
+    val userRef = firestore.collection("eWallet").document(userId)
     userRef.get().addOnSuccessListener { document ->
         if (document.exists()) {
             val currentBalance = document.getDouble("balance") ?: 0.0
             userRef.update("balance", currentBalance + amount)
+            onSuccess("Success")
         }
+    }.addOnFailureListener{
+        onFailure("Error Update Balance")
     }
 }
 
-fun recordTransaction(firestore: FirebaseFirestore, userId: String, amount: Double) {
+fun deleteReloadPIN(pin: String,onSuccess: (String) -> Unit,onFailure: (String) -> Unit) {
+    val firestore = FirebaseFirestore.getInstance()
+
+    firestore.collection("Topup")
+        .whereEqualTo("TopupPIN", pin) // Find the document with this PIN
+        .get()
+        .addOnSuccessListener { documents ->
+            for (document in documents) {
+                firestore.collection("Topup").document(document.id)
+                    .delete()
+                    .addOnSuccessListener {
+                        onSuccess("Success")
+                        Log.d("Firestore", "Successfully deleted the reload PIN")
+                    }
+                    .addOnFailureListener { e ->
+                        onFailure("Error Delete reload PIN")
+                        Log.e("Firestore", "Error deleting document", e)
+                    }
+            }
+        }
+        .addOnFailureListener { e ->
+            Log.e("Firestore", "Error finding document", e)
+        }
+}
+
+fun recordTransaction(userId: String, amount: Double) {
+    val firestore = FirebaseFirestore.getInstance()
+
     val currentDate = Timestamp.now()
     val formattedDate = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(currentDate.toDate())
 
@@ -1002,4 +1062,93 @@ fun recordTransaction(firestore: FirebaseFirestore, userId: String, amount: Doub
     )
 
     firestore.collection("Transaction").add(transaction)
+}
+
+@Composable
+fun TopUpSuccessScreen(navController: NavController, topUpAmount: Double, newBalance: Double) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+        ,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(180.dp))
+
+        // Success Icon
+        Image(
+            painter = painterResource(id = R.drawable.completed_icon),
+            contentDescription = "Complete ICON",
+            modifier = Modifier.size(150.dp)
+        )
+
+        Spacer(modifier = Modifier.height(56.dp))
+
+        // Top Up Amount Text
+        Text(
+            text = "+ RM %.2f".format(topUpAmount),
+            fontSize = 35.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.Black
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Success Message
+        Text(
+            text = "TOP UP SUCCESSFUL",
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color.Gray
+        )
+
+        // **Pushes everything above up**
+        Spacer(modifier = Modifier.weight(1f))
+
+        // Updated Balance Section
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Color.Blue,
+                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                )
+                .padding(24.dp)
+                .height(200.dp)
+            ,
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "Current Balance",
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "RM %.2f".format(newBalance),
+                    fontSize = 30.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+
+                Spacer(modifier = Modifier.height(26.dp))
+
+                // Done Button
+                Button(
+                    onClick = { navController.navigate("ewalletDashboard") },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                    modifier = Modifier.width(300.dp).height(50.dp)
+                ) {
+                    Text(
+                        text = "Done",
+                        fontSize = 16.sp,
+                        color = Color.Black
+                    )
+                }
+            }
+        }
+    }
 }

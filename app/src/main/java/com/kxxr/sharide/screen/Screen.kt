@@ -152,6 +152,11 @@ fun AppNavHost(
             composable("security_question") { SetSecurityQuestionsScreen(navController) }
             composable("ewalletDashboard") { EWalletDashboardScreen(navController) }
             composable("topup") { TopUpScreen(navController) }
+            composable("topupsuccess/{topup}/{balance}") { backStackEntry ->
+                val topup = backStackEntry.arguments?.getString("topup")?.toDoubleOrNull() ?: 0.0
+                val balance = backStackEntry.arguments?.getString("balance")?.toDoubleOrNull() ?: 0.0
+                TopUpSuccessScreen(navController, topup, balance)
+            }
         }
     }
 }
