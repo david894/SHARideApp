@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
@@ -62,7 +64,7 @@ import java.util.Locale
 
 
 @Composable
-fun CreateRideScreen(navController: NavController) {
+fun SearchRideScreen(navController: NavController) {
     val firestore = FirebaseFirestore.getInstance()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -77,7 +79,9 @@ fun CreateRideScreen(navController: NavController) {
     var routePreference by remember { mutableStateOf("Selecting Preference") }
     var capacity by remember { mutableStateOf(1) }
     var rideId by remember { mutableStateOf("") }
-
+    var petPreference by remember { mutableStateOf("No") }
+    var genderPreference by remember { mutableStateOf("Both") }
+    var vehicleType by remember { mutableStateOf("SUV") }
     ObserveSelectedLocations(navController, lifecycleOwner, { loc, latLng ->
         location = loc
         locationLatLng = latLng
@@ -87,29 +91,34 @@ fun CreateRideScreen(navController: NavController) {
     })
 
     Scaffold(
-        topBar = { CreateRideTopBar(navController) },
-        bottomBar = { BottomNavBar("create_ride", navController) }
+        topBar = { CreateSearchTopBar(navController) },
+        // important
+        bottomBar = { BottomNavBar("search_ride", navController) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState()) // Enables scrolling
                 .padding(paddingValues)
                 .padding(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            CreateRideDetailsCard(
+            SearchRideDetailsCard(
                 navController,
                 context,
                 date, { date = it },
                 time, { time = it },
                 location,
                 destination, { destination = it },
-                routePreference, { routePreference = it },
-                capacity, { capacity = it }
+
+                capacity, { capacity = it } ,
+                petPreference, { routePreference = it },
+                genderPreference, { routePreference = it },
+                vehicleType, { routePreference = it },
             )
 
-            ConfirmRideButton(
+            ConfirmSearchButton(
                 navController = navController,
                 firestore = firestore,
                 date = date,
@@ -125,32 +134,12 @@ fun CreateRideScreen(navController: NavController) {
     }
 }
 
-@Composable
-fun ObserveSelectedLocations(
-    navController: NavController,
-    lifecycleOwner: LifecycleOwner,
-    onLocationSelected: (String, LatLng) -> Unit,
-    onDestinationSelected: (String, LatLng) -> Unit
-) {
-    LaunchedEffect(navController) {
-        navController.currentBackStackEntry?.savedStateHandle
-            ?.getLiveData<Pair<String, LatLng>>("selected_location")
-            ?.observe(lifecycleOwner) { (selectedAddress, selectedLatLng) ->
-                onLocationSelected(selectedAddress, selectedLatLng)
-            }
 
-        navController.currentBackStackEntry?.savedStateHandle
-            ?.getLiveData<Pair<String, LatLng>>("selected_destination")
-            ?.observe(lifecycleOwner) { (selectedAddress, selectedLatLng) ->
-                onDestinationSelected(selectedAddress, selectedLatLng)
-            }
-    }
-}
 
 @Composable
-fun CreateRideTopBar(navController: NavController) {
+fun CreateSearchTopBar(navController: NavController) {
     TopAppBar(
-        title = { Text("Create Ride", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White) },
+        title = { Text("Search Ride", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White) },
         navigationIcon = {
             IconButton(onClick = { navController.popBackStack() }) { // Navigates back
                 Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
@@ -162,15 +151,17 @@ fun CreateRideTopBar(navController: NavController) {
 
 
 @Composable
-fun CreateRideDetailsCard(
+fun SearchRideDetailsCard(
     navController: NavController,
     context: Context,
     date: String, onDateChange: (String) -> Unit,
     time: String, onTimeChange: (String) -> Unit,
     location: String,
     destination: String, onDestinationChange: (String) -> Unit,
-    routePreference: String, onRoutePreferenceChange: (String) -> Unit,
-    capacity: Int, onCapacityChange: (Int) -> Unit
+    capacity: Int, onCapacityChange: (Int) -> Unit,
+    petPreference: String, onPetPreferenceChange: (String) -> Unit,
+    genderPreference: String, onGenderPreferenceChange: (String) -> Unit,
+    VehicleType:  String, onVehicleTypeChange: (String) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -183,102 +174,30 @@ fun CreateRideDetailsCard(
         ) {
             LocationFields(navController, location, destination, onDestinationChange)
             DateTimePicker(context, date, onDateChange, time, onTimeChange)
-            RoutePreferenceDropdown(routePreference, onRoutePreferenceChange)
+            petPreferenceDropdown(petPreference, onPetPreferenceChange)
+            genderPreferenceDropdown(genderPreference, onGenderPreferenceChange)
+            VehicleDropdown(VehicleType, onVehicleTypeChange)
             CapacitySelector(capacity, onCapacityChange)
         }
     }
 }
 
-@Composable
-fun DateTimePicker(
-    context: Context,
-    date: String, onDateChange: (String) -> Unit,
-    time: String, onTimeChange: (String) -> Unit
-) {
-    Column {
-        Text("Select Date", fontWeight = FontWeight.SemiBold)
-        OutlinedTextField(
-            value = date,
-            onValueChange = { },
-            readOnly = true,
-            modifier = Modifier.fillMaxWidth(),
-            trailingIcon = {
-                IconButton(onClick = {
-                    showDatePicker(context, onDateChange) {
-                        onTimeChange("Now") // Reset time when date is changed
-                    }
-                }) {
-                    Icon(Icons.Outlined.DateRange, contentDescription = "Pick Date", tint = Color(0xFF0075FD))
-                }
-            }
-        )
-    }
-
-    Column {
-        Text("Select Time", fontWeight = FontWeight.SemiBold)
-        OutlinedTextField(
-            value = time,
-            onValueChange = { },
-            readOnly = true,
-            modifier = Modifier.fillMaxWidth(),
-            trailingIcon = {
-                IconButton(onClick = { showTimePicker(context, date, onTimeChange) }) {
-                    Icon(Icons.Outlined.AccessTime, contentDescription = "Pick Time", tint = Color(0xFF0075FD))
-                }
-            }
-        )
-    }
-}
 
 @Composable
-fun LocationFields(
-    navController: NavController,
-    location: String,
-    destination: String, onDestinationChange: (String) -> Unit
-) {
-    Column {
-        Text("Current Location", fontWeight = FontWeight.SemiBold)
-        OutlinedTextField(
-            value = location,
-            onValueChange = {},
-            modifier = Modifier.fillMaxWidth(),
-            readOnly = true,
-            trailingIcon = {
-                IconButton(onClick = { navController.navigate("search_location") }) {
-                    Icon(Icons.Default.LocationOn, contentDescription = "Select Location")
-                }
-            }
-        )
-
-        Text("Select Destination", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
-        OutlinedTextField(
-            value = destination,
-            onValueChange = onDestinationChange,
-            modifier = Modifier.fillMaxWidth(),
-            trailingIcon = {
-                IconButton(onClick = { navController.navigate("search_destination") }) {
-                    Icon(Icons.Default.LocationOn, contentDescription = "Select Destination")
-                }
-            }
-        )
-    }
-}
-
-@Composable
-fun RoutePreferenceDropdown(routePreference: String, onRoutePreferenceChange: (String) -> Unit) {
-    val routePreferences = listOf("Shortest Time", "Shortest Distance", "Highest Passenger Count")
+fun petPreferenceDropdown(petPreference: String, onPetPreferenceChange: (String) -> Unit) {
+    val routePreferences = listOf("No", "Yes")
     var expanded by remember { mutableStateOf(false) }
 
     Column {
-        Text("Route Preference", fontWeight = FontWeight.SemiBold)
+        Text("Pet Preference", fontWeight = FontWeight.SemiBold)
         OutlinedTextField(
-            value = routePreference,
+            value = petPreference,
             onValueChange = { },
             readOnly = true,
             modifier = Modifier.fillMaxWidth(),
             trailingIcon = {
                 IconButton(onClick = { expanded = true }) {
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Route Preference", tint = Color(0xFF0075FD))
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Pet Preference", tint = Color(0xFF0075FD))
                 }
             }
         )
@@ -287,7 +206,7 @@ fun RoutePreferenceDropdown(routePreference: String, onRoutePreferenceChange: (S
                 DropdownMenuItem(
                     text = { Text(option) },
                     onClick = {
-                        onRoutePreferenceChange(option)
+                        onPetPreferenceChange(option)
                         expanded = false
                     }
                 )
@@ -297,7 +216,71 @@ fun RoutePreferenceDropdown(routePreference: String, onRoutePreferenceChange: (S
 }
 
 @Composable
-fun ConfirmRideButton(
+fun genderPreferenceDropdown(genderPreference: String, onGenderPreferenceChange: (String) -> Unit) {
+    val routePreferences = listOf("Male", "Female", "Both")
+    var expanded by remember { mutableStateOf(false) }
+
+    Column {
+        Text("Driver Gender Preference", fontWeight = FontWeight.SemiBold)
+        OutlinedTextField(
+            value = genderPreference,
+            onValueChange = { },
+            readOnly = true,
+            modifier = Modifier.fillMaxWidth(),
+            trailingIcon = {
+                IconButton(onClick = { expanded = true }) {
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Driver Gender Preference", tint = Color(0xFF0075FD))
+                }
+            }
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            routePreferences.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option) },
+                    onClick = {
+                        onGenderPreferenceChange(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun VehicleDropdown(VehicleType: String, onVehicleTypeChange: (String) -> Unit) {
+    val routePreferences = listOf("SUV", "Sedan")
+    var expanded by remember { mutableStateOf(false) }
+
+    Column {
+        Text("Vehicle Type", fontWeight = FontWeight.SemiBold)
+        OutlinedTextField(
+            value = VehicleType,
+            onValueChange = { },
+            readOnly = true,
+            modifier = Modifier.fillMaxWidth(),
+            trailingIcon = {
+                IconButton(onClick = { expanded = true }) {
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Vehicle Type", tint = Color(0xFF0075FD))
+                }
+            }
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            routePreferences.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option) },
+                    onClick = {
+                        onVehicleTypeChange(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ConfirmSearchButton(
     navController: NavController,
     firestore: FirebaseFirestore,
     date: String,
@@ -364,108 +347,4 @@ fun ConfirmRideButton(
     }
 }
 
-@Composable
-fun CapacitySelector(capacity: Int, onCapacityChanged: (Int) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text("Capacity", fontWeight = FontWeight.SemiBold)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(
-                onClick = { if (capacity > 1) onCapacityChanged(capacity - 1) },
-                modifier = Modifier.size(40.dp),
-                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Blue)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Remove,
-                    contentDescription = "Decrease Capacity",
-                    tint = Color.White
-                )
-            }
 
-            Text(
-                text = capacity.toString(),
-                modifier = Modifier.padding(horizontal = 8.dp),
-                fontSize = 18.sp
-            )
-
-            IconButton(
-                onClick = { if (capacity < 3) onCapacityChanged(capacity + 1) },
-                modifier = Modifier.size(40.dp),
-                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Blue)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Increase Capacity",
-                    tint = Color.White
-                )
-            }
-        }
-    }
-}
-
-fun showTimePicker(context: Context, selectedDate: String, onTimeSelected: (String) -> Unit) {
-    val calendar = Calendar.getInstance()
-    val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
-    val currentMinute = calendar.get(Calendar.MINUTE)
-
-    // Get today's date for comparison
-    val todayDate = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()).format(calendar.time)
-
-    val timePickerDialog = TimePickerDialog(
-        context,
-        { _, selectedHour, selectedMinute ->
-            val selectedCalendar = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, selectedHour)
-                set(Calendar.MINUTE, selectedMinute)
-            }
-
-            // If the selected date is today, only allow future times
-            if (selectedDate == todayDate && selectedCalendar.timeInMillis <= System.currentTimeMillis()) {
-                Toast.makeText(context, "Please select a future time.", Toast.LENGTH_SHORT).show()
-            } else {
-                val formattedTime = String.format("%02d:%02d", selectedHour, selectedMinute)
-                onTimeSelected(formattedTime)
-            }
-        },
-        if (selectedDate == todayDate) currentHour else 0, // Default hour (0 for future dates)
-        if (selectedDate == todayDate) currentMinute else 0, // Default minute (0 for future dates)
-        false
-    )
-
-    timePickerDialog.show()
-}
-
-
-fun showDatePicker(context: Context, onDateSelected: (String) -> Unit, onTimeReset: () -> Unit) {
-    val calendar = Calendar.getInstance()
-    val year = calendar.get(Calendar.YEAR)
-    val month = calendar.get(Calendar.MONTH)
-    val day = calendar.get(Calendar.DAY_OF_MONTH)
-
-    val datePickerDialog = android.app.DatePickerDialog(
-        context,
-        { _, selectedYear, selectedMonth, selectedDay ->
-            val selectedCalendar = Calendar.getInstance().apply {
-                set(Calendar.YEAR, selectedYear)
-                set(Calendar.MONTH, selectedMonth)
-                set(Calendar.DAY_OF_MONTH, selectedDay)
-            }
-
-            val formattedDate = String.format("%02d-%02d-%d", selectedDay, selectedMonth + 1, selectedYear)
-            onDateSelected(formattedDate)
-
-            // Reset time when date is changed
-            onTimeReset()
-        },
-        year,
-        month,
-        day
-    )
-
-    // Set minimum date to today (restrict past dates)
-    datePickerDialog.datePicker.minDate = System.currentTimeMillis()
-    datePickerDialog.show()
-}

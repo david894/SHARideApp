@@ -143,14 +143,10 @@ fun AppNavHost(
             composable("create_ride") { CreateRideScreen(navController) }
             composable("search_location") { SearchLocationScreen(navController, isSelectingDestination = false) }
             composable("search_destination") { SearchLocationScreen(navController, isSelectingDestination = true) }
-            // Ride & Location
-            composable("create_ride") { CreateRideScreen(navController) }
-            composable("search_location") { SearchLocationScreen(navController, isSelectingDestination = false) }
-            composable("search_destination") { SearchLocationScreen(navController, isSelectingDestination = true) }
 
-            composable("matching_screen") { MatchingScreen(navController)
-            }
 
+            composable("matching_screen") { MatchingScreen(navController) }
+            composable("search_ride") { SearchRideScreen(navController) }
             // eWallet
             composable("ewallet") { EWalletIntro(navController) }
             composable("security_question") { SetSecurityQuestionsScreen(navController) }

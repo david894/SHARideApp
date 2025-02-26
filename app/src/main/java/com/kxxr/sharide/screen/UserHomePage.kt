@@ -39,6 +39,9 @@ import com.google.firebase.firestore.firestore
 import com.google.firebase.storage.FirebaseStorage
 import com.google.maps.android.compose.*
 import com.kxxr.sharide.R
+import kotlinx.coroutines.tasks.await
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 // Main home screen(driver and passenger
 @Composable
@@ -61,11 +64,11 @@ fun MapScreen(navController: NavController, firebaseAuth: FirebaseAuth, firestor
     val context = LocalContext.current
     val locationPermissionState = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
     var isPermissionRequested by remember { mutableStateOf(false) }
-
+    var isDriver by remember { mutableStateOf(false) }
     when {
         // If permission is granted, show the map
         locationPermissionState.status.isGranted -> {
-            ShowDriverScreen(navController, firebaseAuth, firestore)
+            ShowUserScreen(navController, firebaseAuth, firestore,isDriver, onRoleChange = { isDriver = it })
         }
         // If permission was denied, show error screen
         isPermissionRequested && !locationPermissionState.status.isGranted -> {
@@ -86,20 +89,22 @@ fun MapScreen(navController: NavController, firebaseAuth: FirebaseAuth, firestor
 
 // Displays driver screen with map,driver location,reminder list, create ride...
 @Composable
-fun ShowDriverScreen(navController: NavController?, firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
+fun ShowUserScreen(navController: NavController?, firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore, isDriver: Boolean, onRoleChange: (Boolean) -> Unit) {
     val context = LocalContext.current
     val fusedLocationProviderClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var userLocation by remember { mutableStateOf<LatLng?>(null) }
     val cameraPositionState = rememberCameraPositionState()
     val coroutineScope = rememberCoroutineScope()
 
-    // Get user's last known location
     LaunchedEffect(Unit) {
-        fusedLocationProviderClient.lastLocation.addOnSuccessListener { location ->
-            location?.let {
-                userLocation = LatLng(it.latitude, it.longitude)
+        try {
+            val location = fusedLocationProviderClient.lastLocation.await()
+            if (location != null) {
+                userLocation = LatLng(location.latitude, location.longitude)
                 cameraPositionState.position = com.google.android.gms.maps.model.CameraPosition.fromLatLngZoom(userLocation!!, 15f)
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
     // Exit if navController is null
@@ -114,10 +119,8 @@ fun ShowDriverScreen(navController: NavController?, firebaseAuth: FirebaseAuth, 
                 .fillMaxSize()
                 .padding(paddingValues) // Prevents overlapping
         ) {
-            // Profile Section (Passing Firebase instances)
-            ProfileHeader(firebaseAuth, firestore)
 
-            // Google Map
+            ProfileHeader(firebaseAuth, firestore, isDriver, onRoleChange)
             Box(modifier = Modifier.weight(1f)) {
                 GoogleMap(
                     modifier = Modifier.fillMaxSize(),
@@ -125,34 +128,26 @@ fun ShowDriverScreen(navController: NavController?, firebaseAuth: FirebaseAuth, 
                     properties = MapProperties(isMyLocationEnabled = true),
                     uiSettings = MapUiSettings(zoomControlsEnabled = true, myLocationButtonEnabled = true)
                 ) {
-                    userLocation?.let {
-                        Marker(state = MarkerState(position = it), title = "You are here")
-                    }
+                    userLocation?.let { Marker(state = MarkerState(position = it), title = "You are here") }
                 }
             }
-
-            // Ride Reminder
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)) // Rounded Corners
-                    .background(Color.White)
-                    .border(1.dp, Color.Gray, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                    .padding(top = 16.dp)
-            ) {
-                RideReminder()
-            }
-
-            // Create Ride Button
-            Button(
-                onClick = { navController.navigate("create_ride") }, // Navigate to Create Ride Screen
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .height(50.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0075FD))
-            ) {
-                Text(text = "Create Ride", color = Color.White, fontSize = 18.sp)
+            if (isDriver) {
+                RideReminder(firebaseAuth,firestore)
+                Button(
+                    onClick = { navController.navigate("create_ride") },
+                    modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0075FD))
+                ) {
+                    Text(text = "Create Ride", color = Color.White, fontSize = 18.sp)
+                }
+            } else {
+                Button(
+                    onClick = {  navController.navigate("search_ride") },
+                    modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0075FD))
+                ) {
+                    Text(text = "Search Ride", color = Color.White, fontSize = 18.sp)
+                }
             }
         }
     }
@@ -161,9 +156,13 @@ fun ShowDriverScreen(navController: NavController?, firebaseAuth: FirebaseAuth, 
 
 
 // Profile header with user info and icons
-
 @Composable
-fun ProfileHeader(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
+fun ProfileHeader(
+    firebaseAuth: FirebaseAuth,
+    firestore: FirebaseFirestore,
+    isDriver: Boolean,
+    onRoleChange: (Boolean) -> Unit
+) {
     val userName = fetchUserName(firebaseAuth, firestore)
     val profileBitmap = fetchProfileImage(firebaseAuth)
 
@@ -200,14 +199,31 @@ fun ProfileHeader(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
 
         Spacer(modifier = Modifier.weight(1f))
 
+        // Car/Passenger icon
+        val roleIcon = if (isDriver) R.drawable.car_front else R.drawable.profile_ico
         Image(
-            painter = painterResource(id = R.drawable.car_front),
-            contentDescription = "Car",
+            painter = painterResource(id = roleIcon),
+            contentDescription = if (isDriver) "Driver Mode" else "Passenger Mode",
             modifier = Modifier.size(40.dp)
         )
 
         Spacer(modifier = Modifier.width(8.dp))
 
+        // Switch with custom color (moved to the right)
+        Switch(
+            checked = isDriver,
+            onCheckedChange = { onRoleChange(it) },
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = Color(0xFF0075FD),
+                uncheckedThumbColor = Color.White,
+                uncheckedTrackColor = Color.Gray
+            )
+        )
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        // Notification icon
         Icon(
             painter = painterResource(id = R.drawable.notification_ico),
             contentDescription = "Notifications",
@@ -217,18 +233,87 @@ fun ProfileHeader(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
 }
 
 
+
+
 // Need to update logic for reminder (Problem Xr)
 @Composable
-fun RideReminder() {
+fun RideReminder(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
+    val rides = remember { mutableStateListOf<Ride>() }
+    val userId = firebaseAuth.currentUser?.uid ?: ""
+
+    LaunchedEffect(userId) {
+        if (userId.isNotEmpty()) {
+            firestore.collection("rides")
+                .whereEqualTo("driverId", userId) // Filter only the user's rides
+                .get()
+                .addOnSuccessListener { documents ->
+                    val currentTime = System.currentTimeMillis()
+                    val rideList = documents.mapNotNull { doc ->
+                        val date = doc.getString("date") ?: return@mapNotNull null
+                        val time = doc.getString("time") ?: return@mapNotNull null
+                        val rideTimestamp = convertToTimestamp(date, time)
+                        val timeLeftMillis = rideTimestamp - currentTime
+                        val timeLeftText = formatTimeLeft(timeLeftMillis)
+                        val status = if (timeLeftMillis > 0) timeLeftText else "Completed"
+
+                        Ride(
+                            id = doc.id,
+                            status = status,
+                            timeLeftMillis = timeLeftMillis
+                        )
+                    }.sortedByDescending { it.timeLeftMillis } // Sort rides by time left
+
+                    rides.clear()
+                    rides.addAll(rideList)
+                }
+        }
+    }
+
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        Spacer(modifier = Modifier.height(16.dp)) // Add space above the title
+        Spacer(modifier = Modifier.height(16.dp))
         Text(text = "Reminder", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
         Spacer(modifier = Modifier.height(8.dp))
-        RideItem("Ride 3", "1 hr 30 min left", Color(0xFF0075FD))
-        RideItem("Ride 2", "Completed", Color(0xFF008000))
-        RideItem("Ride 1", "Cancelled", Color(0xFFFF4444))
+
+        if (rides.isEmpty()) {
+            Text(text = "No rides available", fontSize = 16.sp, color = Color.Gray)
+        } else {
+            rides.forEachIndexed { index, ride ->
+                RideItem(
+                    title = "Ride ${index + 1}",
+                    status = ride.status,
+                    statusColor = getStatusColor(ride.status)
+                )
+            }
+        }
     }
 }
+
+fun convertToTimestamp(date: String, time: String): Long {
+    val formatter = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())
+    return try {
+        val parsedDate = formatter.parse("$date $time")
+        parsedDate?.time ?: 0L
+    } catch (e: Exception) {
+        0L
+    }
+}
+
+fun formatTimeLeft(timeLeftMillis: Long): String {
+    return when {
+        timeLeftMillis > 3600000 -> "${timeLeftMillis / 3600000} hr ${timeLeftMillis % 3600000 / 60000} min left"
+        timeLeftMillis > 60000 -> "${timeLeftMillis / 60000} min left"
+        else -> "Completed"
+    }
+}
+
+fun getStatusColor(status: String): Color {
+    return when {
+        status.contains("hr") || status.contains("min") -> Color(0xFF0075FD) // Upcoming rides
+        status == "Completed" -> Color(0xFF008000) // Green for completed
+        else -> Color(0xFFFF4444) // Red for cancelled (if applicable)
+    }
+}
+
 
 @Composable
 fun RideItem(title: String, status: String, statusColor: Color) {
@@ -241,7 +326,6 @@ fun RideItem(title: String, status: String, statusColor: Color) {
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Car Icon on the Left
         Image(
             painter = painterResource(id = R.drawable.car_front),
             contentDescription = "Car Icon",
@@ -254,7 +338,6 @@ fun RideItem(title: String, status: String, statusColor: Color) {
             Text(text = title, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
 
-        // Status Box on the Right
         Box(
             modifier = Modifier
                 .background(statusColor, shape = RoundedCornerShape(4.dp))
@@ -264,6 +347,15 @@ fun RideItem(title: String, status: String, statusColor: Color) {
         }
     }
 }
+
+
+
+data class Ride(
+    val id: String,
+    val status: String,
+    val timeLeftMillis: Long
+)
+
 
 
 // Error screen when location permission is denied
