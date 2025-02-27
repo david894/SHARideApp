@@ -148,8 +148,13 @@ fun AppNavHost(
 
 
             composable("notification") { NotificationScreen(navController, firebaseAuth, firestore,context) }
-            composable("matching_screen") { MatchingScreen(navController) }
+            composable("matching_screen") { MatchingScreen(navController,firestore) }
             composable("search_ride") { SearchRideScreen(navController) }
+            composable("request_ride/{rideId}") { backStackEntry ->
+                val rideId = backStackEntry.arguments?.getString("rideId") ?: ""
+                RideRequestScreen(firebaseAuth,navController, rideId)
+            }
+
             // eWallet
             composable("ewallet") { EWalletIntro(navController) }
             composable("security_question") { SetSecurityQuestionsScreen(navController) }

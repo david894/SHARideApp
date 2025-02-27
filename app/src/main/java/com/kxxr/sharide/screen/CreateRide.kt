@@ -393,6 +393,9 @@ fun ConfirmRideButton(
             val rideRef = firestore.collection("rides").document() // Auto-generate ride ID
             val rideId = rideRef.id
 
+            // Initialize passengerId list with "null" based on capacity
+            val passengerIds = List(capacity) { "null" }
+
             val rideData = mapOf(
                 "rideId" to rideId,
                 "driverId" to userId, // Store userId as driverId
@@ -403,8 +406,9 @@ fun ConfirmRideButton(
                 "destination" to destination,
                 "routePreference" to routePreference,
                 "capacity" to capacity,
+                "passengerIds" to passengerIds, // Store passenger IDs
                 "timestamp" to FieldValue.serverTimestamp() // Add server timestamp
-                )
+            )
 
             rideRef.set(rideData).addOnSuccessListener {
                 onRideIdChange(rideId) // Update rideId in UI state
@@ -418,6 +422,7 @@ fun ConfirmRideButton(
         Text("Confirm Ride", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
     }
 }
+
 
 @Composable
 fun CapacitySelector(capacity: Int, onCapacityChanged: (Int) -> Unit) {

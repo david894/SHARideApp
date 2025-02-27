@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3Api::class)
 
 package com.kxxr.sharide.screen
 
@@ -130,7 +130,7 @@ fun SearchRideScreen(navController: NavController) {
                 location = location,
                 destination = destination,
                 petPreference = petPreference,
-                genderPreference = petPreference,
+                genderPreference = genderPreference,
                 vehicleType = vehicleType,
                 capacity = capacity,
                 userId = userId,

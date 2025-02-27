@@ -22,28 +22,36 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 
 @Composable
-fun MatchingScreen(navController: NavController) {
+fun MatchingScreen(navController: NavController, firestore: FirebaseFirestore) {
     var location by remember { mutableStateOf("Loading...") }
     var destination by remember { mutableStateOf("Loading...") }
-    var rideId by remember { mutableStateOf<String?>(null) }
+    var searchId by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var matchingRides by remember { mutableStateOf<List<DocumentSnapshot>?>(null) }
 
     val user = FirebaseAuth.getInstance().currentUser
     val userId = user?.uid ?: ""
 
     LaunchedEffect(userId) {
-        fetchLatestRideId(userId, { latestRideId ->
-            rideId = latestRideId
-            if (latestRideId != null) {
-                fetchRideDetails(latestRideId, { loc, dest ->
+        fetchLatestSearchId(userId, { latestSearchId ->
+            searchId = latestSearchId
+            if (latestSearchId != null) {
+                fetchSearchDetails(latestSearchId, { loc, dest, date ->
                     location = loc
                     destination = dest
                     isLoading = false
+                    val passengerSearch = mapOf("location" to loc, "destination" to dest, "date" to date, "passengerId" to userId)
+                    findMatchingRides(firestore, passengerSearch, { rides ->
+                        matchingRides = rides
+                    }, {
+                        errorMessage = "No matching rides found."
+                    })
                 }, { error ->
                     errorMessage = error
                     isLoading = false
@@ -58,11 +66,20 @@ fun MatchingScreen(navController: NavController) {
         })
     }
 
-    MatchingScreenContent(location, destination, isLoading, errorMessage)
+    MatchingScreenContent(location, destination, isLoading, errorMessage, matchingRides,navController)
 }
 
+
+
 @Composable
-fun MatchingScreenContent(location: String, destination: String, isLoading: Boolean, errorMessage: String?) {
+fun MatchingScreenContent(
+    location: String,
+    destination: String,
+    isLoading: Boolean,
+    errorMessage: String?,
+    matchingRides: List<DocumentSnapshot>?,
+    navController: NavController
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -82,13 +99,29 @@ fun MatchingScreenContent(location: String, destination: String, isLoading: Bool
             Spacer(modifier = Modifier.weight(1f))
             MatchingIndicator()
             Spacer(modifier = Modifier.weight(1f))
-            MatchingText()
+
+            if (matchingRides != null && matchingRides.isNotEmpty()) {
+                Text("Matching Rides Found:", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                matchingRides.forEach { ride ->
+                    TextButton(onClick = {
+                        navController.navigate("request_ride/${ride.id}")
+
+                    }) {
+                        Text("Click me to Choose Ride Driver", color = Color.White, fontSize = 16.sp)
+                    }
+                }
+            } else {
+                MatchingText()
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
 
-fun fetchLatestRideId(userId: String, onSuccess: (String?) -> Unit, onFailure: (String) -> Unit) {
+
+
+fun fetchLatestSearchId(userId: String, onSuccess: (String?) -> Unit, onFailure: (String) -> Unit) {
     val firestore = FirebaseFirestore.getInstance()
 
     firestore.collection("searchs")
@@ -104,27 +137,25 @@ fun fetchLatestRideId(userId: String, onSuccess: (String?) -> Unit, onFailure: (
             }
         }
         .addOnFailureListener { e ->
-            onFailure("Failed to fetch rides: ${e.message}")
+            onFailure("Failed to fetch searchs: ${e.message}")
         }
 }
 
-fun fetchRideDetails(rideId: String, onSuccess: (String, String) -> Unit, onFailure: (String) -> Unit) {
+fun fetchSearchDetails(searchId: String, onSuccess: (String, String, String) -> Unit, onFailure: (String) -> Unit) {
+    // Fetch search details from Firestore using searchId
     val firestore = FirebaseFirestore.getInstance()
-
-    firestore.collection("searchs").document(rideId).get()
+    firestore.collection("searchs").document(searchId).get()
         .addOnSuccessListener { document ->
-            if (document.exists()) {
-                val location = document.getString("location") ?: "Unknown Location"
-                val destination = document.getString("destination") ?: "Unknown Destination"
-                onSuccess(location, destination)
-            } else {
-                onFailure("Search data not found.")
-            }
+            val loc = document.getString("location") ?: ""
+            val dest = document.getString("destination") ?: ""
+            val date = document.getString("date") ?: ""
+            onSuccess(loc, dest, date)  // Now returns three parameters
         }
-        .addOnFailureListener { e ->
-            onFailure("Error fetching search details: ${e.message}")
+        .addOnFailureListener { exception ->
+            onFailure(exception.localizedMessage ?: "Unknown error")
         }
 }
+
 
 @Composable
 fun LocationBox(location: String, icon: ImageVector) {
