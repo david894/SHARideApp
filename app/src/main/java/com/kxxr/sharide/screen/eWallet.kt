@@ -6,7 +6,6 @@ import android.util.Base64
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -64,22 +63,18 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import com.google.firebase.Timestamp
-import com.google.rpc.context.AttributeContext.Resource
+import com.google.firebase.firestore.Query
 import com.kxxr.sharide.db.PinAttemptManager
-import org.checkerframework.common.subtyping.qual.Bottom
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
@@ -639,7 +634,6 @@ fun EWalletDashboardScreen(navController: NavController) {
                 }
         }
 
-        // Fetch transaction history
         if (userId != null) {
             firestore.collection("Transaction")
                 .whereEqualTo("userId", userId) // Filter by userId field inside the document
@@ -654,7 +648,10 @@ fun EWalletDashboardScreen(navController: NavController) {
                                 amount = transactionData["amount"].toString().toDouble()
                             )
                         }
-                        transactions = data
+                        // Sort transactions by date in descending order
+                        transactions = data.sortedByDescending {
+                            SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).parse(it.date)
+                        }
                     } else {
                         // No transactions found for this user
                         transactions = emptyList()
@@ -950,10 +947,8 @@ fun TopUpScreen(navController: NavController) {
                         validateTopUpPin(
                             userId = userId,
                             pin = topUpPin,
-                            onSuccess = { amount ->
-                                balance += amount
-                                recordTransaction(userId, amount)
-                                navController.navigate("topupsuccess/$amount/$balance")
+                            onSuccess = { newbalance,amount ->
+                                navController.navigate("topupsuccess/$amount/$newbalance")
                                 isLoading = false
                             },
                             onFailure = { error ->
@@ -983,7 +978,7 @@ fun TopUpScreen(navController: NavController) {
 fun validateTopUpPin(
     userId: String,
     pin: String,
-    onSuccess: (Double) -> Unit,
+    onSuccess: (String,String) -> Unit,
     onFailure: (String) -> Unit
 ) {
     val firestore = FirebaseFirestore.getInstance()
@@ -998,10 +993,11 @@ fun validateTopUpPin(
 
                 // Valid PIN found, update user balance
                 updateUserBalance(userId, amount
-                    ,onSuccess = { message ->
+                    ,onSuccess = { balance ->
                         deleteReloadPIN(pin
                             ,onSuccess = { message->
-                                onSuccess(amount)
+                                recordTransaction(userId, amount,"Top Up","add")
+                                onSuccess(balance, amount.toString())
                             }
                             ,onFailure={ error ->
                                 onFailure(error)
@@ -1012,7 +1008,6 @@ fun validateTopUpPin(
                         onFailure(error)
                     }
                 )
-                onSuccess(amount)
             } else {
                 onFailure("Invalid Reload PIN") // Invalid PIN
             }
@@ -1030,7 +1025,8 @@ fun updateUserBalance(userId: String, amount: Double,onSuccess: (String) -> Unit
         if (document.exists()) {
             val currentBalance = document.getDouble("balance") ?: 0.0
             userRef.update("balance", currentBalance + amount)
-            onSuccess("Success")
+            val balance = currentBalance + amount
+            onSuccess(balance.toString())
         }
     }.addOnFailureListener{
         onFailure("Error Update Balance")
@@ -1062,21 +1058,43 @@ fun deleteReloadPIN(pin: String,onSuccess: (String) -> Unit,onFailure: (String) 
         }
 }
 
-fun recordTransaction(userId: String, amount: Double) {
+fun recordTransaction(userId: String, amount: Double, description: String, operator: String) {
     val firestore = FirebaseFirestore.getInstance()
+// Set Malaysia Time Zone (MYT)
+    val timeZone = TimeZone.getTimeZone("Asia/Kuala_Lumpur")
+    val sdf = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
+    sdf.timeZone = timeZone
 
-    val currentDate = Timestamp.now()
-    val formattedDate = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(currentDate.toDate())
+    val currentDate = Timestamp.now() // Firestore's Timestamp
+    val formattedDate = sdf.format(currentDate.toDate()) // Format with MYT Time Zone
 
+    // Format amount with operator
+    val formattedAmount = when (operator.lowercase()) {
+        "add" -> "+${"%.2f".format(amount)}"
+        "minus" -> "-${"%.2f".format(amount)}"
+        else -> "%.2f".format(amount) // No operator, just the amount
+    }
+
+    // Prepare transaction data
     val transaction = hashMapOf(
         "userId" to userId,
-        "date" to formattedDate,
-        "amount" to "+${"%.2f".format(amount)}",
-        "description" to "Top Up"
+        "date" to formattedDate, // Store Timestamp
+        "amount" to formattedAmount,
+        "description" to description
     )
 
-    firestore.collection("Transaction").add(transaction)
+    // Add transaction to Firestore
+    firestore.collection("Transaction")
+        .add(transaction)
+        .addOnSuccessListener {
+            println("Transaction Recorded Successfully")
+        }
+        .addOnFailureListener { e ->
+            println("Failed to Record Transaction: ${e.message}")
+        }
 }
+
+
 
 @Composable
 fun TopUpSuccessScreen(navController: NavController, topUpAmount: Double, newBalance: Double) {
