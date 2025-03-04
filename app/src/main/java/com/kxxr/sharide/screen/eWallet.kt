@@ -709,7 +709,7 @@ fun EWalletDashboardScreen(navController: NavController) {
                 ) {
                 ActionButton("TOP UP\n","topup") { navController.navigate("topup")}
                 ActionButton("Change Payment PIN","change_pin") { navController.navigate("changePIN") }
-                ActionButton("Security Question","security") { /* Navigate */ }
+                ActionButton("Security Question","security") {  navController.navigate("reset_question")}
             }
         }
 
@@ -1472,5 +1472,170 @@ fun updateUserPin(userId: String, newPin: String, onSuccess: () -> Unit, onFailu
         .addOnFailureListener { exception ->
             onFailure(exception)
         }
+}
+
+@Composable
+fun ResetSecurityQuestions(navController: NavController) {
+    val securityQuestions = stringArrayResource(id = R.array.security_questions).toList()
+    val selectedQuestions = remember { mutableStateListOf<String?>(null, null, null) }
+    val answers = remember { mutableStateListOf("", "", "") }
+    val context = LocalContext.current
+    val firestore = FirebaseFirestore.getInstance()
+    val userId = FirebaseAuth.getInstance().currentUser?.uid
+    var showDialog by remember { mutableStateOf(false) }
+    var showPinDialog by remember { mutableStateOf(true) }
+    var pinVerified by remember { mutableStateOf(false) }
+
+    // Read max attempts from strings.xml
+    val maxAttempts = stringResource(id = R.string.max_pin_attempts).toInt()
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var attemptsLeft by remember { mutableStateOf(3 - PinAttemptManager.getAttempts(context)) }
+    var clearPinTrigger by remember { mutableStateOf(false) } // To trigger PIN reset
+
+    // PIN Verification Dialog
+    if (showPinDialog) {
+        PinInputDialog(
+            title = "Verify Your PIN",
+            description = buildString {
+                append("Please enter your current payment PIN to reset security questions.")
+                if (attemptsLeft < 3) {
+                    append("\n\nYou have $attemptsLeft attempts left.")
+                }
+            },
+            onPinEntered = { enteredPin ->
+                if (userId != null) {
+                    verifyCurrentPin(
+                        context = context,
+                        userId = userId,
+                        enteredPin = enteredPin,
+                        onSuccess = {
+                            PinAttemptManager.resetAttempts(context) // Reset attempt count
+                            showPinDialog = false
+                            pinVerified = true
+
+                            // Fetch Current Security Questions
+                            firestore.collection("eWallet").document(userId)
+                                .get()
+                                .addOnSuccessListener { document ->
+                                    selectedQuestions[0] = document.getString("securityQuestion1")
+                                    selectedQuestions[1] = document.getString("securityQuestion2")
+                                    selectedQuestions[2] = document.getString("securityQuestion3")
+                                }
+                        },
+                        onFailure = { error ->
+                            pinVerified = false
+                            attemptsLeft = maxAttempts - PinAttemptManager.getAttempts(context) // Update attempts left
+                            errorMessage = error
+                            clearPinTrigger = !clearPinTrigger
+                        },
+                        onLockout = {
+                            navController.navigate("resetPIN") // Navigate to reset PIN screen
+                        }
+                    )
+                }
+            },
+            onClearPin = clearPinTrigger,
+            onDismiss = {
+                navController.popBackStack()
+            }
+        )
+    }
+
+    if (pinVerified) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.White),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Close Button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(onClick = {navController.popBackStack() }) {
+                    Icon(Icons.Default.Close, contentDescription = "Close")
+                }
+            }
+            Text(
+                text = "Reset Security Questions",
+                fontWeight = FontWeight.Bold,
+                fontSize = 28.sp,
+                color = Color.Black
+            )
+
+            Text(
+                text = "Select new security questions and provide new answers.",
+                fontSize = 16.sp,
+                color = Color.Gray,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Display Dropdowns and Answer Fields
+            for (i in 0 until 3) {
+                SecurityQuestionDropdown(
+                    questionIndex = i,
+                    questions = securityQuestions.filter { it !in selectedQuestions.filterNotNull() },
+                    selectedQuestion = selectedQuestions[i],
+                    onQuestionSelected = { selectedQuestions[i] = it }
+                )
+                AnswerTextField(
+                    answer = answers[i],
+                    onAnswerChanged = { answers[i] = it }
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            // Submit Button
+            Button(
+                onClick = {
+                    if (selectedQuestions.all { it != null } && answers.all { it.isNotBlank() }) {
+                        showDialog = true
+                        val questionsWithHashedAnswers = selectedQuestions.mapIndexed { index, question ->
+                            question!! to hashAnswer(answers[index])
+                        }.toMap()
+
+                        val dataToUpdate = hashMapOf(
+                            "securityQuestion1" to questionsWithHashedAnswers.keys.elementAt(0),
+                            "securityAnswer1" to questionsWithHashedAnswers.values.elementAt(0),
+                            "securityQuestion2" to questionsWithHashedAnswers.keys.elementAt(1),
+                            "securityAnswer2" to questionsWithHashedAnswers.values.elementAt(1),
+                            "securityQuestion3" to questionsWithHashedAnswers.keys.elementAt(2),
+                            "securityAnswer3" to questionsWithHashedAnswers.values.elementAt(2)
+                        )
+
+                        // Update Firestore Without Overwriting Other Fields
+                        firestore.collection("eWallet").document(userId!!)
+                            .update(dataToUpdate as Map<String, Any>)
+                            .addOnSuccessListener {
+                                Toast.makeText(context, "Security Questions Reset Successfully!", Toast.LENGTH_SHORT).show()
+                                showDialog = false
+                                navController.navigate("ewallet")
+                            }
+                            .addOnFailureListener { e ->
+                                Toast.makeText(context, "Failed to reset questions: ${e.message}", Toast.LENGTH_SHORT).show()
+                                showDialog = false
+                            }
+                    } else {
+                        Toast.makeText(context, "Please fill out all questions.", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                modifier = Modifier
+                    .height(90.dp)
+                    .width(180.dp)
+                    .padding(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+            ) {
+                Text("Reset", color = Color.White, fontSize = 18.sp)
+            }
+        }
+    }
+
+    // Loading Dialog
+    LoadingDialog(text = "Resetting...", showDialog = showDialog, onDismiss = { showDialog = false })
 }
 

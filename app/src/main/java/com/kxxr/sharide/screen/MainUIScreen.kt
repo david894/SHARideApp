@@ -301,7 +301,7 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 280.dp)
+                .padding(top = 290.dp)
                 .verticalScroll(rememberScrollState()), // Enable scrolling
                 horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -309,11 +309,15 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
             Text(text = "Settings", color = Color.Gray, fontSize = 20.sp, modifier = Modifier.fillMaxWidth().padding(8.dp))
 
             Column(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)
             ) {
-                ProfileCard(title = "Reset Password", onClick = { /* Navigate */ })
-                ProfileCard(title = "Enable 2FA Login", onClick = { /* Navigate */ })
-                ProfileCard(title = "Edit Phone Number", onClick = { /* Navigate */ })
+                ProfileCard(title = "Reset Password", img = "reset_password", onClick = { /* Navigate */ })
+                Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
+
+                ProfileCard(title = "Enable 2FA Login", img = "authentication", onClick = { /* Navigate */ })
+                Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
+
+                ProfileCard(title = "Edit Phone Number",img = "edit", onClick = { /* Navigate */ })
 
             }
 
@@ -337,6 +341,8 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
 
             Spacer(modifier = Modifier.height(150.dp)) // Pushes Log Out button to bottom
 
+            Text(text = "© SHARide 2025 \n Ziegler Tan & David Ng\nTARUMT Project ONLY", color = Color.LightGray, fontSize = 16.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+
         }
     }
 
@@ -345,7 +351,12 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
 }
 
 @Composable
-fun ProfileCard(title: String, onClick: () -> Unit) {
+fun ProfileCard(title: String,img: String, onClick: () -> Unit) {
+    val context = LocalContext.current
+    val imageResId = remember(img) {
+        context.resources.getIdentifier(img, "drawable", context.packageName)
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -355,14 +366,35 @@ fun ProfileCard(title: String, onClick: () -> Unit) {
         elevation = CardDefaults.cardElevation(4.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
-        Text(
-            text = title,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth()
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically, // Align items in the center
+            modifier = Modifier.padding(8.dp).padding(start = 10.dp) // Add padding for better spacing
+        ) {
+            if (imageResId != 0) {
+                Image(
+                    painter = painterResource(id = imageResId),
+                    contentDescription = title,
+                    modifier = Modifier
+                        .size(38.dp)
+                        .padding(end = 8.dp) // Add spacing between image and text
+                )
+            } else {
+                Text(
+                    "Image Not Found",
+                    color = Color.Red,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+            }
+
+            Text(
+                text = title,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f) // Allow text to take remaining space
+            )
+        }
+
     }
 }
 
