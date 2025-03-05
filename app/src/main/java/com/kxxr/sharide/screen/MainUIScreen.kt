@@ -1,5 +1,7 @@
 package com.kxxr.sharide.screen
 
+import android.app.Activity
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
@@ -24,6 +26,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
@@ -32,6 +35,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -51,15 +55,22 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.google.firebase.Firebase
+import com.google.firebase.FirebaseException
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.PhoneAuthCredential
+import com.google.firebase.auth.PhoneAuthOptions
+import com.google.firebase.auth.PhoneAuthProvider
+import com.google.firebase.auth.PhoneMultiFactorGenerator
 import com.google.firebase.firestore.firestore
 import com.google.firebase.storage.FirebaseStorage
 import com.kxxr.sharide.R
+import java.util.concurrent.TimeUnit
 
 @Composable
 fun Testing123(name: String, modifier: Modifier = Modifier) {
@@ -314,7 +325,7 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
                 ProfileCard(title = "Reset Password", img = "reset_password", onClick = { /* Navigate */ })
                 Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
-                ProfileCard(title = "Enable 2FA Login", img = "authentication", onClick = { /* Navigate */ })
+                ProfileCard(title = "Enable 2FA Login", img = "authentication", onClick = { navController.navigate("reg_otp") })
                 Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
                 ProfileCard(title = "Edit Phone Number",img = "edit", onClick = { /* Navigate */ })
@@ -469,3 +480,7 @@ fun BottomNavItem(icon: Int, label: String, isSelected: Boolean, onClick: () -> 
         )
     }
 }
+
+
+
+
