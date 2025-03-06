@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -28,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -52,21 +54,26 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.google.firebase.Firebase
 import com.google.firebase.FirebaseException
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.MultiFactorResolver
 import com.google.firebase.auth.PhoneAuthCredential
 import com.google.firebase.auth.PhoneAuthOptions
 import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.auth.PhoneMultiFactorGenerator
+import com.google.firebase.auth.PhoneMultiFactorInfo
 import com.google.firebase.firestore.firestore
 import com.google.firebase.storage.FirebaseStorage
 import com.kxxr.sharide.R
@@ -217,6 +224,7 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
     val firestore = Firebase.firestore
 
     var userName by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
     var studentId by remember { mutableStateOf("") }
     var profileImageUrl by remember { mutableStateOf("") }
     var profileBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -233,6 +241,7 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
                     val document = querySnapshot.documents.firstOrNull()
                     document?.let {
                         userName = it.getString("name").orEmpty()
+                        email = it.getString("email").orEmpty()
                         studentId = it.getString("studentId").orEmpty()
                         profileImageUrl = it.getString("profileImageUrl").orEmpty()
 
@@ -271,7 +280,9 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
                 .padding(20.dp)
                 .clip(RoundedCornerShape(bottomStart = 60.dp, bottomEnd = 60.dp)) // Rounded bottom corners
         ) {
-            Spacer(modifier = Modifier.height(36.dp).padding(paddingValues))
+            Spacer(modifier = Modifier
+                .height(36.dp)
+                .padding(paddingValues))
 
             Text(text = "My Profile", fontSize = 26.sp,color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp))
 
@@ -317,18 +328,22 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
                 horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
-            Text(text = "Settings", color = Color.Gray, fontSize = 20.sp, modifier = Modifier.fillMaxWidth().padding(8.dp))
+            Text(text = "Settings", color = Color.Gray, fontSize = 20.sp, modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp))
 
             Column(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 10.dp)
             ) {
-                ProfileCard(title = "Reset Password", img = "reset_password", onClick = { /* Navigate */ })
+                ProfileCard(title = "Reset Password", img = "reset_password", onClick = { resetPassword(email,context) })
                 Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
-                ProfileCard(title = "Enable 2FA Login", img = "authentication", onClick = { navController.navigate("reg_otp") })
+                ProfileCard(title = "Enable 2FA Login", img = "authentication", onClick = { navController.navigate("check_mfa") })
                 Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
-                ProfileCard(title = "Edit Phone Number",img = "edit", onClick = { /* Navigate */ })
+                ProfileCard(title = "Edit Personal Info",img = "edit", onClick = { /* Navigate */ })
 
             }
 
@@ -379,7 +394,9 @@ fun ProfileCard(title: String,img: String, onClick: () -> Unit) {
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically, // Align items in the center
-            modifier = Modifier.padding(8.dp).padding(start = 10.dp) // Add padding for better spacing
+            modifier = Modifier
+                .padding(8.dp)
+                .padding(start = 10.dp) // Add padding for better spacing
         ) {
             if (imageResId != 0) {
                 Image(
@@ -424,7 +441,7 @@ fun BottomNavBar(screen: String, navController: NavController) {
                 .padding(8.dp)
                 .clip(RoundedCornerShape(30.dp)) // Rounded edges like a pebble
                 .shadow(12.dp, RoundedCornerShape(30.dp))
-                .border(1.dp,Color.LightGray,RoundedCornerShape(30.dp)), // Floating shadow effect
+                .border(1.dp, Color.LightGray, RoundedCornerShape(30.dp)), // Floating shadow effect
             color = Color.White, // Background color
             tonalElevation = 8.dp // More elevation for a lifted effect
         ) {
@@ -481,6 +498,130 @@ fun BottomNavItem(icon: Int, label: String, isSelected: Boolean, onClick: () -> 
     }
 }
 
+@Composable
+fun ShowUnbindDialog(phoneNumber: String, onUnbind: () -> Unit, onCancel: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        containerColor = Color.White, // Force White Background
+        title = { Text("MFA Already Enabled", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+        text = { Text("This account is already registered with $phoneNumber.\nDo you want to unbind MFA?",textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+        confirmButton = {
+            Button(
+                onClick = onUnbind,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+            ) {
+                Text("Unbind")
+            }
+        },
+        dismissButton = {
+            Button(
+                onClick = onCancel,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+            ) {
+                Text("Cancel")
+            }
+        }
+    )
+}
 
+@Composable
+fun CheckMfaEnrollment(firebaseAuth: FirebaseAuth, navController: NavController) {
+    val context = LocalContext.current
+    val user = firebaseAuth.currentUser
+    var showDialog by remember { mutableStateOf(false) }
+    var showPasswordDialog by remember { mutableStateOf(false) }
+    var phoneNumber by remember { mutableStateOf("") }
+    val enrolledFactors = user?.multiFactor?.enrolledFactors ?: emptyList()
+    var errormsg by remember { mutableStateOf("") }
+
+
+    LaunchedEffect(user) {
+        if (user != null) {
+            if (enrolledFactors.isNotEmpty()) {
+                val phoneInfo = enrolledFactors[0] as? PhoneMultiFactorInfo
+                if (phoneInfo != null) {
+                    phoneNumber = phoneInfo.phoneNumber ?: ""
+                    showDialog = true // Show Unbind Dialog
+                }
+            } else {
+                navController.navigate("reg_otp") // No MFA -> Go to Register Screen
+            }
+        } else {
+            Toast.makeText(context, "User Not Logged In", Toast.LENGTH_SHORT).show()
+            navController.popBackStack()
+        }
+    }
+
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+    val topPadding = (0.3f * screenHeight.value).dp
+
+    Text(
+        text = errormsg,
+        textAlign = TextAlign.Center,
+        fontWeight = FontWeight.Bold,
+        fontSize = 20.sp,
+        color = Color.Red,
+        modifier = Modifier.fillMaxSize().padding(top = topPadding)
+    )
+
+    if (showDialog) {
+        ShowUnbindDialog(
+            phoneNumber = phoneNumber,
+            onUnbind = {
+                if (user != null) {
+                    user.multiFactor.unenroll(enrolledFactors[0]) // 🔥 Direct Unbind
+                        .addOnSuccessListener {
+                            Toast.makeText(context, "MFA Unbound Successfully", Toast.LENGTH_SHORT).show()
+                            navController.popBackStack() // Navigate back on success
+                        }
+                        .addOnFailureListener { e ->
+                            errormsg = "Failed to Unbind MFA: ${e.localizedMessage}"
+                        }
+                }
+            },
+            onCancel = {
+                showDialog = false
+                navController.navigate("profile") // Go back to Check MFA()
+            }
+        )
+    }
+}
+
+fun resetPassword(email:String,context: Context){
+    val firebaseAuth = FirebaseAuth.getInstance()
+
+    val trimmedEmail = email.trim() // Remove unnecessary spaces
+    if (trimmedEmail.isNotEmpty()) {
+        Toast
+            .makeText(context, "Checking email...", Toast.LENGTH_SHORT)
+            .show()
+        firebaseAuth
+            .sendPasswordResetEmail(trimmedEmail)
+            .addOnCompleteListener { resetTask ->
+                if (resetTask.isSuccessful) {
+                    Toast
+                        .makeText(
+                            context,
+                            "Password reset email sent successfully!",
+                            Toast.LENGTH_LONG
+                        )
+                        .show()
+                } else {
+                    Log.e(
+                        "ResetPassword",
+                        "Error sending reset email",
+                        resetTask.exception
+                    )
+                    Toast
+                        .makeText(
+                            context,
+                            "Error: ${resetTask.exception?.message}",
+                            Toast.LENGTH_LONG
+                        )
+                        .show()
+                }
+            }
+    }
+}
 
 

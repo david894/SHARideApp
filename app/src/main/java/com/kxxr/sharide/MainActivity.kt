@@ -8,11 +8,16 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.android.libraries.places.api.Places
 import com.google.firebase.auth.FirebaseAuth
@@ -39,6 +44,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
 @Composable
 fun ShareRideApp() {
     // Get the application context
@@ -48,6 +54,7 @@ fun ShareRideApp() {
 
     // Observe network state
     val isConnected by networkViewModel.isConnected.collectAsState(initial = true)
+
 
     MaterialTheme {
         if (isConnected) {
@@ -59,8 +66,6 @@ fun ShareRideApp() {
         }
     }
 }
-
-
 
 
 @Composable

@@ -3,6 +3,7 @@ package com.kxxr.sharide.screen
 import android.app.Activity
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -53,137 +55,9 @@ import com.google.firebase.auth.PhoneAuthOptions
 import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.auth.PhoneMultiFactorGenerator
 import com.google.firebase.firestore.FirebaseFirestore
+import com.kxxr.sharide.db.ResolverHolder
 import kotlinx.coroutines.delay
 import java.util.concurrent.TimeUnit
-
-@Composable
-fun OtpVerificationScreen(
-    navController: NavController,
-    verificationId: String
-) {
-    var otpCode by remember { mutableStateOf("") }
-    var isResendEnabled by remember { mutableStateOf(false) }
-    var timeLeft by remember { mutableStateOf(60) }
-    val context = LocalContext.current
-
-    // Timer for Resend OTP
-    LaunchedEffect(timeLeft) {
-        while (timeLeft > 0) {
-            delay(1000L)
-            timeLeft--
-        }
-        isResendEnabled = true
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        // Back Button
-        IconButton(onClick = { navController.popBackStack() }, modifier = Modifier.align(Alignment.Start)) {
-            Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
-        }
-
-        // Title
-        Text(
-            text = "2FA Login",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(top = 16.dp)
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Instructions
-        Text(
-            text = "Verification code sent!\nEnter the verification code sent to xxx@tarc.edu.my.\nCheck your spam mail box.",
-            textAlign = TextAlign.Center,
-            fontSize = 16.sp,
-            color = Color.Gray,
-            modifier = Modifier.padding(horizontal = 20.dp)
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // OTP Input Fields
-        OtpTextField(otpCode) { newCode -> otpCode = newCode }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Resend Code with Timer
-        if (!isResendEnabled) {
-            Text(
-                text = "Please wait ${timeLeft}s before requesting another code.",
-                fontSize = 14.sp,
-                color = Color.Gray
-            )
-        } else {
-            ClickableText(
-                text = AnnotatedString("Resend Now"),
-                onClick = {
-                    isResendEnabled = false
-                    timeLeft = 60 // Reset timer
-                    //resendOtp() // Function to resend OTP
-                },
-                style = TextStyle(color = Color.Blue, fontSize = 14.sp, textDecoration = TextDecoration.Underline)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Login Button
-        Button(
-            onClick = {
-                //verifyOtp(context, verificationId, otpCode, navController)
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp),
-            shape = RoundedCornerShape(10.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
-        ) {
-            Text(text = "Login", color = Color.White, fontSize = 16.sp)
-        }
-    }
-}
-
-@Composable
-fun OtpTextField(otpCode: String, onOtpChange: (String) -> Unit) {
-    val focusRequesterList = List(5) { FocusRequester() }
-    Row(
-        horizontalArrangement = Arrangement.Center,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        repeat(5) { index ->
-            TextField(
-                value = otpCode.getOrNull(index)?.toString() ?: "",
-                onValueChange = { newValue ->
-                    if (newValue.length <= 1) {
-                        val newOtpCode = otpCode.toMutableList()
-                        if (newValue.isNotEmpty()) {
-                            newOtpCode[index] = newValue.first()
-                        } else {
-                            newOtpCode.removeAt(index)
-                        }
-                        onOtpChange(newOtpCode.joinToString(""))
-                        if (newValue.isNotEmpty() && index < 4) {
-                            focusRequesterList[index + 1].requestFocus()
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .size(50.dp)
-                    .focusRequester(focusRequesterList[index])
-                    .padding(4.dp),
-                textStyle = TextStyle(fontSize = 20.sp, textAlign = TextAlign.Center),
-                singleLine = true
-            )
-        }
-    }
-}
 
 @Composable
 fun RegisterPhoneNumberScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
@@ -226,7 +100,7 @@ fun RegisterPhoneNumberScreen(firebaseAuth: FirebaseAuth, navController: NavCont
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(26.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -274,13 +148,16 @@ fun RegisterPhoneNumberScreen(firebaseAuth: FirebaseAuth, navController: NavCont
 
         Button(
             onClick = {
+                showDialog = true
                 if (phoneNumber.isNotEmpty() && error.isEmpty()) {
                     sendOtp(phoneNumber, firebaseAuth, context, navController, onResult = {
                         if (it != null) {
                             error = it
+                            showDialog = false
                         }
                     })
                 } else {
+                    showDialog = false
                     Toast.makeText(context, "Please enter phone number!", Toast.LENGTH_SHORT).show()
                 }
             },
@@ -326,7 +203,8 @@ fun sendOtp(
 
             override fun onCodeSent(verificationId: String, token: PhoneAuthProvider.ForceResendingToken) {
                 Toast.makeText(context, "OTP Sent to $phoneNumber", Toast.LENGTH_SHORT).show()
-                navController.navigate("verifyOtp/$verificationId")
+                val route = "Register"
+                navController.navigate("verifyOtp/$verificationId/$phoneNumber/$route")
             }
         })
         .build()
@@ -335,9 +213,10 @@ fun sendOtp(
 }
 
 @Composable
-fun VerifyOtpScreen(navController: NavController, verificationId: String, firebaseAuth: FirebaseAuth) {
+fun VerifyOtpScreen(navController: NavController, verificationId: String, firebaseAuth: FirebaseAuth,phoneNumber: String,route:String) {
     var otp by remember { mutableStateOf("") }
     val context = LocalContext.current
+    val resolver = ResolverHolder.resolver
 
     Column(
         modifier = Modifier
@@ -346,23 +225,50 @@ fun VerifyOtpScreen(navController: NavController, verificationId: String, fireba
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Enter OTP", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("OTP sent successful !", fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
+        Text("Enter the One Time Passcode sent to \n $phoneNumber via SMS", fontSize = 15.sp, textAlign = TextAlign.Center)
+        Spacer(modifier = Modifier.height(26.dp))
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(25.dp),
+        ) {
+            Text("Enter OTP", textAlign = TextAlign.Start, modifier = Modifier.fillMaxWidth(), fontWeight = FontWeight.SemiBold)
+            //Spacer(modifier = Modifier.height(16.dp))
 
-        OutlinedTextField(
-            value = otp,
-            onValueChange = { otp = it },
-            label = { Text("OTP") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth()
-        )
+            OutlinedTextField(
+                value = otp,
+                onValueChange = { otp = it },
+                label = { Text("OTP") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
 
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(
             onClick = {
                 if (otp.isNotEmpty()) {
-                    verifyOtp(verificationId, otp, firebaseAuth, context, navController)
+                    if(route == "Register"){
+                        verifyOtp(verificationId, otp, firebaseAuth, context, navController)
+                    }else{
+                        if (resolver != null) {
+                            val credential = PhoneAuthProvider.getCredential(verificationId, otp)
+                            val assertion = PhoneMultiFactorGenerator.getAssertion(credential)
+
+                            resolver.resolveSignIn(assertion)
+                                .addOnSuccessListener {
+                                    Toast.makeText(context, "MFA Verified Successfully", Toast.LENGTH_SHORT).show()
+                                    navController.navigate("home")
+                                }
+                                .addOnFailureListener { e ->
+                                    Toast.makeText(context, "Invalid OTP: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                }
+                        } else {
+                            Toast.makeText(context, "Resolver is null", Toast.LENGTH_SHORT).show()
+                        }
+                    }
                 } else {
                     Toast.makeText(context, "Enter OTP!", Toast.LENGTH_SHORT).show()
                 }

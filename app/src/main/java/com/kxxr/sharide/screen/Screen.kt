@@ -46,7 +46,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -78,6 +77,7 @@ import com.google.mlkit.vision.face.FaceDetectorOptions
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.kxxr.sharide.R
+import com.kxxr.sharide.db.ResolverHolder
 import com.kxxr.sharide.logic.NetworkViewModel
 import kotlinx.coroutines.delay
 import java.io.ByteArrayOutputStream
@@ -146,10 +146,14 @@ fun AppNavHost(
 
             // Profile
             composable("profile") { ProfileScreen(firebaseAuth, navController) }
+            composable("check_mfa") { CheckMfaEnrollment(firebaseAuth, navController) }
             composable("reg_otp") { RegisterPhoneNumberScreen(firebaseAuth, navController) }
-            composable("verifyOtp/{verifyID}") { backStackEntry ->
+            composable("verifyOtp/{verifyID}/{phone}/{route}") { backStackEntry ->
                 val verifyID = backStackEntry.arguments?.getString("verifyID").orEmpty()
-                VerifyOtpScreen(navController, verifyID,firebaseAuth)
+                val phone = backStackEntry.arguments?.getString("phone").orEmpty()
+                val route = backStackEntry.arguments?.getString("route").orEmpty()
+
+                VerifyOtpScreen(navController, verifyID,firebaseAuth,phone,route)
             }
 
             // Home (Updated to pass FirebaseAuth & Firestore)
@@ -442,6 +446,7 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
             contract = ActivityResultContracts.StartActivityForResult()
         ) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
+                showDialog = true
                 handleGoogleSignIn(result.data, firebaseAuth, navController, context)
             }
         }
@@ -488,7 +493,14 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
         // Email TextField
         OutlinedTextField(
             value = email,
-            onValueChange = { email = it },
+            onValueChange = {
+                email = it
+                if (!email.endsWith("tarc.edu.my")){
+                    errormsg = "Only TARC emails are allowed"
+                }else{
+                    errormsg = ""
+                }
+            },
             label = { Text("Email") },
             leadingIcon = { Icon(Icons.Default.Email, contentDescription = "Email Icon") },
             modifier = Modifier.fillMaxWidth(),
@@ -564,7 +576,7 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
         // Login Button
         Button(
             onClick = {
-                if (email.isNotEmpty() && password.isNotEmpty()) {
+                if (email.isNotEmpty() && password.isNotEmpty() && email.endsWith("tarc.edu.my")) {
                     showDialog = true
                     signInWithEmailPassword(
                         email,
@@ -579,6 +591,7 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
                         },
                         onFailure = { error ->
                             showDialog = false
+                            errormsg = error
                             Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
                         }
                     )
@@ -594,6 +607,7 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
         ) {
             Text(text = "Login", color = Color.White)
         }
+        Text(text = "$errormsg",color = Color.Red , textAlign = TextAlign.Center)
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -615,7 +629,6 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(text = "$errormsg",color = Color.Red , textAlign = TextAlign.Center)
     }
     // Show Loading Dialog
     LoadingDialog(text="Logging in...",showDialog = showDialog, onDismiss = { showDialog = false })
@@ -631,32 +644,69 @@ fun handleGoogleSignIn(
     try {
         val account = task.getResult(ApiException::class.java)!!
         val googleCredential = GoogleAuthProvider.getCredential(account.idToken, null)
+        val email = account.email ?: ""
+
+        // Step 1: Allow Only @tarc.edu.my Emails
+        if (!email.endsWith("tarc.edu.my")) {
+            Toast.makeText(context, "Only TARC emails are allowed",Toast.LENGTH_SHORT).show()
+            firebaseAuth.signOut()
+            navController.navigate("login")
+            return
+        }
 
         firebaseAuth.signInWithCredential(googleCredential)
-            .addOnSuccessListener {
-                val firebaseUser = firebaseAuth.currentUser
-                showToast(context, "Sign-In Successful")
-                navController.navigate("home")
-            }
-            .addOnFailureListener { exception ->
-                if (exception is FirebaseAuthMultiFactorException) {
-                    showToast(context, "MFA Required. Please Verify")
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    val user = firebaseAuth.currentUser
 
-                    // Handle MFA challenge with resolver
-                    handleMultiFactorAuthentication(
-                        exception.resolver, //  This will always pass the correct resolver
-                        firebaseAuth,
-                        navController,
-                        context
-                    )
+                    if (user != null) {
+                        // Step 3: Check if Email is Verified
+                        if (!user.isEmailVerified) {
+                            Toast.makeText(context, "Please verify your email before signing in.",Toast.LENGTH_LONG).show()
+                            firebaseAuth.signOut()
+                            return@addOnCompleteListener
+                        }
+                        // Step 4: Check if User Already Exists in Firestore by userId FIELD
+                        val db = FirebaseFirestore.getInstance()
+                        db.collection("users")
+                            .whereEqualTo("userId", user.uid) // Check if userId field exists
+                            .get()
+                            .addOnSuccessListener { documents ->
+                                if (!documents.isEmpty) {
+                                    Toast.makeText(context, "Sign-In Successful",Toast.LENGTH_LONG).show()
+                                    navController.navigate("home")
+                                } else {
+                                    firebaseAuth.signOut()
+                                    Toast.makeText(context, "Account does not exist. Please register first.",Toast.LENGTH_LONG).show()
+                                }
+                            }
+                            .addOnFailureListener {
+                                Toast.makeText(context, "Failed to check account existence",Toast.LENGTH_LONG).show()
+                            }
+                    }
                 } else {
-                    showToast(context, "Login Failed: ${exception.localizedMessage}")
+                    val exception = task.exception
+                    if (exception is FirebaseAuthMultiFactorException) {
+                        Toast.makeText(context, "MFA Required. Please Verify",Toast.LENGTH_LONG).show()
+                        val resolver = exception.resolver
+
+                        // Now the resolver is not null
+                        handleMultiFactorAuthentication(
+                            resolver,
+                            firebaseAuth,
+                            navController,
+                            context
+                        )
+                    } else {
+                        Toast.makeText(context, "Login Failed: ${exception?.localizedMessage}",Toast.LENGTH_LONG).show()
+                    }
                 }
             }
     } catch (e: ApiException) {
-        showToast(context, "Google Sign-In failed: ${e.localizedMessage}")
+        Toast.makeText(context, "Google Sign-In failed: ${e.localizedMessage}",Toast.LENGTH_LONG).show()
     }
 }
+
 
 fun handleMultiFactorAuthentication(
     resolver: MultiFactorResolver,
@@ -672,23 +722,27 @@ fun handleMultiFactorAuthentication(
             return
         }
 
-        val phoneInfo = resolver.hints.first() as PhoneMultiFactorInfo
+        val phoneInfo = resolver.hints[0] as? PhoneMultiFactorInfo
+            ?: throw Exception("PhoneMultiFactorInfo is null")
+
+        ResolverHolder.resolver = resolver // Store Resolver Here
 
         val options = PhoneAuthOptions.newBuilder(firebaseAuth)
-            .setPhoneNumber(phoneInfo.phoneNumber!!)
-            .setTimeout(60L, TimeUnit.SECONDS)
             .setActivity(activity)
-            .setMultiFactorSession(resolver.session!!)
+            .setMultiFactorSession(resolver.session) // Must Set Session
+            .setMultiFactorHint(phoneInfo) // Use MultiFactor Hint Here
+            .setTimeout(60L, TimeUnit.SECONDS)
             .setCallbacks(object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+
                 override fun onVerificationCompleted(credential: PhoneAuthCredential) {
                     val assertion = PhoneMultiFactorGenerator.getAssertion(credential)
                     resolver.resolveSignIn(assertion)
                         .addOnSuccessListener {
-                            Toast.makeText(context, "MFA Verified Successfully ✅", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "MFA Verified Successfully", Toast.LENGTH_SHORT).show()
                             navController.navigate("home")
                         }
-                        .addOnFailureListener {
-                            Toast.makeText(context, "MFA Failed: ${it.localizedMessage}", Toast.LENGTH_SHORT).show()
+                        .addOnFailureListener { e ->
+                            Toast.makeText(context, "MFA Failed: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
                         }
                 }
 
@@ -698,7 +752,8 @@ fun handleMultiFactorAuthentication(
 
                 override fun onCodeSent(verificationId: String, token: PhoneAuthProvider.ForceResendingToken) {
                     Toast.makeText(context, "OTP Sent to ${phoneInfo.phoneNumber}", Toast.LENGTH_SHORT).show()
-                    navController.navigate("verifyOtp/$verificationId") // Optional Navigate to OTP Screen
+                    val route = "Login"
+                    navController.navigate("verifyOtp/$verificationId/${phoneInfo.phoneNumber}/$route") // Optional Navigate to OTP Screen
                 }
             })
             .build()
@@ -708,31 +763,6 @@ fun handleMultiFactorAuthentication(
     } catch (e: Exception) {
         Toast.makeText(context, "Unexpected Error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
     }
-}
-
-fun handleNormalLogin(
-    firebaseUser: FirebaseUser,
-    firebaseAuth: FirebaseAuth,
-    navController: NavController,
-    context: Context
-) {
-    val email = firebaseUser.email ?: return
-
-    firebaseAuth.fetchSignInMethodsForEmail(email)
-        .addOnSuccessListener { result ->
-            val signInMethods = result.signInMethods
-
-            if (signInMethods.isNullOrEmpty()) {
-                linkEmailPassword(firebaseUser, email, firebaseAuth, navController, context)
-            } else if (!signInMethods.contains(EmailAuthProvider.EMAIL_PASSWORD_SIGN_IN_METHOD)) {
-                linkEmailPassword(firebaseUser, email, firebaseAuth, navController, context)
-            } else {
-                verifyEmailAndLogin(firebaseUser, firebaseAuth, navController, context)
-            }
-        }
-        .addOnFailureListener { e ->
-            showToast(context, "Failed to check linked methods: ${e.localizedMessage}")
-        }
 }
 
 fun signInWithEmailPassword(
@@ -777,47 +807,6 @@ fun signInWithEmailPassword(
                 }
             }
         }
-}
-
-
-fun linkEmailPassword(
-    firebaseUser: FirebaseUser,
-    email: String,
-    firebaseAuth: FirebaseAuth,
-    navController: NavController,
-    context: Context
-) {
-    val emailCredential = EmailAuthProvider.getCredential(email, "user_password")
-    firebaseUser.linkWithCredential(emailCredential)
-        .addOnCompleteListener { linkTask ->
-            if (linkTask.isSuccessful) {
-                verifyEmailAndLogin(firebaseUser, firebaseAuth, navController, context)
-            } else {
-                showToast(context, "Failed to link Email/Password: ${linkTask.exception?.message}")
-            }
-        }
-}
-
-fun verifyEmailAndLogin(
-    firebaseUser: FirebaseUser,
-    firebaseAuth: FirebaseAuth,
-    navController: NavController,
-    context: Context
-) {
-    firebaseUser.reload()
-        .addOnSuccessListener {
-            if (firebaseUser.isEmailVerified) {
-                showToast(context, "Login successful!")
-                navController.navigate("home")
-            } else {
-                firebaseAuth.signOut()
-                showToast(context, "Please verify your email before logging in!")
-            }
-        }
-}
-
-fun showToast(context: Context, message: String) {
-    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
 }
 
 @Composable
