@@ -80,6 +80,7 @@ fun RegisterPhoneNumberScreen(firebaseAuth: FirebaseAuth, navController: NavCont
                     if (!documents.isEmpty) {
                         val document = documents.documents[0] // Get the first document
                         phoneNumber = document.getString("phoneNumber") ?: "+60"
+
                         // Auto-Validation when PhoneNumber is fetched
                         if (!phoneNumber.startsWith("+60")) {
                             error = "Invalid phone number, should start with +60"
@@ -131,6 +132,8 @@ fun RegisterPhoneNumberScreen(firebaseAuth: FirebaseAuth, navController: NavCont
                 // Validate immediately while typing
                 if (!phoneNumber.startsWith("+60")) {
                     error = "Invalid phone number, should start with +60"
+                } else if (phoneNumber.length <= 11 && phoneNumber.length >= 10){
+                    error = "Invalid Malaysia Number"
                 } else {
                     error = ""
                 }

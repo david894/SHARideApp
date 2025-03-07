@@ -1,21 +1,17 @@
 package com.kxxr.sharide.screen
 
-import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.util.Base64
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,14 +26,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -58,34 +52,18 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.google.firebase.Firebase
-import com.google.firebase.FirebaseException
-import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.MultiFactorResolver
-import com.google.firebase.auth.PhoneAuthCredential
-import com.google.firebase.auth.PhoneAuthOptions
-import com.google.firebase.auth.PhoneAuthProvider
-import com.google.firebase.auth.PhoneMultiFactorGenerator
 import com.google.firebase.auth.PhoneMultiFactorInfo
 import com.google.firebase.firestore.firestore
 import com.google.firebase.storage.FirebaseStorage
 import com.kxxr.sharide.R
-import java.util.concurrent.TimeUnit
-
-@Composable
-fun Testing123(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
 
 @Composable
 fun HomeScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
@@ -226,9 +204,18 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
     var userName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var studentId by remember { mutableStateOf("") }
+    var gender by remember { mutableStateOf("") }
+    var phoneNumber by remember { mutableStateOf("") }
     var profileImageUrl by remember { mutableStateOf("") }
     var profileBitmap by remember { mutableStateOf<Bitmap?>(null) }
+
     var showDialog by remember { mutableStateOf(false) }
+    var showEmailDialog by remember { mutableStateOf(false) }
+    var showEditDialog by remember { mutableStateOf(false) }
+    var updatedPhoneNumber by remember { mutableStateOf(phoneNumber) }
+
+    // Retrieve isDriver state from SharedPreferences
+    var isDriver by remember { mutableStateOf(getDriverPreference(context)) }
 
     // Fetch user data from Firestore
     LaunchedEffect(Unit) {
@@ -243,6 +230,8 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
                         userName = it.getString("name").orEmpty()
                         email = it.getString("email").orEmpty()
                         studentId = it.getString("studentId").orEmpty()
+                        gender = it.getString("gender").orEmpty()
+                        phoneNumber = it.getString("phoneNumber").orEmpty()
                         profileImageUrl = it.getString("profileImageUrl").orEmpty()
 
                         if (profileImageUrl.isNotEmpty()) {
@@ -337,14 +326,28 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
                     .fillMaxWidth()
                     .padding(vertical = 10.dp)
             ) {
-                ProfileCard(title = "Reset Password", img = "reset_password", onClick = { resetPassword(email,context) })
+                ProfileCard(title = "Reset Password", img = "reset_password", onClick = {
+                    showDialog = true
+                    resetPassword(email,context,
+                        onSuccess = {
+                            showDialog = false
+                            showEmailDialog = true},
+                        onFailure = {
+                            showDialog = false
+                        }
+                    )
+                })
                 Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
                 ProfileCard(title = "Enable 2FA Login", img = "authentication", onClick = { navController.navigate("check_mfa") })
                 Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
-                ProfileCard(title = "Edit Personal Info",img = "edit", onClick = { /* Navigate */ })
+                ProfileCard(title = "Edit Personal Info",img = "edit", onClick = { showEditDialog = true })
+                Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
+                if(isDriver){
+                    ProfileCard(title = "Edit Vehicle Info",img = "car_front", onClick = { showEditDialog = true })
+                }
             }
 
             Spacer(modifier = Modifier.height(50.dp)) // Pushes Log Out button to bottom
@@ -372,6 +375,53 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
         }
     }
 
+    if (showEmailDialog) {
+        AlertDialog(
+            onDismissRequest = { showEmailDialog = false },
+            title = { Text("Email Sent") },
+            text = { Text("An email has been sent to $email. Please check your inbox to reset your password.") },
+            confirmButton = {
+                Button(
+                    onClick = { showEmailDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+                ) {
+                    Text("Done")
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+
+    if (showEditDialog) {
+        EditPersonalInfoDialog(
+            userName = userName,
+            studentId = studentId,
+            email = email,
+            gender = gender,
+            phoneNumber = phoneNumber,
+            context = context,
+            onPhoneNumberChange = { updatedPhoneNumber = it },
+            onConfirm = { newPhone ->
+                showEditDialog = false
+                // Save Phone Number to Firestore
+                firestore.collection("users")
+                    .whereEqualTo("firebaseUserId", currentUser?.uid)
+                    .get()
+                    .addOnSuccessListener { querySnapshot ->
+                        val document = querySnapshot.documents.firstOrNull()
+                        document?.reference?.update("phoneNumber", newPhone)
+                            ?.addOnSuccessListener {
+                                Toast.makeText(context, "Phone Number Updated!", Toast.LENGTH_SHORT).show()
+                            }
+                            ?.addOnFailureListener { e ->
+                                Toast.makeText(context, "Failed to Update Phone Number: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                            }
+                    }
+            },
+            onDismiss = { showEditDialog = false }
+        )
+    }
     // Show Loading Dialog
     LoadingDialog(text = "Loading...", showDialog = showDialog, onDismiss = { showDialog = false })
 }
@@ -587,7 +637,7 @@ fun CheckMfaEnrollment(firebaseAuth: FirebaseAuth, navController: NavController)
     }
 }
 
-fun resetPassword(email:String,context: Context){
+fun resetPassword(email:String,context: Context, onSuccess: () -> Unit,onFailure: () -> Unit){
     val firebaseAuth = FirebaseAuth.getInstance()
 
     val trimmedEmail = email.trim() // Remove unnecessary spaces
@@ -599,29 +649,126 @@ fun resetPassword(email:String,context: Context){
             .sendPasswordResetEmail(trimmedEmail)
             .addOnCompleteListener { resetTask ->
                 if (resetTask.isSuccessful) {
-                    Toast
-                        .makeText(
-                            context,
-                            "Password reset email sent successfully!",
-                            Toast.LENGTH_LONG
-                        )
-                        .show()
+                    Toast.makeText(context, "Password reset email sent successfully!", Toast.LENGTH_LONG).show()
+                    onSuccess()
                 } else {
-                    Log.e(
-                        "ResetPassword",
-                        "Error sending reset email",
-                        resetTask.exception
-                    )
-                    Toast
-                        .makeText(
-                            context,
-                            "Error: ${resetTask.exception?.message}",
-                            Toast.LENGTH_LONG
-                        )
-                        .show()
+                    Log.e("ResetPassword", "Error sending reset email", resetTask.exception)
+                    Toast.makeText(context, "Error: ${resetTask.exception?.message}", Toast.LENGTH_LONG).show()
+                    onFailure()
                 }
             }
     }
+}
+
+@Composable
+fun EditPersonalInfoDialog(
+    userName: String,
+    studentId: String,
+    email: String,
+    gender: String,
+    phoneNumber: String,
+    context: Context,
+    onPhoneNumberChange: (String) -> Unit,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var updatedPhoneNumber by remember { mutableStateOf(phoneNumber) }
+    var isPhoneValid by remember { mutableStateOf(true) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Personal Info") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = userName,
+                    onValueChange = {},
+                    label = { Text("Name") },
+                    readOnly = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = Color.Gray,
+                        disabledLabelColor = Color.Gray,
+                        unfocusedContainerColor = Color.Gray
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = studentId,
+                    onValueChange = {},
+                    label = { Text("TARUMT ID") },
+                    readOnly = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = Color.Gray,
+                        disabledLabelColor = Color.Gray,
+                        unfocusedContainerColor = Color.Gray
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = {},
+                    label = { Text("Email") },
+                    readOnly = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = Color.Gray,
+                        disabledLabelColor = Color.Gray,
+                        unfocusedContainerColor = Color.Gray
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = gender,
+                    onValueChange = {},
+                    label = { Text("Gender") },
+                    readOnly = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = Color.Gray,
+                        disabledLabelColor = Color.Gray,
+                        unfocusedContainerColor = Color.Gray
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = updatedPhoneNumber,
+                    onValueChange = {
+                        updatedPhoneNumber = it
+                        onPhoneNumberChange(it)
+                        isPhoneValid = updatedPhoneNumber.startsWith("+601") && updatedPhoneNumber.length <= 13 && updatedPhoneNumber.length >= 12
+                    },
+                    label = { Text("Phone Number") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done, keyboardType = KeyboardType.Phone)
+                )
+                if (!isPhoneValid) {
+                    Text(text = "Invalid Malaysian phone number", color = Color.Red, fontSize = 12.sp)
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                if (!isPhoneValid) {
+                    Toast.makeText(context, "Invalid Phone Number!", Toast.LENGTH_SHORT).show()
+                }else{
+                    onConfirm(updatedPhoneNumber)
+                }
+            },colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss,colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+            ) {
+                Text("Cancel")
+            }
+        },
+        containerColor = Color.White,
+        shape = RoundedCornerShape(16.dp)
+    )
 }
 
 

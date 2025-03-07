@@ -415,6 +415,7 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
 
     // Dialog visibility state
     var showDialog by remember { mutableStateOf(false) }
+    var showEmailDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -536,38 +537,14 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
             modifier = Modifier
                 .align(Alignment.End)
                 .clickable {
-                    val trimmedEmail = email.trim() // Remove unnecessary spaces
-                    if (trimmedEmail.isNotEmpty()) {
-                        Toast
-                            .makeText(context, "Checking email...", Toast.LENGTH_SHORT)
-                            .show()
-                        firebaseAuth
-                            .sendPasswordResetEmail(trimmedEmail)
-                            .addOnCompleteListener { resetTask ->
-                                if (resetTask.isSuccessful) {
-                                    Toast
-                                        .makeText(
-                                            context,
-                                            "Password reset email sent successfully!",
-                                            Toast.LENGTH_LONG
-                                        )
-                                        .show()
-                                } else {
-                                    Log.e(
-                                        "ResetPassword",
-                                        "Error sending reset email",
-                                        resetTask.exception
-                                    )
-                                    Toast
-                                        .makeText(
-                                            context,
-                                            "Error: ${resetTask.exception?.message}",
-                                            Toast.LENGTH_LONG
-                                        )
-                                        .show()
-                                }
-                            }
-                    }
+                    resetPassword(email,context,
+                        onSuccess = {
+                            showDialog = false
+                            showEmailDialog = true},
+                        onFailure = {
+                            showDialog = false
+                        }
+                    )
                 }
         )
 
@@ -578,12 +555,7 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
             onClick = {
                 if (email.isNotEmpty() && password.isNotEmpty() && email.endsWith("tarc.edu.my")) {
                     showDialog = true
-                    signInWithEmailPassword(
-                        email,
-                        password,
-                        firebaseAuth,
-                        context,
-                        navController,
+                    signInWithEmailPassword(email, password, firebaseAuth, context, navController,
                         onMfaRequired = { resolver ->
                             showDialog = false
                             Toast.makeText(context, "MFA Required. Please Verify", Toast.LENGTH_SHORT).show()
@@ -630,6 +602,25 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
         Spacer(modifier = Modifier.height(16.dp))
 
     }
+
+    if (showEmailDialog) {
+        AlertDialog(
+            onDismissRequest = { showEmailDialog = false },
+            title = { Text("Email Sent") },
+            text = { Text("An email has been sent to $email. Please check your inbox to reset your password.") },
+            confirmButton = {
+                Button(
+                    onClick = { showEmailDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+                ) {
+                    Text("Done")
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+
     // Show Loading Dialog
     LoadingDialog(text="Logging in...",showDialog = showDialog, onDismiss = { showDialog = false })
 }
@@ -1285,7 +1276,7 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
             value = phoneNumber,
             onValueChange = {
                 phoneNumber = it
-                isPhoneValid = phoneNumber.startsWith("01") && phoneNumber.length <= 11
+                isPhoneValid = phoneNumber.startsWith("01") && phoneNumber.length <= 11 && phoneNumber.length >= 10
             },
             label = { Text("Phone Number") },
             isError = !isPhoneValid,
