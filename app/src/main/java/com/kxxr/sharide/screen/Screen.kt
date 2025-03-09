@@ -31,6 +31,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -50,6 +51,7 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import coil.compose.rememberAsyncImagePainter
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
@@ -76,6 +78,7 @@ import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.kxxr.sharide.DataClass.VehicleData
 import com.kxxr.sharide.R
 import com.kxxr.sharide.db.ResolverHolder
 import com.kxxr.sharide.logic.NetworkViewModel
@@ -83,6 +86,7 @@ import kotlinx.coroutines.delay
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -3120,6 +3124,7 @@ fun DuplicateVehicle(navController: NavController) {
         }
     }
 }
+
 @Composable
 fun AddNewVehicle(navController: NavController) {
     val context = LocalContext.current
@@ -3142,9 +3147,31 @@ fun AddNewVehicle(navController: NavController) {
     // Dialog visibility state
     var showDialog by remember { mutableStateOf(false) }
     val firebaseAuth = FirebaseAuth.getInstance()
+    var verificationStatus by remember { mutableStateOf("Pending Verification") }
+    var backVerificationStatus by remember { mutableStateOf("Pending Verification") }
 
     // Get logged-in user's ID
     val userId = firebaseAuth.currentUser?.uid ?: "unknown_user"
+
+    //load user privious image
+    var existingcarfrontUrl by remember { mutableStateOf<String?>(null) }
+    var existingcarbackUrl by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(userId) {
+        showDialog = true
+        loadVehicleData(userId) { vehicle ->
+            vehicle?.let {
+                carmake = it.carMake
+                carmodel = it.carModel
+                carcolor = it.carColor
+                registrationnum = it.registrationNum
+                existingcarfrontUrl = it.carFrontPhoto
+                existingcarbackUrl = it.carBackPhoto
+            }
+            showDialog = false
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -3270,16 +3297,65 @@ fun AddNewVehicle(navController: NavController) {
         UploadIdButton { uri ->
             carfronturi =  uri
         }
-        if (carfronturi != null) {
+
+        if(existingcarfrontUrl != null){
+            Image(
+                painter = rememberAsyncImagePainter(existingcarfrontUrl),
+                contentDescription = "Front Car Image",
+                modifier = Modifier
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(color = Color.Green),
+                    .background(Color.Green),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     text = "Done",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f) // Ensures the "Done" text takes available space
+                )
+
+                IconButton(onClick = { existingcarfrontUrl = null }) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Reset",
+                        tint = Color.Black
+                    )
+                }
+            }
+        }
+
+        if (carfronturi != null) {
+            existingcarfrontUrl = null
+            detectPlateNumber(context, carfronturi!!, registrationnum) { isMatch, message ->
+                verificationStatus = message
+            }
+
+            Image(
+                painter = rememberAsyncImagePainter(carfronturi),
+                contentDescription = "Front Car Image",
+                modifier = Modifier
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(if (verificationStatus.contains("Matched")) Color.Green else Color.Red,),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = verificationStatus,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black,
                     textAlign = TextAlign.Center,
@@ -3314,16 +3390,63 @@ fun AddNewVehicle(navController: NavController) {
         UploadIdButton { uri ->
             carbackuri =  uri
         }
-        if (carbackuri != null) {
+        if(existingcarbackUrl != null){
+            Image(
+                painter = rememberAsyncImagePainter(existingcarbackUrl),
+                contentDescription = "Front Car Image",
+                modifier = Modifier
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(color = Color.Green),
+                    .background(Color.Green),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     text = "Done",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f) // Ensures the "Done" text takes available space
+                )
+
+                IconButton(onClick = { existingcarbackUrl = null }) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Reset",
+                        tint = Color.Black
+                    )
+                }
+            }
+        }
+        if (carbackuri != null) {
+            existingcarbackUrl = null
+            detectPlateNumber(context, carbackuri!!, registrationnum) { isMatch, message ->
+                backVerificationStatus = message
+            }
+            carbackuri?.let {
+                Image(
+                    painter = rememberAsyncImagePainter(it),
+                    contentDescription = "Front Car Image",
+                    modifier = Modifier
+                        .height(200.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(if (backVerificationStatus.contains("Matched")) Color.Green else Color.Red),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = backVerificationStatus,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black,
                     textAlign = TextAlign.Center,
@@ -3347,102 +3470,26 @@ fun AddNewVehicle(navController: NavController) {
             onClick = {
                 showDialog = true
 
-                if(carmake.isNotEmpty() && carmodel.isNotEmpty() && carcolor.isNotEmpty() && registrationnum.isNotEmpty() && carfronturi != null && carbackuri != null){
-                    firestore.collection("Vehicle")
-                        .whereEqualTo("CarRegistrationNumber", registrationnum)
-                        .get()
-                        .addOnSuccessListener { querySnapshot ->
-                            if (querySnapshot.isEmpty) {
-                                // Upload lesen and profile picture to Firebase Storage
-                                val carfrontUrl =
-                                    firebaseStorage.reference.child("Vehicle Photo/$caseId/car_front.jpg")
-                                val carbackUrl =
-                                    firebaseStorage.reference.child("Vehicle Photo/$caseId/car_back.jpg")
-
-                                // Upload Front
-                                carfronturi?.let {
-                                    carfrontUrl.putFile(it).addOnSuccessListener {
-                                        carfrontUrl.downloadUrl.addOnSuccessListener { fronturl ->
-                                            // Upload Back
-                                            carbackuri?.let { it1 ->
-                                                carbackUrl.putFile(it1).addOnSuccessListener {
-                                                    carbackUrl.downloadUrl.addOnSuccessListener { backUrl ->
-                                                        // Save details to Firestore
-                                                        val userData = hashMapOf(
-                                                            "caseId" to caseId,
-                                                            "CarMake" to carmake,
-                                                            "CarModel" to carmodel,
-                                                            "CarColour" to carcolor,
-                                                            "CarRegistrationNumber" to registrationnum,
-                                                            "CarFrontPhoto" to fronturl.toString(),
-                                                            "CarBackPhoto" to backUrl.toString(),
-                                                            "status" to "Active",
-                                                            "UserID" to userId
-                                                        )
-                                                        firestore.collection("Vehicle")
-                                                            .document(caseId)
-                                                            .set(userData)
-                                                            .addOnSuccessListener {
-                                                                // Update driver collection with the required changes
-                                                                firestore.collection("driver")
-                                                                    .document(userId)
-                                                                    .update(
-                                                                        mapOf(
-                                                                            "vehicleId" to caseId, // Update vehicleid to caseId
-                                                                            "vehiclePlate" to registrationnum // Update vehicleplate to CarRegistrationNumber
-                                                                        )
-                                                                    )
-                                                                    .addOnSuccessListener {
-                                                                        showDialog = false
-                                                                        Toast.makeText(
-                                                                            context,
-                                                                            "Submitted Successfully",
-                                                                            Toast.LENGTH_SHORT
-                                                                        ).show()
-                                                                        navController.navigate("driversuccess")
-                                                                    }
-                                                                    .addOnFailureListener { e ->
-                                                                        showDialog = false
-                                                                        Toast.makeText(
-                                                                            context,
-                                                                            "Error: ${e.message}",
-                                                                            Toast.LENGTH_SHORT
-                                                                        ).show()
-                                                                    }
-                                                            }
-                                                            .addOnFailureListener { e ->
-                                                                showDialog = false
-                                                                Toast.makeText(
-                                                                    context,
-                                                                    "Error: ${e.message}",
-                                                                    Toast.LENGTH_SHORT
-                                                                ).show()
-                                                            }
-                                                    }
-                                                }.addOnFailureListener { e ->
-                                                    showDialog = false
-                                                    Toast.makeText(
-                                                        context,
-                                                        "Error uploading selfie: ${e.message}",
-                                                        Toast.LENGTH_SHORT
-                                                    ).show()
-                                                }
-                                            }
-                                        }
-                                    }.addOnFailureListener { e ->
-                                        showDialog = false
-                                        Toast.makeText(
-                                            context,
-                                            "Error uploading ID: ${e.message}",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
-                                }
-                            } else {
-                                showDialog = false
-                                navController.navigate("duplicatecar")
-                            }
-                        }
+                if(
+                    carmake.isNotEmpty() && carmodel.isNotEmpty() && carcolor.isNotEmpty()
+                    && registrationnum.isNotEmpty() && carfronturi != null && carbackuri != null
+                    && backVerificationStatus.contains("Matched") && verificationStatus.contains("Matched")
+                ){
+                    handleVehicleSubmission(
+                        context = context,
+                        navController = navController,
+                        userId = userId,
+                        caseId = caseId,
+                        carMake = carmake,
+                        carModel = carmodel,
+                        carColor = carcolor,
+                        registrationNum = registrationnum,
+                        carFrontUri = carfronturi,
+                        carBackUri = carbackuri,
+                        verificationStatus = verificationStatus,
+                        backVerificationStatus = backVerificationStatus,
+                        onComplete = { showDialog = false }
+                    )
                 }else{
                     showDialog = false
                     Toast.makeText(context, "Please fill up all the details", Toast.LENGTH_SHORT).show()
@@ -3460,6 +3507,186 @@ fun AddNewVehicle(navController: NavController) {
         LoadingDialog(text= "Uploading..." , showDialog = showDialog, onDismiss = { showDialog = false })
     }
 }
+
+fun loadVehicleData(userId: String, onResult: (VehicleData?) -> Unit) {
+    val firestore = FirebaseFirestore.getInstance()
+    firestore.collection("Vehicle")
+        .whereEqualTo("UserID", userId)
+        .get()
+        .addOnSuccessListener { querySnapshot ->
+            if (!querySnapshot.isEmpty) {
+                val document = querySnapshot.documents[0]
+                val vehicle = VehicleData(
+                    carMake = document.getString("CarMake") ?: "",
+                    carModel = document.getString("CarModel") ?: "",
+                    carColor = document.getString("CarColour") ?: "",
+                    registrationNum = document.getString("CarRegistrationNumber") ?: "",
+                    carFrontPhoto = document.getString("CarFrontPhoto") ?: "",
+                    carBackPhoto = document.getString("CarBackPhoto") ?: ""
+                )
+                onResult(vehicle)
+            } else {
+                onResult(null) // No vehicle found
+            }
+        }
+        .addOnFailureListener {
+            onResult(null) // Handle error
+        }
+}
+
+fun handleVehicleSubmission(
+    context: Context,
+    navController: NavController,
+    userId: String,
+    caseId: String,
+    carMake: String,
+    carModel: String,
+    carColor: String,
+    registrationNum: String,
+    carFrontUri: Uri?,
+    carBackUri: Uri?,
+    verificationStatus: String,
+    backVerificationStatus: String,
+    onComplete: () -> Unit
+) {
+    val firestore = FirebaseFirestore.getInstance()
+    val firebaseStorage = FirebaseStorage.getInstance()
+
+    // Validate inputs
+    if (
+        carMake.isEmpty() || carModel.isEmpty() || carColor.isEmpty() || registrationNum.isEmpty()
+        || carFrontUri == null || carBackUri == null
+        || !verificationStatus.contains("Matched") || !backVerificationStatus.contains("Matched")
+    ) {
+        Toast.makeText(context, "Please fill up all the details", Toast.LENGTH_SHORT).show()
+        onComplete()
+        return
+    }
+
+    // Check if the plate number already exists
+    firestore.collection("Vehicle")
+        .whereEqualTo("CarRegistrationNumber", registrationNum)
+        .get()
+        .addOnSuccessListener { querySnapshot ->
+            if (!querySnapshot.isEmpty) {
+                Toast.makeText(context, "Duplicate Car Plate!", Toast.LENGTH_SHORT).show()
+                navController.navigate("duplicatecar")
+                onComplete()
+                return@addOnSuccessListener
+            }
+
+            // Proceed with uploading images
+            val carFrontRef = firebaseStorage.reference.child("Vehicle Photo/$caseId/car_front.jpg")
+            val carBackRef = firebaseStorage.reference.child("Vehicle Photo/$caseId/car_back.jpg")
+
+            carFrontRef.putFile(carFrontUri).addOnSuccessListener {
+                carFrontRef.downloadUrl.addOnSuccessListener { frontUrl ->
+
+                    carBackRef.putFile(carBackUri).addOnSuccessListener {
+                        carBackRef.downloadUrl.addOnSuccessListener { backUrl ->
+
+                            // Save details to Firestore
+                            val vehicleData = hashMapOf(
+                                "caseId" to caseId,
+                                "CarMake" to carMake,
+                                "CarModel" to carModel,
+                                "CarColour" to carColor,
+                                "CarRegistrationNumber" to registrationNum,
+                                "CarFrontPhoto" to frontUrl.toString(),
+                                "CarBackPhoto" to backUrl.toString(),
+                                "status" to "Active",
+                                "UserID" to userId
+                            )
+
+                            firestore.collection("Vehicle")
+                                .document(caseId)
+                                .set(vehicleData)
+                                .addOnSuccessListener {
+                                    // Update driver details
+                                    firestore.collection("driver")
+                                        .document(userId)
+                                        .update(
+                                            mapOf(
+                                                "vehicleId" to caseId,
+                                                "vehiclePlate" to registrationNum
+                                            )
+                                        )
+                                        .addOnSuccessListener {
+                                            Toast.makeText(context, "Submitted Successfully", Toast.LENGTH_SHORT).show()
+                                            navController.navigate("driversuccess")
+                                            onComplete()
+                                        }
+                                        .addOnFailureListener { e ->
+                                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                            onComplete()
+                                        }
+                                }
+                                .addOnFailureListener { e ->
+                                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    onComplete()
+                                }
+                        }
+                    }.addOnFailureListener { e ->
+                        Toast.makeText(context, "Error uploading back photo: ${e.message}", Toast.LENGTH_SHORT).show()
+                        onComplete()
+                    }
+                }
+            }.addOnFailureListener { e ->
+                Toast.makeText(context, "Error uploading front photo: ${e.message}", Toast.LENGTH_SHORT).show()
+                onComplete()
+            }
+        }
+}
+
+fun detectPlateNumber(
+    context: Context,
+    imageUri: Uri,
+    expectedPlateNumber: String,
+    onResult: (Boolean, String) -> Unit // (isMatch, message)
+) {
+    val inputImage = InputImage.fromFilePath(context, imageUri)
+    val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+
+    if (expectedPlateNumber.isBlank()) {
+        onResult(false, "Plate Number Not Found")
+        return
+    }
+
+    recognizer.process(inputImage)
+        .addOnSuccessListener { visionText ->
+            val extractedText = visionText.text?.uppercase(Locale.getDefault()) ?: ""
+
+            // Ensure extracted text is not empty
+            if (extractedText.isBlank()) {
+                onResult(false, "No Text Detected in Image")
+                return@addOnSuccessListener
+            }
+
+            // Ensure plate number is correctly formatted
+            val plateParts = expectedPlateNumber.trim().split(" ")
+            if (plateParts.size < 2) {
+                onResult(false, "Invalid Plate Number Format")
+                return@addOnSuccessListener
+            }
+
+            val firstPart = plateParts.getOrNull(0) ?: ""
+            val secondPart = plateParts.getOrNull(1) ?: ""
+
+            // Ensure BOTH parts exist separately in the extracted text
+            val firstPartMatch = "\\b$firstPart\\b".toRegex().containsMatchIn(extractedText)
+            val secondPartMatch = "\\b$secondPart\\b".toRegex().containsMatchIn(extractedText)
+
+            if (firstPartMatch && secondPartMatch) {
+                onResult(true, "Plate Number Matched")
+            } else {
+                onResult(false, "Plate Number Not Found")
+            }
+        }
+        .addOnFailureListener {
+            onResult(false, "Failed to process image")
+        }
+}
+
 
 @Composable
 fun DriverSuccess(navController: NavController) {
@@ -3493,10 +3720,10 @@ fun DriverSuccess(navController: NavController) {
         )
         Spacer(modifier = Modifier.height(34.dp))
 
-        // "Try Again" Button
+        // Button
         Button(
             onClick = {
-                //navController.navigate("intro")
+                navController.navigate("home")
             }, // Navigate to the verification screen
             modifier = Modifier
                 .fillMaxWidth()

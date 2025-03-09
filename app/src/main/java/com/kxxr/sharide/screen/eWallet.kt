@@ -71,6 +71,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.Query
+import com.kxxr.sharide.DataClass.Transaction
 import com.kxxr.sharide.db.PinAttemptManager
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -818,8 +819,7 @@ fun TransactionItem(transaction: Transaction) {
     }
 }
 
-// Data class for transaction
-data class Transaction(val date: String, val description: String, val amount: Double)
+
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable

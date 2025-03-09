@@ -346,7 +346,7 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
                 Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
                 if(isDriver){
-                    ProfileCard(title = "Edit Vehicle Info",img = "car_front", onClick = { showEditDialog = true })
+                    ProfileCard(title = "Edit Vehicle Info",img = "car_front", onClick = { navController.navigate("addnewcar") })
                 }
             }
 
@@ -368,10 +368,9 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
                 Text(text = "Log Out", color = Color.White, fontSize = 16.sp)
             }
 
-            Spacer(modifier = Modifier.height(150.dp)) // Pushes Log Out button to bottom
+            Spacer(modifier = Modifier.height(150.dp))
 
             Text(text = "© SHARide 2025 \n Ziegler Tan & David Ng\nTARUMT Project ONLY", color = Color.LightGray, fontSize = 16.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-
         }
     }
 
