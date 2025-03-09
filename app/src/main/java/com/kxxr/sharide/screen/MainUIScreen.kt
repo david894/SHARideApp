@@ -215,7 +215,7 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
     var updatedPhoneNumber by remember { mutableStateOf(phoneNumber) }
 
     // Retrieve isDriver state from SharedPreferences
-    var isDriver by remember { mutableStateOf(getDriverPreference(context)) }
+    val isDriver by remember { mutableStateOf(getDriverPreference(context)) }
 
     // Fetch user data from Firestore
     LaunchedEffect(Unit) {

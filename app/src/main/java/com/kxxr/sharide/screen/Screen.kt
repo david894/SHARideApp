@@ -2013,6 +2013,14 @@ fun CustomerServiceScreen(navController: NavController) {
         }
 
         if (studentIdUri != null) {
+            Image(
+                painter = rememberAsyncImagePainter(studentIdUri), // Load from URL
+                contentDescription = "Student ID",
+                modifier = Modifier
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2066,6 +2074,14 @@ fun CustomerServiceScreen(navController: NavController) {
             selfieUri =  uri
         }
         if (selfieUri != null) {
+            Image(
+                painter = rememberAsyncImagePainter(selfieUri), // Load from URL
+                contentDescription = "Selfie",
+                modifier = Modifier
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2846,6 +2862,14 @@ fun DriverSignUpScreen(navController: NavController, drivingid: String, lesen: S
             selfieUri =  uri
         }
         if (selfieUri != null) {
+            Image(
+                painter = rememberAsyncImagePainter(selfieUri), // Load from URL
+                contentDescription = "Selfie",
+                modifier = Modifier
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -3503,6 +3527,15 @@ fun AddNewVehicle(navController: NavController) {
             Text("Submit")
         }
 
+        TextButton(
+            onClick = {
+                navController.navigate("driverCustomerService")
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = "Contact Customer Service", color = Color.Blue, fontSize = 16.sp)
+        }
+
         // Show Loading Dialog
         LoadingDialog(text= "Uploading..." , showDialog = showDialog, onDismiss = { showDialog = false })
     }
@@ -3849,6 +3882,14 @@ fun DriverCustomerService(navController: NavController) {
             IDUri =  uri
         }
         if (IDUri != null) {
+            Image(
+                painter = rememberAsyncImagePainter(IDUri), // Load from URL
+                contentDescription = "ID Image",
+                modifier = Modifier
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -3906,6 +3947,14 @@ fun DriverCustomerService(navController: NavController) {
             selfieUri =  uri
         }
         if (selfieUri != null) {
+            Image(
+                painter = rememberAsyncImagePainter(selfieUri), // Load from URL
+                contentDescription = "Selfie",
+                modifier = Modifier
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -4040,6 +4089,14 @@ fun DriverCustomerService(navController: NavController) {
             carfronturi =  uri
         }
         if (carfronturi != null) {
+            Image(
+                painter = rememberAsyncImagePainter(carfronturi), // Load from URL
+                contentDescription = "Front Car Image",
+                modifier = Modifier
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -4084,6 +4141,14 @@ fun DriverCustomerService(navController: NavController) {
             carbackuri =  uri
         }
         if (carbackuri != null) {
+            Image(
+                painter = rememberAsyncImagePainter(carfronturi), // Load from URL
+                contentDescription = "Front Car Image",
+                modifier = Modifier
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
