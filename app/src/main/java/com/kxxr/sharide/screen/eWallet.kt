@@ -70,7 +70,6 @@ import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import com.google.firebase.Timestamp
-import com.google.firebase.firestore.Query
 import com.kxxr.sharide.DataClass.Transaction
 import com.kxxr.sharide.db.PinAttemptManager
 import java.text.SimpleDateFormat
@@ -1245,7 +1244,6 @@ fun ChangePaymentPIN(navController: NavController) {
         errorMessage = null
     }
 }
-
 
 fun verifyCurrentPin(
     context: Context,
