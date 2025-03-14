@@ -1,8 +1,8 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
+    alias(libs.plugins.google.gms.google.services)
     id("kotlin-kapt")
-
 }
 
 android {
@@ -60,6 +60,13 @@ dependencies {
     implementation("androidx.compose.ui:ui:1.5.4")
     implementation("androidx.compose.material3:material3:1.1.2")
     implementation("androidx.compose.ui:ui-tooling-preview:1.5.4")
+
+    // Google Maps Compose
+    implementation("com.google.maps.android:maps-compose:2.11.4")
+    implementation("com.google.android.gms:play-services-maps:18.2.0")
+
+    // Location Services
+    implementation("com.google.android.gms:play-services-location:21.0.1")
 
     // Permission Handling (Accompanist no longer needed)
     implementation("com.google.accompanist:accompanist-permissions:0.31.1-alpha")

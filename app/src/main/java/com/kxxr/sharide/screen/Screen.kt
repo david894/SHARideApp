@@ -197,7 +197,7 @@ fun NoInternetScreen(onRetry: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(26.dp))
         Image(
-            painter = painterResource(id = com.kxxr.logiclibrary.R.drawable.error), // Replace with your error image resource
+            painter = painterResource(id = R.drawable.error), // Replace with your error image resource
             contentDescription = "Error Icon",
             modifier = Modifier.size(100.dp)
         )
@@ -383,7 +383,7 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
     // Dialog visibility state
     var showDialog by remember { mutableStateOf(false) }
     var showEmailDialog by remember { mutableStateOf(false) }
-
+    val type = "user"
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -414,8 +414,7 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
             contract = ActivityResultContracts.StartActivityForResult()
         ) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
-                showDialog = true
-                handleGoogleSignIn(result.data, firebaseAuth, navController, context)
+                handleGoogleSignIn(result.data, firebaseAuth, navController, context,type)
             }
         }
 
@@ -504,14 +503,18 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
             modifier = Modifier
                 .align(Alignment.End)
                 .clickable {
-                    resetPassword(email,context,
-                        onSuccess = {
-                            showDialog = false
-                            showEmailDialog = true},
-                        onFailure = {
-                            showDialog = false
-                        }
-                    )
+                    if(email.isNotEmpty()&&email.endsWith("tarc.edu.my")){
+                        resetPassword(email,context,
+                            onSuccess = {
+                                showDialog = false
+                                showEmailDialog = true},
+                            onFailure = {
+                                showDialog = false
+                            }
+                        )
+                    }else{
+                        Toast.makeText(context,"Please enter your email first",Toast.LENGTH_SHORT).show()
+                    }
                 }
         )
 
@@ -526,7 +529,7 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
                         onMfaRequired = { resolver ->
                             showDialog = false
                             Toast.makeText(context, "MFA Required. Please Verify", Toast.LENGTH_SHORT).show()
-                            handleMultiFactorAuthentication(resolver, firebaseAuth, navController, context)
+                            handleMultiFactorAuthentication(resolver, firebaseAuth, navController, context,type)
                         },
                         onFailure = { error ->
                             showDialog = false

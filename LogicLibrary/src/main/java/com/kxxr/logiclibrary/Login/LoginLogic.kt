@@ -27,7 +27,8 @@ fun handleGoogleSignIn(
     data: Intent?,
     firebaseAuth: FirebaseAuth,
     navController: NavController,
-    context: Context
+    context: Context,
+    type : String
 ) {
     val task = GoogleSignIn.getSignedInAccountFromIntent(data)
     try {
@@ -59,12 +60,30 @@ fun handleGoogleSignIn(
                         // Step 4: Check if User Already Exists in Firestore by userId FIELD
                         val db = FirebaseFirestore.getInstance()
                         db.collection("users")
-                            .whereEqualTo("userId", user.uid) // Check if userId field exists
+                            .whereEqualTo("firebaseUserId", user.uid) // Check if userId field exists
                             .get()
                             .addOnSuccessListener { documents ->
                                 if (!documents.isEmpty) {
-                                    Toast.makeText(context, "Sign-In Successful", Toast.LENGTH_LONG).show()
-                                    navController.navigate("home")
+                                    if(type == "admin"){
+                                        db.collection("Admin")
+                                            .whereEqualTo("userId", user.uid) // Check if userId field exists
+                                            .get()
+                                            .addOnSuccessListener { documents ->
+                                                if (!documents.isEmpty) {
+                                                    Toast.makeText(context, "Sign-In Successful", Toast.LENGTH_LONG).show()
+                                                    navController.navigate("home")
+                                                }else{
+                                                    firebaseAuth.signOut()
+                                                    Toast.makeText(context, "You're not an Admin!", Toast.LENGTH_LONG).show()
+                                                }
+                                            }
+                                            .addOnFailureListener {
+                                                Toast.makeText(context, "Failed to check account existence", Toast.LENGTH_LONG).show()
+                                            }
+                                    }else{
+                                        Toast.makeText(context, "Sign-In Successful", Toast.LENGTH_LONG).show()
+                                        navController.navigate("home")
+                                    }
                                 } else {
                                     firebaseAuth.signOut()
                                     Toast.makeText(context, "Account does not exist. Please register first.",
@@ -86,7 +105,8 @@ fun handleGoogleSignIn(
                             resolver,
                             firebaseAuth,
                             navController,
-                            context
+                            context,
+                            type
                         )
                     } else {
                         Toast.makeText(context, "Login Failed: ${exception?.localizedMessage}",
@@ -99,12 +119,12 @@ fun handleGoogleSignIn(
     }
 }
 
-
 fun handleMultiFactorAuthentication(
     resolver: MultiFactorResolver,
     firebaseAuth: FirebaseAuth,
     navController: NavController,
-    context: Context
+    context: Context,
+    user: String
 ) {
     try {
         val activity = context as? Activity ?: throw Exception("Invalid Context")
