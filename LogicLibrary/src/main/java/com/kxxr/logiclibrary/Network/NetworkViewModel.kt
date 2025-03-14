@@ -1,4 +1,5 @@
-package com.kxxr.sharide.logic
+package com.kxxr.logiclibrary.Network
+
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel

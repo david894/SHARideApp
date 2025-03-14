@@ -3,6 +3,12 @@ import java.net.URI
 include(":sharmin")
 
 
+include(":LogicLibrary")
+
+
+include(":app")
+
+
 pluginManagement {
     repositories {
         google {

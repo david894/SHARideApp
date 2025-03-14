@@ -1,4 +1,4 @@
-package com.kxxr.sharide.logic
+package com.kxxr.logiclibrary.Network
 
 import android.content.Context
 import android.net.ConnectivityManager

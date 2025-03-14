@@ -2,14 +2,10 @@ package com.kxxr.sharide.screen
 
 import android.app.Activity
 import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.net.Uri
 import android.provider.MediaStore
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -54,22 +50,8 @@ import androidx.navigation.compose.rememberNavController
 import coil.compose.rememberAsyncImagePainter
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
 import com.google.firebase.Firebase
-import com.google.firebase.FirebaseException
-import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
-import com.google.firebase.auth.FirebaseAuthInvalidUserException
-import com.google.firebase.auth.FirebaseAuthMultiFactorException
-import com.google.firebase.auth.FirebaseUser
-import com.google.firebase.auth.GoogleAuthProvider
-import com.google.firebase.auth.MultiFactorResolver
-import com.google.firebase.auth.PhoneAuthCredential
-import com.google.firebase.auth.PhoneAuthOptions
-import com.google.firebase.auth.PhoneAuthProvider
-import com.google.firebase.auth.PhoneMultiFactorGenerator
-import com.google.firebase.auth.PhoneMultiFactorInfo
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.firestore
 import com.google.firebase.storage.FirebaseStorage
@@ -78,17 +60,19 @@ import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.kxxr.logiclibrary.Login.handleGoogleSignIn
+import com.kxxr.logiclibrary.Login.handleMultiFactorAuthentication
+import com.kxxr.logiclibrary.Login.resetPassword
+import com.kxxr.logiclibrary.Login.signInWithEmailPassword
+import com.kxxr.logiclibrary.Network.NetworkViewModel
 import com.kxxr.sharide.DataClass.VehicleData
 import com.kxxr.sharide.R
-import com.kxxr.sharide.db.ResolverHolder
-import com.kxxr.sharide.logic.NetworkViewModel
 import kotlinx.coroutines.delay
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
 import java.util.UUID
-import java.util.concurrent.TimeUnit
 
 @Composable
 fun AppNavHost(
@@ -195,27 +179,6 @@ fun AppNavHost(
     }
 }
 
-
-@Composable
-fun isConnectedToInternet(): Boolean {
-    val context = LocalContext.current
-    val connectivityManager = remember {
-        context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-    }
-
-    val networkStatus = remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        val network = connectivityManager.activeNetwork
-        val capabilities = connectivityManager.getNetworkCapabilities(network)
-        networkStatus.value = capabilities != null &&
-                (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
-                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR))
-    }
-
-    return networkStatus.value
-}
-
 @Composable
 fun NoInternetScreen(onRetry: () -> Unit) {
     Column(
@@ -234,7 +197,7 @@ fun NoInternetScreen(onRetry: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(26.dp))
         Image(
-            painter = painterResource(id = R.drawable.error), // Replace with your error image resource
+            painter = painterResource(id = com.kxxr.logiclibrary.R.drawable.error), // Replace with your error image resource
             contentDescription = "Error Icon",
             modifier = Modifier.size(100.dp)
         )
@@ -627,181 +590,6 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
 
     // Show Loading Dialog
     LoadingDialog(text="Logging in...",showDialog = showDialog, onDismiss = { showDialog = false })
-}
-
-fun handleGoogleSignIn(
-    data: Intent?,
-    firebaseAuth: FirebaseAuth,
-    navController: NavController,
-    context: Context
-) {
-    val task = GoogleSignIn.getSignedInAccountFromIntent(data)
-    try {
-        val account = task.getResult(ApiException::class.java)!!
-        val googleCredential = GoogleAuthProvider.getCredential(account.idToken, null)
-        val email = account.email ?: ""
-
-        // Step 1: Allow Only @tarc.edu.my Emails
-        if (!email.endsWith("tarc.edu.my")) {
-            Toast.makeText(context, "Only TARC emails are allowed",Toast.LENGTH_SHORT).show()
-            firebaseAuth.signOut()
-            navController.navigate("login")
-            return
-        }
-
-        firebaseAuth.signInWithCredential(googleCredential)
-            .addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    val user = firebaseAuth.currentUser
-
-                    if (user != null) {
-                        // Step 3: Check if Email is Verified
-                        if (!user.isEmailVerified) {
-                            Toast.makeText(context, "Please verify your email before signing in.",Toast.LENGTH_LONG).show()
-                            firebaseAuth.signOut()
-                            return@addOnCompleteListener
-                        }
-                        // Step 4: Check if User Already Exists in Firestore by userId FIELD
-                        val db = FirebaseFirestore.getInstance()
-                        db.collection("users")
-                            .whereEqualTo("userId", user.uid) // Check if userId field exists
-                            .get()
-                            .addOnSuccessListener { documents ->
-                                if (!documents.isEmpty) {
-                                    Toast.makeText(context, "Sign-In Successful",Toast.LENGTH_LONG).show()
-                                    navController.navigate("home")
-                                } else {
-                                    firebaseAuth.signOut()
-                                    Toast.makeText(context, "Account does not exist. Please register first.",Toast.LENGTH_LONG).show()
-                                }
-                            }
-                            .addOnFailureListener {
-                                Toast.makeText(context, "Failed to check account existence",Toast.LENGTH_LONG).show()
-                            }
-                    }
-                } else {
-                    val exception = task.exception
-                    if (exception is FirebaseAuthMultiFactorException) {
-                        Toast.makeText(context, "MFA Required. Please Verify",Toast.LENGTH_LONG).show()
-                        val resolver = exception.resolver
-
-                        // Now the resolver is not null
-                        handleMultiFactorAuthentication(
-                            resolver,
-                            firebaseAuth,
-                            navController,
-                            context
-                        )
-                    } else {
-                        Toast.makeText(context, "Login Failed: ${exception?.localizedMessage}",Toast.LENGTH_LONG).show()
-                    }
-                }
-            }
-    } catch (e: ApiException) {
-        Toast.makeText(context, "Google Sign-In failed: ${e.localizedMessage}",Toast.LENGTH_LONG).show()
-    }
-}
-
-
-fun handleMultiFactorAuthentication(
-    resolver: MultiFactorResolver,
-    firebaseAuth: FirebaseAuth,
-    navController: NavController,
-    context: Context
-) {
-    try {
-        val activity = context as? Activity ?: throw Exception("Invalid Context")
-
-        if (resolver.hints.isEmpty()) {
-            Toast.makeText(context, "No Phone Number Enrolled for MFA", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val phoneInfo = resolver.hints[0] as? PhoneMultiFactorInfo
-            ?: throw Exception("PhoneMultiFactorInfo is null")
-
-        ResolverHolder.resolver = resolver // Store Resolver Here
-
-        val options = PhoneAuthOptions.newBuilder(firebaseAuth)
-            .setActivity(activity)
-            .setMultiFactorSession(resolver.session) // Must Set Session
-            .setMultiFactorHint(phoneInfo) // Use MultiFactor Hint Here
-            .setTimeout(60L, TimeUnit.SECONDS)
-            .setCallbacks(object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
-
-                override fun onVerificationCompleted(credential: PhoneAuthCredential) {
-                    val assertion = PhoneMultiFactorGenerator.getAssertion(credential)
-                    resolver.resolveSignIn(assertion)
-                        .addOnSuccessListener {
-                            Toast.makeText(context, "MFA Verified Successfully", Toast.LENGTH_SHORT).show()
-                            navController.navigate("home")
-                        }
-                        .addOnFailureListener { e ->
-                            Toast.makeText(context, "MFA Failed: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
-                        }
-                }
-
-                override fun onVerificationFailed(e: FirebaseException) {
-                    Toast.makeText(context, "OTP Verification Failed: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
-                }
-
-                override fun onCodeSent(verificationId: String, token: PhoneAuthProvider.ForceResendingToken) {
-                    Toast.makeText(context, "OTP Sent to ${phoneInfo.phoneNumber}", Toast.LENGTH_SHORT).show()
-                    val route = "Login"
-                    navController.navigate("verifyOtp/$verificationId/${phoneInfo.phoneNumber}/$route") // Optional Navigate to OTP Screen
-                }
-            })
-            .build()
-
-        PhoneAuthProvider.verifyPhoneNumber(options)
-
-    } catch (e: Exception) {
-        Toast.makeText(context, "Unexpected Error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
-    }
-}
-
-fun signInWithEmailPassword(
-    email: String,
-    password: String,
-    firebaseAuth: FirebaseAuth,
-    context: Context,
-    navController: NavController,
-    onMfaRequired: (MultiFactorResolver) -> Unit,
-    onFailure: (String) -> Unit
-) {
-    firebaseAuth.signInWithEmailAndPassword(email, password)
-        .addOnCompleteListener { task ->
-            if (task.isSuccessful) {
-                val user = firebaseAuth.currentUser
-
-                user?.reload()?.addOnSuccessListener {
-                    if (user.isEmailVerified) {
-                        navController.navigate("home") // Direct Login if MFA not required
-                    } else {
-                        firebaseAuth.signOut()
-                        onFailure("Please verify your email before logging in!")
-                    }
-                }?.addOnFailureListener { e ->
-                    onFailure("Error checking email verification: ${e.message}")
-                }
-            }
-        }
-        .addOnFailureListener { exception ->
-            when (exception) {
-                is FirebaseAuthMultiFactorException -> {
-                    // ✅ Prompt user for Multi-Factor Authentication
-                    onMfaRequired(exception.resolver)
-                }
-
-                is FirebaseAuthInvalidUserException, is FirebaseAuthInvalidCredentialsException -> {
-                    onFailure("Invalid Credentials! Try again.")
-                }
-
-                else -> {
-                    onFailure("Login failed: ${exception.localizedMessage}")
-                }
-            }
-        }
 }
 
 @Composable

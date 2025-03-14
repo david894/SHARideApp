@@ -1,8 +1,8 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
-    alias(libs.plugins.google.gms.google.services)
-        id("kotlin-kapt")
+    id("kotlin-kapt")
+
 }
 
 android {
@@ -17,6 +17,9 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        vectorDrawables {
+            useSupportLibrary = true
+        }
     }
 
     buildTypes {
@@ -35,6 +38,17 @@ android {
     kotlinOptions {
         jvmTarget = "1.8"
     }
+    buildFeatures {
+        compose = true
+    }
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.1"
+    }
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
 }
 
 dependencies {
@@ -46,6 +60,9 @@ dependencies {
     implementation("androidx.compose.ui:ui:1.5.4")
     implementation("androidx.compose.material3:material3:1.1.2")
     implementation("androidx.compose.ui:ui-tooling-preview:1.5.4")
+
+    // Permission Handling (Accompanist no longer needed)
+    implementation("com.google.accompanist:accompanist-permissions:0.31.1-alpha")
 
     implementation ("com.google.android.gms:play-services-auth:20.7.0")
     implementation ("com.google.mlkit:text-recognition:16.0.1")
@@ -76,7 +93,7 @@ dependencies {
     implementation(libs.firebase.storage.ktx)
     implementation(libs.places)
     implementation(libs.androidx.room.common)
-    implementation(project(":app"))
+    implementation(project(":LogicLibrary"))
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -90,8 +107,7 @@ dependencies {
     implementation("com.google.maps.android:android-maps-utils:3.5.3")
     implementation ("androidx.work:work-runtime-ktx:2.9.0")
     implementation("androidx.room:room-runtime:2.6.1")
+    kapt("androidx.room:room-compiler:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     implementation("io.coil-kt:coil-compose:2.2.2")
-    kapt("androidx.room:room-compiler:2.6.1")
-
 }

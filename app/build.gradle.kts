@@ -3,7 +3,6 @@ plugins {
     alias(libs.plugins.jetbrains.kotlin.android)
     alias(libs.plugins.google.gms.google.services)
         id("kotlin-kapt")
-
 }
 
 android {
@@ -101,6 +100,7 @@ dependencies {
     implementation(libs.firebase.storage.ktx)
     implementation(libs.places)
     implementation(libs.androidx.room.common)
+    implementation(project(":LogicLibrary"))
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

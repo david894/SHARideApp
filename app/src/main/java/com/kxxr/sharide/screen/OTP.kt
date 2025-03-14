@@ -1,9 +1,6 @@
 package com.kxxr.sharide.screen
 
-import android.app.Activity
-import android.content.Context
 import android.widget.Toast
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,12 +9,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -25,7 +18,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -34,30 +26,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.google.firebase.FirebaseException
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.PhoneAuthCredential
-import com.google.firebase.auth.PhoneAuthOptions
 import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.auth.PhoneMultiFactorGenerator
 import com.google.firebase.firestore.FirebaseFirestore
-import com.kxxr.sharide.db.ResolverHolder
-import kotlinx.coroutines.delay
-import java.util.concurrent.TimeUnit
+import com.kxxr.logiclibrary.Login.ResolverHolder
+import com.kxxr.logiclibrary.Login.sendOtp
+import com.kxxr.logiclibrary.Login.verifyOtp
+
 
 @Composable
 fun RegisterPhoneNumberScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
@@ -175,45 +159,6 @@ fun RegisterPhoneNumberScreen(firebaseAuth: FirebaseAuth, navController: NavCont
 }
 
 
-fun sendOtp(
-    phoneNumber: String,
-    firebaseAuth: FirebaseAuth,
-    context: Context,
-    navController: NavController,
-    onResult: (String?) -> Unit // Callback to return success or error
-) {
-    var error = ""
-    val activity = context as? Activity
-    if (activity == null) {
-        Toast.makeText(context, "Invalid Context!", Toast.LENGTH_SHORT).show()
-        return
-    }
-
-    val options = PhoneAuthOptions.newBuilder(firebaseAuth)
-        .setPhoneNumber(phoneNumber)
-        .setTimeout(60L, TimeUnit.SECONDS)
-        .setActivity(activity)
-        .setCallbacks(object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
-
-            override fun onVerificationCompleted(credential: PhoneAuthCredential) {
-                Toast.makeText(context, "Phone Verified Automatically", Toast.LENGTH_SHORT).show()
-            }
-
-            override fun onVerificationFailed(e: FirebaseException) {
-                onResult(e.localizedMessage) // Return the error message
-                Toast.makeText(context, "Verification Failed: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
-            }
-
-            override fun onCodeSent(verificationId: String, token: PhoneAuthProvider.ForceResendingToken) {
-                Toast.makeText(context, "OTP Sent to $phoneNumber", Toast.LENGTH_SHORT).show()
-                val route = "Register"
-                navController.navigate("verifyOtp/$verificationId/$phoneNumber/$route")
-            }
-        })
-        .build()
-
-    PhoneAuthProvider.verifyPhoneNumber(options)
-}
 
 @Composable
 fun VerifyOtpScreen(navController: NavController, verificationId: String, firebaseAuth: FirebaseAuth,phoneNumber: String,route:String) {
@@ -283,22 +228,3 @@ fun VerifyOtpScreen(navController: NavController, verificationId: String, fireba
     }
 }
 
-fun verifyOtp(
-    verificationId: String,
-    otp: String,
-    firebaseAuth: FirebaseAuth,
-    context: Context,
-    navController: NavController
-) {
-    val credential = PhoneAuthProvider.getCredential(verificationId, otp)
-
-    firebaseAuth.currentUser?.multiFactor?.enroll(
-        PhoneMultiFactorGenerator.getAssertion(credential),
-        "My Phone"
-    )?.addOnSuccessListener {
-        Toast.makeText(context, "Phone Number Registered Successfully!", Toast.LENGTH_SHORT).show()
-        navController.navigate("home")
-    }?.addOnFailureListener {
-        Toast.makeText(context, "Failed to Register Phone: ${it.localizedMessage}", Toast.LENGTH_SHORT).show()
-    }
-}

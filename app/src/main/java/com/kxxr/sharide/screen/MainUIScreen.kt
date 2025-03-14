@@ -63,6 +63,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.PhoneMultiFactorInfo
 import com.google.firebase.firestore.firestore
 import com.google.firebase.storage.FirebaseStorage
+import com.kxxr.logiclibrary.Login.resetPassword
 import com.kxxr.sharide.R
 
 @Composable
@@ -633,29 +634,6 @@ fun CheckMfaEnrollment(firebaseAuth: FirebaseAuth, navController: NavController)
                 navController.navigate("profile") // Go back to Check MFA()
             }
         )
-    }
-}
-
-fun resetPassword(email:String,context: Context, onSuccess: () -> Unit,onFailure: () -> Unit){
-    val firebaseAuth = FirebaseAuth.getInstance()
-
-    val trimmedEmail = email.trim() // Remove unnecessary spaces
-    if (trimmedEmail.isNotEmpty()) {
-        Toast
-            .makeText(context, "Checking email...", Toast.LENGTH_SHORT)
-            .show()
-        firebaseAuth
-            .sendPasswordResetEmail(trimmedEmail)
-            .addOnCompleteListener { resetTask ->
-                if (resetTask.isSuccessful) {
-                    Toast.makeText(context, "Password reset email sent successfully!", Toast.LENGTH_LONG).show()
-                    onSuccess()
-                } else {
-                    Log.e("ResetPassword", "Error sending reset email", resetTask.exception)
-                    Toast.makeText(context, "Error: ${resetTask.exception?.message}", Toast.LENGTH_LONG).show()
-                    onFailure()
-                }
-            }
     }
 }
 
