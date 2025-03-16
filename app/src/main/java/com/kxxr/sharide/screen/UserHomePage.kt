@@ -11,6 +11,7 @@ import android.provider.Settings
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -109,7 +110,7 @@ fun getDriverPreference(context: Context): Boolean {
 
 
 
-// Displays driver screen with map,driver location,reminder list, create ride...
+// Displays driver screen with map, driver location, reminder list, create ride...
 @Composable
 fun ShowUserScreen(navController: NavController?, firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore, isDriver: Boolean, onRoleChange: (Boolean) -> Unit) {
     val context = LocalContext.current
@@ -153,29 +154,17 @@ fun ShowUserScreen(navController: NavController?, firebaseAuth: FirebaseAuth, fi
                     userLocation?.let { Marker(state = MarkerState(position = it), title = "You are here") }
                 }
             }
-            if (isDriver) {
-                RideReminder(firebaseAuth,firestore)
-                Button(
-                    onClick = { navController.navigate("create_ride") },
-                    modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0075FD))
-                ) {
-                    Text(text = "Create Ride", color = Color.White, fontSize = 18.sp)
-                }
-            } else {
-                Button(
-                    onClick = {  navController.navigate("search_ride") },
-                    modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0075FD))
-                ) {
-                    Text(text = "Search Ride", color = Color.White, fontSize = 18.sp)
-                }
+            RideSearchReminder(firebaseAuth, firestore, navController, isDriver)
+            Button(
+                onClick = { navController.navigate(if (isDriver) "create_ride" else "search_ride") },
+                modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0075FD))
+            ) {
+                Text(text = if (isDriver) "Create Ride" else "Search Ride", color = Color.White, fontSize = 18.sp)
             }
         }
     }
 }
-
-
 
 // Profile header with user info and icons
 @Composable
@@ -257,26 +246,140 @@ fun ProfileHeader(
     }
 }
 
-@Composable
-fun RideReminder(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
-    val rides = remember { mutableStateListOf<Ride>() }
-    val userId = firebaseAuth.currentUser?.uid ?: ""
+//@Composable
+//fun ProfileHeader(
+//    firebaseAuth: FirebaseAuth,
+//    firestore: FirebaseFirestore,
+//    isDriver: Boolean,
+//    onRoleChange: (Boolean) -> Unit,
+//    navController: NavController
+//) {
+//    val userName = fetchUserName(firebaseAuth, firestore)
+//    val profileBitmap = fetchProfileImage(firebaseAuth)
+//    val context = LocalContext.current
+//    val currentUser = firebaseAuth.currentUser
+//
+//    Row(
+//        modifier = Modifier
+//            .fillMaxWidth()
+//            .height(56.dp)
+//            .padding(horizontal = 16.dp),
+//        verticalAlignment = Alignment.CenterVertically
+//    ) {
+//        profileBitmap?.let {
+//            Image(
+//                bitmap = it.asImageBitmap(),
+//                contentDescription = "Profile Picture",
+//                modifier = Modifier
+//                    .size(40.dp)
+//                    .clip(CircleShape)
+//            )
+//        } ?: Image(
+//            painter = painterResource(id = R.drawable.profile_ico),
+//            contentDescription = "Profile Picture",
+//            modifier = Modifier
+//                .size(40.dp)
+//                .clip(CircleShape)
+//        )
+//
+//        Spacer(modifier = Modifier.width(8.dp))
+//
+//        Text(
+//            text = "Hi $userName",
+//            fontSize = 18.sp,
+//            fontWeight = FontWeight.Bold
+//        )
+//
+//        Spacer(modifier = Modifier.weight(1f))
+//
+//        // Car/Passenger icon
+//        val roleIcon = if (isDriver) R.drawable.car_front else R.drawable.profile_ico
+//        Image(
+//            painter = painterResource(id = roleIcon),
+//            contentDescription = if (isDriver) "Driver Mode" else "Passenger Mode",
+//            modifier = Modifier.size(40.dp)
+//        )
+//
+//        Spacer(modifier = Modifier.width(8.dp))
+//
+//        // Role Switch with Validation
+//        Switch(
+//            checked = isDriver,
+//            onCheckedChange = { isChecked ->
+//                if (isChecked) {
+//                    currentUser?.let {
+//                        firestore.collection("driver")
+//                            .whereEqualTo("userId", it.uid)
+//                            .get()
+//                            .addOnSuccessListener { querySnapshot ->
+//                                if (querySnapshot.isEmpty) {
+//                                    navController.navigate("driverintro")
+//                                } else {
+//                                    onRoleChange(true)
+//                                }
+//                            }
+//                            .addOnFailureListener {
+//                                Toast.makeText(context, "Error checking driver status", Toast.LENGTH_SHORT).show()
+//                            }
+//                    }
+//                } else {
+//                    onRoleChange(false)
+//                }
+//            },
+//            colors = SwitchDefaults.colors(
+//                checkedThumbColor = Color.White,
+//                checkedTrackColor = Color(0xFF0075FD),
+//                uncheckedThumbColor = Color.White,
+//                uncheckedTrackColor = Color.Gray
+//            )
+//        )
+//
+//        Spacer(modifier = Modifier.width(8.dp))
+//
+//        // Notification icon
+//        IconButton(onClick = { navController.navigate("notification") }) {
+//            Icon(
+//                painter = painterResource(id = R.drawable.notification_ico),
+//                contentDescription = "Notifications",
+//                modifier = Modifier.size(40.dp)
+//            )
+//        }
+//    }
+//}
 
+
+
+@Composable
+fun RideSearchReminder(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore, navController: NavController, isDriver: Boolean) {
+    val items = remember { mutableStateListOf<Ride>() }
+    val userId = firebaseAuth.currentUser?.uid ?: ""
+    val collectionName = if (isDriver) "rides" else "searchs" // Use correct Firestore collection
+    val fieldFilter = if (isDriver) "driverId" else "passengerId"
+    val titleText = if (isDriver) "Ride Reminder" else "Search Reminder"
+    val emptyText = if (isDriver) "No rides available" else "No active searches"
+    val driverIdsStringMap = remember { mutableStateMapOf<String, String>() } // Store driverIdsString per searchId
     LaunchedEffect(userId) {
         if (userId.isNotEmpty()) {
-            firestore.collection("rides")
-                .whereEqualTo("driverId", userId) // Get rides for this driver
+            firestore.collection(collectionName)
+                .whereEqualTo(fieldFilter, userId) // Fetch relevant documents
                 .addSnapshotListener { documents, error ->
                     if (error != null || documents == null) return@addSnapshotListener
 
                     val currentTime = System.currentTimeMillis()
-                    val rideList = documents.mapNotNull { doc ->
+                    val itemList = documents.mapNotNull { doc ->
                         val date = doc.getString("date") ?: return@mapNotNull null
                         val time = doc.getString("time") ?: return@mapNotNull null
-                        val rideTimestamp = convertToTimestamp(date, time)
-                        val timeLeftMillis = rideTimestamp - currentTime
+                        val searchId = doc.id
+                        val timestamp = convertToTimestamp(date, time)
+                        val timeLeftMillis = timestamp - currentTime
                         val timeLeftText = formatTimeLeft(timeLeftMillis)
-                        val status = if (timeLeftMillis > 0) timeLeftText else "Completed"
+                        val status = if (timeLeftMillis > 0) timeLeftText else if (isDriver) "Completed" else "Expired"
+
+                        // Fetch driverIdsString only for passengers
+                        if (!isDriver) {
+                            val driverIdsString = doc.getString("driverIdsString") ?: ""
+                            driverIdsStringMap[searchId] = driverIdsString
+                        }
 
                         Ride(
                             id = doc.id,
@@ -285,30 +388,41 @@ fun RideReminder(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
                             date = date,
                             time = time
                         )
-                    }.sortedByDescending { it.timeLeftMillis } // Sort by upcoming rides
+                    }.sortedByDescending { it.timeLeftMillis } // Sort upcoming items
 
-                    rides.clear()
-                    rides.addAll(rideList)
+                    items.clear()
+                    items.addAll(itemList)
                 }
         }
     }
 
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         Spacer(modifier = Modifier.height(16.dp))
-        Text(text = "Reminder", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+        Text(text = titleText, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
         Spacer(modifier = Modifier.height(8.dp))
 
-        if (rides.isEmpty()) {
-            Text(text = "No rides available", fontSize = 16.sp, color = Color.Gray)
+        if (items.isEmpty()) {
+            Text(text = emptyText, fontSize = 16.sp, color = Color.Gray)
         } else {
             LazyColumn(
                 modifier = Modifier.heightIn(max = 200.dp) // Limit height to fit 3 items, enable scroll
             ) {
-                items(rides) { ride ->
+                items(items) { item ->
+                    val driverIdsString = driverIdsStringMap[item.id] ?: "" // Get driverIdsString for this search
+
                     RideItem(
-                        title = "Ride ${rides.indexOf(ride) + 1}",
-                        status = ride.status,
-                        statusColor = getStatusColor(ride.status)
+                        title = if (isDriver) "Ride ${items.indexOf(item) + 1}" else "Search ${items.indexOf(item) + 1}",
+                        status = item.status,
+                        statusColor = getStatusColor(item.status),
+                        isDriver = isDriver, // Pass the user mode
+                        onClick = {
+                            if (isDriver) {
+                                navController.navigate("ride_detail")  ///${item.id}
+                            }
+                            else{
+                                navController.navigate("request_ride/$driverIdsString")
+                            }
+                        }
                     )
                 }
             }
@@ -343,21 +457,23 @@ fun getStatusColor(status: String): Color {
     }
 }
 
-
 @Composable
-fun RideItem(title: String, status: String, statusColor: Color) {
+fun RideItem(title: String, status: String, statusColor: Color, isDriver: Boolean, onClick: () -> Unit) {
+    val iconRes = if (isDriver) R.drawable.car_front else R.drawable.profile_ico
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .background(Color.White, shape = RoundedCornerShape(8.dp))
             .border(1.dp, Color.Gray, shape = RoundedCornerShape(8.dp))
+            .clickable { onClick() }
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Image(
-            painter = painterResource(id = R.drawable.car_front),
-            contentDescription = "Car Icon",
+            painter = painterResource(id = iconRes),
+            contentDescription = "User Mode Icon",
             modifier = Modifier
                 .size(40.dp)
                 .padding(end = 8.dp)
@@ -377,8 +493,6 @@ fun RideItem(title: String, status: String, statusColor: Color) {
     }
 }
 
-
-
 data class Ride(
     val id: String,
     val status: String,
@@ -386,7 +500,6 @@ data class Ride(
     val date: String,
     val time: String
 )
-
 
 
 // Error screen when location permission is denied

@@ -85,7 +85,6 @@ fun CreateRideScreen(navController: NavController) {
     var locationLatLng by remember { mutableStateOf<LatLng?>(null) }
     var destinationLatLng by remember { mutableStateOf<LatLng?>(null) }
     var stopLatLng by remember { mutableStateOf<LatLng?>(null) }
-    var routePreference by remember { mutableStateOf("Selecting Preference") }
     var capacity by remember { mutableStateOf(1) }
     var rideId by remember { mutableStateOf("") }
 
@@ -126,7 +125,6 @@ fun CreateRideScreen(navController: NavController) {
                 location,
                 stop,
                 destination, { destination = it },
-                routePreference, { routePreference = it },
                 capacity, { capacity = it },
             )
 
@@ -138,7 +136,6 @@ fun CreateRideScreen(navController: NavController) {
                 location = location,
                 stop = stop,
                 destination = destination,
-                routePreference = routePreference,
                 capacity = capacity,
                 userId = userId,
                 onRideIdChange = { rideId = it }
@@ -198,7 +195,6 @@ fun CreateRideDetailsCard(
     location: String,
     stop: String,
     destination: String, onDestinationChange: (String) -> Unit,
-    routePreference: String, onRoutePreferenceChange: (String) -> Unit,
     capacity: Int, onCapacityChange: (Int) -> Unit,
 
 ) {
@@ -213,7 +209,6 @@ fun CreateRideDetailsCard(
         ) {
             LocationFields(navController, location, stop, destination, onDestinationChange)
             DateTimePicker(context, date, onDateChange, time, onTimeChange)
-            RoutePreferenceDropdown(routePreference, onRoutePreferenceChange)
             CapacitySelector(capacity, onCapacityChange)
             }
     }
@@ -314,41 +309,6 @@ fun LocationFields(
     }
 }
 
-
-
-
-@Composable
-fun RoutePreferenceDropdown(routePreference: String, onRoutePreferenceChange: (String) -> Unit) {
-    val routePreferences = listOf("Shortest Time", "Shortest Distance", "Highest Passenger Count")
-    var expanded by remember { mutableStateOf(false) }
-
-    Column {
-        Text("Route Preference", fontWeight = FontWeight.SemiBold)
-        OutlinedTextField(
-            value = routePreference,
-            onValueChange = { },
-            readOnly = true,
-            modifier = Modifier.fillMaxWidth(),
-            trailingIcon = {
-                IconButton(onClick = { expanded = true }) {
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Route Preference", tint = Color(0xFF0075FD))
-                }
-            }
-        )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            routePreferences.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option) },
-                    onClick = {
-                        onRoutePreferenceChange(option)
-                        expanded = false
-                    }
-                )
-            }
-        }
-    }
-}
-
 @Composable
 fun ConfirmRideButton(
     navController: NavController,
@@ -358,19 +318,17 @@ fun ConfirmRideButton(
     location: String,
     stop: String,
     destination: String,
-    routePreference: String,
     capacity: Int,
     userId: String,
     onRideIdChange: (String) -> Unit
 ) {
     val context = LocalContext.current
 
-    val isValidRide = remember(date, time, stop, location, destination, routePreference) {
+    val isValidRide = remember(date, time, stop, location, destination) {
         date != "Select Date" &&
                 time != "Now" &&
                 location.isNotBlank() &&
-                destination.isNotBlank() &&
-                routePreference != "Selecting Preference"
+                destination.isNotBlank()
     }
     Button(
         onClick = {
@@ -404,7 +362,6 @@ fun ConfirmRideButton(
                 "location" to location,
                 "stop" to stop,
                 "destination" to destination,
-                "routePreference" to routePreference,
                 "capacity" to capacity,
                 "passengerIds" to passengerIds, // Store passenger IDs
                 "timestamp" to FieldValue.serverTimestamp() // Add server timestamp

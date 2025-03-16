@@ -234,6 +234,7 @@ fun SearchLocationFields(
             value = destination,
             onValueChange = onDestinationChange,
             modifier = Modifier.fillMaxWidth(),
+            readOnly = true,
             trailingIcon = {
                 IconButton(onClick = { navController.navigate("search_destination") }) {
                     Icon(Icons.Default.LocationOn, contentDescription = "Select Destination")
@@ -245,7 +246,7 @@ fun SearchLocationFields(
 
 @Composable
 fun petPreferenceDropdown(petPreference: String, onPetPreferenceChange: (String) -> Unit) {
-    val routePreferences = listOf("No", "Yes")
+    val petPreferences = listOf("No", "Yes")
     var expanded by remember { mutableStateOf(false) }
 
     Column {
@@ -262,7 +263,7 @@ fun petPreferenceDropdown(petPreference: String, onPetPreferenceChange: (String)
             }
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            routePreferences.forEach { option ->
+            petPreferences.forEach { option ->
                 DropdownMenuItem(
                     text = { Text(option) },
                     onClick = {
@@ -277,7 +278,7 @@ fun petPreferenceDropdown(petPreference: String, onPetPreferenceChange: (String)
 
 @Composable
 fun genderPreferenceDropdown(genderPreference: String, onGenderPreferenceChange: (String) -> Unit) {
-    val routePreferences = listOf("Male", "Female", "Both")
+    val genderPreferences = listOf("Male", "Female", "Both")
     var expanded by remember { mutableStateOf(false) }
 
     Column {
@@ -294,7 +295,7 @@ fun genderPreferenceDropdown(genderPreference: String, onGenderPreferenceChange:
             }
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            routePreferences.forEach { option ->
+            genderPreferences.forEach { option ->
                 DropdownMenuItem(
                     text = { Text(option) },
                     onClick = {
@@ -309,7 +310,7 @@ fun genderPreferenceDropdown(genderPreference: String, onGenderPreferenceChange:
 
 @Composable
 fun VehicleDropdown(VehicleType: String, onVehicleTypeChange: (String) -> Unit) {
-    val routePreferences = listOf("5-seated", "7-seated")
+    val vehiclePreferences = listOf("5-seated", "7-seated")
     var expanded by remember { mutableStateOf(false) }
 
     Column {
@@ -326,7 +327,7 @@ fun VehicleDropdown(VehicleType: String, onVehicleTypeChange: (String) -> Unit) 
             }
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            routePreferences.forEach { option ->
+            vehiclePreferences.forEach { option ->
                 DropdownMenuItem(
                     text = { Text(option) },
                     onClick = {
@@ -399,6 +400,7 @@ fun ConfirmSearchButton(
                 "genderPreference" to genderPreference,
                 "vehicleType" to vehicleType,
                 "capacity" to capacity,
+                "driverIdsString" to "",
                 "timestamp" to FieldValue.serverTimestamp() // Add server timestamp
             )
 

@@ -1,5 +1,6 @@
 package com.kxxr.sharide.screen
 
+import android.widget.Toast
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -15,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -33,7 +35,7 @@ fun MatchingScreen(navController: NavController, firestore: FirebaseFirestore) {
     var searchId by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var matchingRides by remember { mutableStateOf<List<DocumentSnapshot>?>(null) }
+    var matchingRides by remember { mutableStateOf<List<DocumentSnapshot>?>(null) } // Keep DocumentSnapshot
 
     val user = FirebaseAuth.getInstance().currentUser
     val userId = user?.uid ?: ""
@@ -66,20 +68,21 @@ fun MatchingScreen(navController: NavController, firestore: FirebaseFirestore) {
         })
     }
 
-    MatchingScreenContent(location, destination, isLoading, errorMessage, matchingRides,navController)
+    MatchingScreenContent(location, destination, isLoading, matchingRides, searchId, firestore, navController)
 }
-
-
 
 @Composable
 fun MatchingScreenContent(
     location: String,
     destination: String,
     isLoading: Boolean,
-    errorMessage: String?,
-    matchingRides: List<DocumentSnapshot>?,
+    matchingRides: List<DocumentSnapshot>?, // Still using DocumentSnapshot
+    searchId: String?, // Add searchId parameter
+    firestore: FirebaseFirestore, // Add Firestore instance
     navController: NavController
 ) {
+    val context = LocalContext.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -90,8 +93,6 @@ fun MatchingScreenContent(
 
         if (isLoading) {
             CircularProgressIndicator(color = Color.White)
-        } else if (errorMessage != null) {
-            Text(errorMessage, color = Color.Red, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         } else {
             LocationBox(location, Icons.Default.LocationOn)
             Spacer(modifier = Modifier.height(8.dp))
@@ -100,24 +101,48 @@ fun MatchingScreenContent(
             MatchingIndicator()
             Spacer(modifier = Modifier.weight(1f))
 
-            if (matchingRides != null && matchingRides.isNotEmpty()) {
-                Text("Matching Rides Found:", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                matchingRides.forEach { ride ->
-                    TextButton(onClick = {
-                        navController.navigate("request_ride/${ride.id}")
-
-                    }) {
-                        Text("Click me to Choose Ride Driver", color = Color.White, fontSize = 16.sp)
-                    }
-                }
+            if (matchingRides.isNullOrEmpty()) {
+                MatchingText() // Always show this if no rides are found
             } else {
-                MatchingText()
+                Text(
+                    "Matching Rides Found:",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                val driverIds = matchingRides.mapNotNull { it.getString("driverId") }
+                val driverIdsString = driverIds.joinToString(",")
+
+                Button(onClick = {
+                    // ✅ Update Firestore's "searchs" collection with driverIdsString
+                    if (searchId != null) {
+                        firestore.collection("searchs")
+                            .document(searchId)
+                            .update("driverIdsString", driverIdsString)
+                            .addOnSuccessListener {
+                                navController.navigate("request_ride/$driverIdsString")
+                            }
+                            .addOnFailureListener { e ->
+                                Toast.makeText(
+                                    context,
+                                    "Failed to update drivers: ${e.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                    }
+                }) {
+                    Text("Click Me to Choose Ride Driver", color = Color.White, fontSize = 16.sp)
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
+
+
+
 
 
 

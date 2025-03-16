@@ -3,7 +3,6 @@ package com.kxxr.sharide.screen
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.QuerySnapshot
-
 fun findMatchingRides(
     firestore: FirebaseFirestore,
     passengerSearch: Map<String, Any>, // Search details
@@ -15,9 +14,12 @@ fun findMatchingRides(
     fetchRides(firestore, passengerDate) { ridesSnapshot ->
         fetchUsers(firestore) { usersSnapshot ->
             fetchSearches(firestore, passengerDate) { searchSnapshot ->
-                val matchingRides = ridesSnapshot.documents.filter { ride ->
-                    isRideMatching(ride, searchSnapshot, usersSnapshot)
+                val matchingRides = if (getMatchingDrivers(ridesSnapshot, searchSnapshot, usersSnapshot).isNotEmpty()) {
+                    ridesSnapshot.documents
+                } else {
+                    emptyList()
                 }
+
                 if (matchingRides.isNotEmpty()) {
                     onMatchFound(matchingRides)
                 } else {
@@ -27,6 +29,7 @@ fun findMatchingRides(
         }
     }
 }
+
 
 fun fetchRides(
     firestore: FirebaseFirestore,
@@ -62,41 +65,50 @@ fun fetchUsers(
         .addOnFailureListener { }
 }
 
-fun isRideMatching(
-    ride: DocumentSnapshot,
+fun getMatchingDrivers(
+    rideSnapshot: QuerySnapshot,
     searchSnapshot: QuerySnapshot,
     usersSnapshot: QuerySnapshot
-): Boolean {
-    val rideLocation = ride.getString("location")
-    val rideStop = ride.getString("stop")
-    val rideDestination = ride.getString("destination")
-    val rideTime = ride.getString("time") ?: "00:00"
-    val rideTimeMinutes = timeToMinutes(rideTime)
-    val rideCapacity = ride.getLong("capacity")?.toInt() ?: 0
-    val driverId = ride.getString("driverId")
+): List<String> {
+    val matchingDriverIds = mutableListOf<String>()
 
-    val driverGender = usersSnapshot.documents.find {
-        it.getString("firebaseUserId") == driverId
-    }?.getString("gender") ?: ""
+    rideSnapshot.documents.forEach { ride ->
+        val rideLocation = ride.getString("location")
+        val rideStop = ride.getString("stop")
+        val rideDestination = ride.getString("destination")
+        val rideTime = ride.getString("time") ?: "00:00"
+        val rideTimeMinutes = timeToMinutes(rideTime)
+        val rideCapacity = ride.getLong("capacity")?.toInt() ?: 0
+        val driverId = ride.getString("driverId") ?: return@forEach
 
-    return searchSnapshot.documents.any { search ->
-        val searchLocation = search.getString("location")
-        val searchDestination = search.getString("destination")
-        val searchTime = search.getString("time") ?: "00:00"
-        val searchTimeMinutes = timeToMinutes(searchTime)
-        val genderPreference = search.getString("genderPreference") ?: "Both"
-        val passengerCapacity = search.getLong("capacity")?.toInt() ?: 1
+        val driverGender = usersSnapshot.documents.find {
+            it.getString("firebaseUserId") == driverId
+        }?.getString("gender") ?: ""
 
-        val timeDiff = kotlin.math.abs(rideTimeMinutes - searchTimeMinutes)
-        val isTimeValid = timeDiff <= 30
-        val isLocationValid = searchLocation == rideLocation || searchLocation == rideStop
-        val isDestinationValid = searchDestination == rideStop || searchDestination == rideDestination
-        val isGenderValid = checkGenderPreference(driverGender, genderPreference)
-        val isCapacityValid = checkCapacity(rideCapacity, passengerCapacity) // Call capacity check function
+        searchSnapshot.documents.forEach { search ->
+            val searchLocation = search.getString("location")
+            val searchDestination = search.getString("destination")
+            val searchTime = search.getString("time") ?: "00:00"
+            val searchTimeMinutes = timeToMinutes(searchTime)
+            val genderPreference = search.getString("genderPreference") ?: "Both"
+            val passengerCapacity = search.getLong("capacity")?.toInt() ?: 1
 
-        isTimeValid && isLocationValid && isDestinationValid && isGenderValid && isCapacityValid
+            val timeDiff = kotlin.math.abs(rideTimeMinutes - searchTimeMinutes)
+            val isTimeValid = timeDiff <= 30
+            val isLocationValid = searchLocation == rideLocation || searchLocation == rideStop
+            val isDestinationValid = searchDestination == rideStop || searchDestination == rideDestination
+            val isGenderValid = checkGenderPreference(driverGender, genderPreference)
+            val isCapacityValid = checkCapacity(rideCapacity, passengerCapacity)
+
+            if (isTimeValid && isLocationValid && isDestinationValid && isGenderValid && isCapacityValid) {
+                matchingDriverIds.add(driverId) // Adds even if it's a duplicate
+            }
+        }
     }
+
+    return matchingDriverIds // Keeps duplicates
 }
+
 
 fun checkGenderPreference(driverGender: String, genderPreference: String): Boolean {
     return when (genderPreference.lowercase()) {

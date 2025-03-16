@@ -159,6 +159,23 @@ fun AppNavHost(
                 val rideId = backStackEntry.arguments?.getString("rideId") ?: ""
                 RideRequestScreen(firebaseAuth,navController, rideId)
             }
+            composable("requested_ride/{rideId}/{driverId}/{driverName}/{passengerId}") { backStackEntry ->
+                val rideId = backStackEntry.arguments?.getString("rideId") ?: "Unknown Ride"
+                val driverId = backStackEntry.arguments?.getString("driverId") ?: "Unknown Driver ID"
+                val driverName = backStackEntry.arguments?.getString("driverName") ?: "Unknown Driver"
+                val passengerId = backStackEntry.arguments?.getString("passengerId") ?: "Unknown Passenger"
+
+                SendRequestToDriver(navController, firestore, rideId, driverId, passengerId, driverName)
+            }
+
+            composable("ride_detail") { RideDetailScreen(navController) }
+//            composable("ride_detail/{rideId}/{driverId}") { backStackEntry ->
+//                val rideId = backStackEntry.arguments?.getString("rideId") ?: ""
+//                val driverId = backStackEntry.arguments?.getString("driverId") ?: ""
+//                RideDetailScreen(rideId = rideId, driverId = driverId)
+//            }
+
+
 
             // eWallet
             composable("ewallet") { EWalletIntro(navController) }
