@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -27,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -37,6 +39,7 @@ import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.auth.PhoneMultiFactorGenerator
+import com.google.firebase.auth.PhoneMultiFactorInfo
 import com.google.firebase.firestore.FirebaseFirestore
 import com.kxxr.logiclibrary.Login.ResolverHolder
 import com.kxxr.logiclibrary.Login.sendOtp
@@ -94,7 +97,7 @@ fun RegisterPhoneNumberScreen(firebaseAuth: FirebaseAuth, navController: NavCont
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End
         ) {
-            IconButton(onClick = { navController.popBackStack() }) {
+            IconButton(onClick = { navController.navigate("profile")}) {
                 Icon(Icons.Default.Close, contentDescription = "Close")
             }
         }
@@ -225,6 +228,94 @@ fun VerifyOtpScreen(navController: NavController, verificationId: String, fireba
         ) {
             Text(text = "Verify", color = Color.White)
         }
+    }
+}
+@Composable
+fun ShowUnbindDialog(phoneNumber: String, onUnbind: () -> Unit, onCancel: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        containerColor = Color.White, // Force White Background
+        title = { Text("MFA Already Enabled", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+        text = { Text("This account is already registered with $phoneNumber.\nDo you want to unbind MFA?",textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+        confirmButton = {
+            Button(
+                onClick = onUnbind,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+            ) {
+                Text("Unbind")
+            }
+        },
+        dismissButton = {
+            Button(
+                onClick = onCancel,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+            ) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun CheckMfaEnrollment(firebaseAuth: FirebaseAuth, navController: NavController) {
+    val context = LocalContext.current
+    val user = firebaseAuth.currentUser
+    var showDialog by remember { mutableStateOf(false) }
+    var showPasswordDialog by remember { mutableStateOf(false) }
+    var phoneNumber by remember { mutableStateOf("") }
+    val enrolledFactors = user?.multiFactor?.enrolledFactors ?: emptyList()
+    var errormsg by remember { mutableStateOf("") }
+
+
+    LaunchedEffect(user) {
+        if (user != null) {
+            if (enrolledFactors.isNotEmpty()) {
+                val phoneInfo = enrolledFactors[0] as? PhoneMultiFactorInfo
+                if (phoneInfo != null) {
+                    phoneNumber = phoneInfo.phoneNumber ?: ""
+                    showDialog = true // Show Unbind Dialog
+                }
+            } else {
+                navController.navigate("reg_otp") // No MFA -> Go to Register Screen
+            }
+        } else {
+            Toast.makeText(context, "User Not Logged In", Toast.LENGTH_SHORT).show()
+            navController.popBackStack()
+        }
+    }
+
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+    val topPadding = (0.3f * screenHeight.value).dp
+
+    Text(
+        text = errormsg,
+        textAlign = TextAlign.Center,
+        fontWeight = FontWeight.Bold,
+        fontSize = 20.sp,
+        color = Color.Red,
+        modifier = Modifier.fillMaxSize().padding(top = topPadding)
+    )
+
+    if (showDialog) {
+        ShowUnbindDialog(
+            phoneNumber = phoneNumber,
+            onUnbind = {
+                if (user != null) {
+                    user.multiFactor.unenroll(enrolledFactors[0]) // 🔥 Direct Unbind
+                        .addOnSuccessListener {
+                            Toast.makeText(context, "MFA Unbound Successfully", Toast.LENGTH_SHORT).show()
+                            navController.popBackStack() // Navigate back on success
+                        }
+                        .addOnFailureListener { e ->
+                            errormsg = "Failed to Unbind MFA: ${e.localizedMessage}"
+                        }
+                }
+            },
+            onCancel = {
+                showDialog = false
+                navController.navigate("profile") // Go back to Check MFA()
+            }
+        )
     }
 }
 

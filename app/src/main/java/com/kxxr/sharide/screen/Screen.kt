@@ -552,7 +552,7 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
                             showDialog = false
                             errormsg = error
                             Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
-                        }
+                        },type
                     )
                 } else {
                     errormsg = "Please fill in all fields to proceed!"

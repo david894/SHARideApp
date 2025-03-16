@@ -124,7 +124,7 @@ fun handleMultiFactorAuthentication(
     firebaseAuth: FirebaseAuth,
     navController: NavController,
     context: Context,
-    user: String
+    type: String
 ) {
     try {
         val activity = context as? Activity ?: throw Exception("Invalid Context")
@@ -184,16 +184,37 @@ fun signInWithEmailPassword(
     context: Context,
     navController: NavController,
     onMfaRequired: (MultiFactorResolver) -> Unit,
-    onFailure: (String) -> Unit
+    onFailure: (String) -> Unit,
+    type: String
 ) {
     firebaseAuth.signInWithEmailAndPassword(email, password)
         .addOnCompleteListener { task ->
             if (task.isSuccessful) {
                 val user = firebaseAuth.currentUser
+                // Step 4: Check if User Already Exists in Firestore by userId FIELD
+                val db = FirebaseFirestore.getInstance()
 
                 user?.reload()?.addOnSuccessListener {
                     if (user.isEmailVerified) {
-                        navController.navigate("home") // Direct Login if MFA not required
+                        if(type == "admin"){
+                            db.collection("Admin")
+                                .whereEqualTo("userId", user.uid) // Check if userId field exists
+                                .get()
+                                .addOnSuccessListener { documents ->
+                                    if (!documents.isEmpty) {
+                                        Toast.makeText(context, "Sign-In Successful", Toast.LENGTH_LONG).show()
+                                        navController.navigate("home")
+                                    }else{
+                                        firebaseAuth.signOut()
+                                        Toast.makeText(context, "You're not an Admin!", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                                .addOnFailureListener {
+                                    Toast.makeText(context, "Failed to check account existence", Toast.LENGTH_LONG).show()
+                                }
+                        }else{
+                            navController.navigate("home") // Direct Login if MFA not required
+                        }
                     } else {
                         firebaseAuth.signOut()
                         onFailure("Please verify your email before logging in!")

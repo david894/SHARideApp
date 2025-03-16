@@ -66,11 +66,15 @@ import androidx.navigation.compose.rememberNavController
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.PhoneAuthProvider
+import com.google.firebase.auth.PhoneMultiFactorGenerator
 import com.google.firebase.firestore.FirebaseFirestore
+import com.kxxr.logiclibrary.Login.ResolverHolder
 import com.kxxr.logiclibrary.Login.handleGoogleSignIn
 import com.kxxr.logiclibrary.Login.handleMultiFactorAuthentication
 import com.kxxr.logiclibrary.Login.resetPassword
 import com.kxxr.logiclibrary.Login.signInWithEmailPassword
+import com.kxxr.logiclibrary.Login.verifyOtp
 import com.kxxr.logiclibrary.Network.NetworkViewModel
 import com.kxxr.sharmin.R
 
@@ -82,10 +86,16 @@ fun AdminAppNavHost() {
 
     NavHost(navController = navController, startDestination = startDestination) {
         composable("login") { AdminLoginScreen(navController, firebaseAuth) }
-        composable("home") { NoInternetScreen {
+        composable("home") { AdminHome(firebaseAuth, navController)}
+        composable("check_mfa") { CheckMfaEnrollment(firebaseAuth, navController) }
+        composable("reg_otp") { RegisterPhoneNumberScreen(firebaseAuth, navController) }
+        composable("verifyOtp/{verifyID}/{phone}/{route}") { backStackEntry ->
+            val verifyID = backStackEntry.arguments?.getString("verifyID").orEmpty()
+            val phone = backStackEntry.arguments?.getString("phone").orEmpty()
+            val route = backStackEntry.arguments?.getString("route").orEmpty()
 
-        }}
-
+            VerifyOtpScreen(navController, verifyID,firebaseAuth,phone,route)
+        }
     }
 }
 
@@ -327,17 +337,24 @@ fun AdminLoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
                         modifier = Modifier
                             .align(Alignment.End)
                             .clickable {
-                                if(email.isNotEmpty()&&email.endsWith("tarc.edu.my")){
-                                    resetPassword(email,context,
+                                if (email.isNotEmpty() && email.endsWith("tarc.edu.my")) {
+                                    resetPassword(email, context,
                                         onSuccess = {
                                             showDialog = false
-                                            showEmailDialog = true},
+                                            showEmailDialog = true
+                                        },
                                         onFailure = {
                                             showDialog = false
                                         }
                                     )
-                                }else{
-                                    Toast.makeText(context,"Please enter your email first",Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast
+                                        .makeText(
+                                            context,
+                                            "Please enter your email first",
+                                            Toast.LENGTH_SHORT
+                                        )
+                                        .show()
                                 }
                             }
                     )
@@ -351,18 +368,18 @@ fun AdminLoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
                         onClick = {
                             if (email.isNotEmpty() && password.isNotEmpty() && email.endsWith("tarc.edu.my")) {
                                 showDialog = true
-//                    signInWithEmailPassword(email, password, firebaseAuth, context, navController,
-//                        onMfaRequired = { resolver ->
-//                            showDialog = false
-//                            Toast.makeText(context, "MFA Required. Please Verify", Toast.LENGTH_SHORT).show()
-//                            handleMultiFactorAuthentication(resolver, firebaseAuth, navController, context)
-//                        },
-//                        onFailure = { error ->
-//                            showDialog = false
-//                            errormsg = error
-//                            Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
-//                        }
-//                    )
+                                signInWithEmailPassword(email, password, firebaseAuth, context, navController,
+                                    onMfaRequired = { resolver ->
+                                        showDialog = false
+                                        Toast.makeText(context, "MFA Required. Please Verify", Toast.LENGTH_SHORT).show()
+                                        handleMultiFactorAuthentication(resolver, firebaseAuth, navController, context,type)
+                                    },
+                                    onFailure = { error ->
+                                        showDialog = false
+                                        errormsg = error
+                                        Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+                                    },type
+                                )
                             } else {
                                 errormsg = "Please fill in all fields to proceed!"
                             }
@@ -404,3 +421,5 @@ fun AdminLoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
      // Show Loading Dialog
     LoadingDialog(text="Logging in...",showDialog = showDialog, onDismiss = { showDialog = false })
 }
+
+
