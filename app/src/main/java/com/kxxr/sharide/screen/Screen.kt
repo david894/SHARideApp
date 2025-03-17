@@ -1088,7 +1088,7 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
             value = phoneNumber,
             onValueChange = {
                 phoneNumber = it
-                isPhoneValid = phoneNumber.startsWith("01") && phoneNumber.length <= 11 && phoneNumber.length >= 10
+                isPhoneValid = phoneNumber.startsWith("+601") && phoneNumber.length <= 13 && phoneNumber.length >= 12
             },
             label = { Text("Phone Number") },
             isError = !isPhoneValid,
