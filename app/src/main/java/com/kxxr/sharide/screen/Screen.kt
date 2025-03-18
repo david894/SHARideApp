@@ -60,6 +60,9 @@ import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.kxxr.logiclibrary.AiDetector.detectFaceFromIdCard
+import com.kxxr.logiclibrary.AiDetector.extractInfoFromIdCard
+import com.kxxr.logiclibrary.AiDetector.saveBitmapToCache
 import com.kxxr.logiclibrary.Login.handleGoogleSignIn
 import com.kxxr.logiclibrary.Login.handleMultiFactorAuthentication
 import com.kxxr.logiclibrary.Login.resetPassword
@@ -274,7 +277,8 @@ fun IntroScreen(navController: NavController) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White),
+            .background(Color.White)
+            .verticalScroll(rememberScrollState()), // Enable scrolling
         verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -293,7 +297,7 @@ fun IntroScreen(navController: NavController) {
         // Rotating Image
         Box(
             modifier = Modifier
-                .size(250.dp)
+                //.size(250.dp)
                 .background(Color.Transparent),
             contentAlignment = Alignment.Center
         ) {
@@ -301,8 +305,7 @@ fun IntroScreen(navController: NavController) {
                 painter = images[currentImageIndex],
                 contentDescription = "Rotating image",
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxSize()
+                    .size(200.dp)
                     .graphicsLayer { alpha = 1f }
             )
         }
@@ -313,7 +316,7 @@ fun IntroScreen(navController: NavController) {
         Text(
             text = introMain[currentImageIndex],
             fontWeight = FontWeight.Bold,
-            fontSize = 30.sp,
+            fontSize = 25.sp,
             color = Color.Blue,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 20.dp)
@@ -322,7 +325,7 @@ fun IntroScreen(navController: NavController) {
         Text(
             text = introDesc[currentImageIndex],
             textAlign = TextAlign.Center,
-            fontSize = 20.sp,
+            fontSize = 18.sp,
             color = Color.Gray,
             modifier = Modifier.padding(horizontal = 20.dp)
         )
@@ -404,7 +407,8 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 16.dp)
+            .verticalScroll(rememberScrollState()), // Enable scrolling
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -757,7 +761,8 @@ fun IdVerificationScreen(navController: NavController) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()), // Enable scrolling
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -861,94 +866,6 @@ fun UploadIdButton(onImageSelected: (Uri) -> Unit) {
     }
 }
 
-fun extractInfoFromIdCard(
-    context: Context,
-    imageUri: Uri,
-    onResult: (String, String, String) -> Unit // Name, Student ID, Profile Picture
-) {
-    val inputImage = InputImage.fromFilePath(context, imageUri)
-    val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-    recognizer.process(inputImage)
-        .addOnSuccessListener { visionText ->
-            val extractedText = visionText.text
-            if (!extractedText.contains("TARUMT", ignoreCase = true)) {
-                onResult("", "", "Error") // Not a valid TARUMT ID
-                return@addOnSuccessListener
-            }
-
-            var name = ""
-            var studentId = ""
-
-            // Loop through the text blocks and lines to extract Name and Student ID
-            for (block in visionText.textBlocks) {
-                for (line in block.lines) {
-                    val text = line.text
-                    if (Regex("[0-9]{2}[A-z]{1}").containsMatchIn(text)){
-                        studentId = text // Matches Student ID pattern
-                    } else if (text.contains(" ") && !Regex("\\d").containsMatchIn(text)) {
-                        name = text // Heuristics for Name
-                    }
-                }
-            }
-
-            // Return results
-            onResult(name, studentId, "Verified")
-        }
-        .addOnFailureListener { e ->
-            onResult("", "", "Error" ) // Failed to process image
-        }
-}
-
-fun detectFaceFromIdCard(
-    idCardBitmap: Bitmap,
-    onResult: (Bitmap?) -> Unit
-) {
-    val options = FaceDetectorOptions.Builder()
-        .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
-        .setContourMode(FaceDetectorOptions.CONTOUR_MODE_NONE)
-        .build()
-
-    val detector = FaceDetection.getClient(options)
-    val image = InputImage.fromBitmap(idCardBitmap, 0)
-
-    detector.process(image)
-        .addOnSuccessListener { faces ->
-            if (faces.isNotEmpty()) {
-                val face = faces[0].boundingBox
-
-                // Padding in pixels
-                val padding = 300 // Adjust this value as needed (e.g., dp converted to pixels)
-
-                // Crop the face region
-                val faceBitmap = Bitmap.createBitmap(
-                    idCardBitmap,
-                    (face.left - 150).coerceAtLeast(0),
-                    (face.top - 170).coerceAtLeast(0),
-                    (face.width() + padding).coerceAtMost(idCardBitmap.width),
-                    (face.height() + padding).coerceAtMost(idCardBitmap.height)
-                )
-                onResult(faceBitmap)
-            } else {
-                onResult(null) // No face detected
-            }
-        }
-        .addOnFailureListener {
-            onResult(null) // Handle error
-        }
-}
-
-fun saveBitmapToCache(context: Context, bitmap: Bitmap, fileName: String): String {
-    // Create a file in the cache directory
-    val cacheDir = context.cacheDir
-    val file = File(cacheDir, fileName)
-
-    FileOutputStream(file).use { outputStream ->
-        bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream) // Save as PNG
-        outputStream.flush()
-    }
-
-    return file.absolutePath // Return the file path for later use
-}
 
 @Composable
 fun SignUpScreen(navController: NavController, name: String, studentId: String, imagePath: String) {
@@ -984,10 +901,13 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()), // Enable scrolling
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        Spacer(modifier = Modifier.height(16.dp))
+
         Text(
             text = "2. Fill in Additional Information",
             fontWeight = FontWeight.Bold,

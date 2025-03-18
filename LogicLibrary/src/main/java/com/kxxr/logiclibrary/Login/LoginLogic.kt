@@ -28,7 +28,7 @@ fun handleGoogleSignIn(
     firebaseAuth: FirebaseAuth,
     navController: NavController,
     context: Context,
-    type : String
+    type: String
 ) {
     val task = GoogleSignIn.getSignedInAccountFromIntent(data)
     try {
@@ -44,83 +44,14 @@ fun handleGoogleSignIn(
             return
         }
 
-        // Step 2: Check if User Already Exists in Firestore by email FIELD
         val db = FirebaseFirestore.getInstance()
+
+        // Step 2: Check if User Exists in Firestore
         db.collection("users")
-            .whereEqualTo("email", email) // Check if userId field exists
+            .whereEqualTo("email", email)
             .get()
             .addOnSuccessListener { documents ->
-                if (!documents.isEmpty) {
-                    firebaseAuth.signInWithCredential(googleCredential)
-                        .addOnCompleteListener { task ->
-                            if (task.isSuccessful) {
-                                val user = firebaseAuth.currentUser
-
-                                if (user != null) {
-                                    // Step 3: Check if Email is Verified
-                                    if(user.isEmailVerified){
-                                        if(type == "admin"){
-                                            db.collection("Admin")
-                                                .whereEqualTo("userId", user.uid) // Check if userId field exists
-                                                .get()
-                                                .addOnSuccessListener { documents ->
-                                                    if (!documents.isEmpty) {
-                                                        Toast.makeText(context, "Sign-In Successful", Toast.LENGTH_LONG).show()
-                                                        navController.navigate("home")
-                                                    }else{
-                                                        firebaseAuth.signOut()
-                                                        Toast.makeText(context, "You're not an Admin!", Toast.LENGTH_LONG).show()
-                                                    }
-                                                }
-                                                .addOnFailureListener {
-                                                    Toast.makeText(context, "Failed to check account existence", Toast.LENGTH_LONG).show()
-                                                }
-                                        }else{
-                                            Toast.makeText(context, "Sign-In Successful", Toast.LENGTH_LONG).show()
-                                            navController.navigate("home")
-                                        }
-                                    }else{
-                                        Toast.makeText(
-                                            context, "Please verify your email before signing in.",
-                                            Toast.LENGTH_LONG
-                                        ).show()
-                                        firebaseAuth.signOut()
-                                        return@addOnCompleteListener
-                                    }
-                                }
-                            } else {
-                                val exception = task.exception
-                                if (exception is FirebaseAuthMultiFactorException) {
-                                    Toast.makeText(
-                                        context,
-                                        "MFA Required. Please Verify",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                    val resolver = exception.resolver
-
-                                    // Now the resolver is not null
-                                    handleMultiFactorAuthentication(
-                                        resolver,
-                                        firebaseAuth,
-                                        navController,
-                                        context,
-                                        type
-                                    )
-                                } else {
-                                    Toast.makeText(
-                                        context, "Login Failed: ${exception?.localizedMessage}",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                }
-                            }
-                        }
-                        .addOnFailureListener {
-                            Toast.makeText(
-                                context, "Login Failed: ${it.localizedMessage}",
-                                Toast.LENGTH_LONG
-                            ).show()
-                        }
-                } else {
+                if (documents.isEmpty) {
                     firebaseAuth.signOut()
                     Toast.makeText(
                         context, "Account does not exist. Please register first.",
@@ -128,13 +59,85 @@ fun handleGoogleSignIn(
                     ).show()
                     return@addOnSuccessListener
                 }
+
+                // Step 3: Proceed to Sign-In with Google Credential
+                firebaseAuth.signInWithCredential(googleCredential)
+                    .addOnCompleteListener { task ->
+                        if (task.isSuccessful) {
+                            val user = firebaseAuth.currentUser
+                            if (user != null) {
+                                if (user.isEmailVerified) {
+                                    if (type == "admin") {
+                                        checkIfAdmin(user.uid, db, firebaseAuth, navController, context)
+                                    } else {
+                                        Toast.makeText(context, "Sign-In Successful", Toast.LENGTH_LONG).show()
+                                        navController.navigate("home")
+                                    }
+                                } else {
+                                    firebaseAuth.signOut()
+                                    Toast.makeText(
+                                        context, "Please verify your email before signing in.",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            }
+                        } else {
+                            handleSignInError(task.exception, firebaseAuth, navController, context, type)
+                        }
+                    }
+                    .addOnFailureListener {
+                        handleSignInError(it, firebaseAuth, navController, context, type)
+                    }
             }.addOnFailureListener {
-                Toast.makeText(context, "Failed to check account existence", Toast.LENGTH_LONG)
-                    .show()
+                Toast.makeText(context, "Failed to check account existence", Toast.LENGTH_LONG).show()
             }
-    }catch (e: ApiException) {
+    } catch (e: ApiException) {
         Toast.makeText(context, "Google Sign-In failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
     }
+}
+
+// Helper Function: Handle Sign-In Errors (including MFA check)
+private fun handleSignInError(
+    exception: Exception?,
+    firebaseAuth: FirebaseAuth,
+    navController: NavController,
+    context: Context,
+    type: String
+) {
+    if (exception is FirebaseAuthMultiFactorException) {
+        // MFA required – trigger the resolver
+        Toast.makeText(context, "MFA Required. Please Verify.", Toast.LENGTH_LONG).show()
+        val resolver = exception.resolver
+        handleMultiFactorAuthentication(resolver, firebaseAuth, navController, context, type)
+    } else {
+        Toast.makeText(context, "Login Failed: ${exception?.localizedMessage}", Toast.LENGTH_LONG).show()
+    }
+}
+
+// Helper Function: Check if User is Admin
+private fun checkIfAdmin(
+    userId: String,
+    db: FirebaseFirestore,
+    firebaseAuth: FirebaseAuth,
+    navController: NavController,
+    context: Context
+) {
+    db.collection("Admin")
+        .whereEqualTo("userId", userId)
+        .get()
+        .addOnSuccessListener { documents ->
+            if (!documents.isEmpty) {
+                Toast.makeText(context, "Admin Sign-In Successful", Toast.LENGTH_LONG).show()
+                navController.navigate("home")
+            } else {
+                firebaseAuth.signOut()
+                Toast.makeText(context, "You're not an Admin!", Toast.LENGTH_LONG).show()
+                navController.navigate("login")
+            }
+        }
+        .addOnFailureListener {
+            Toast.makeText(context, "Failed to check admin status", Toast.LENGTH_LONG).show()
+        }
 }
 
 fun handleMultiFactorAuthentication(
