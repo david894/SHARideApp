@@ -85,9 +85,6 @@ fun handleGoogleSignIn(
                             handleSignInError(task.exception, firebaseAuth, navController, context, type)
                         }
                     }
-                    .addOnFailureListener {
-                        handleSignInError(it, firebaseAuth, navController, context, type)
-                    }
             }.addOnFailureListener {
                 Toast.makeText(context, "Failed to check account existence", Toast.LENGTH_LONG).show()
             }

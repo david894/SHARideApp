@@ -6,6 +6,17 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -63,6 +74,7 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.google.accompanist.navigation.animation.AnimatedNavHost
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.firebase.auth.FirebaseAuth
@@ -78,13 +90,50 @@ import com.kxxr.logiclibrary.Login.verifyOtp
 import com.kxxr.logiclibrary.Network.NetworkViewModel
 import com.kxxr.sharmin.R
 
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun AdminAppNavHost() {
     val firebaseAuth = FirebaseAuth.getInstance()
     val navController = rememberNavController()
     val startDestination = if (firebaseAuth.currentUser != null) "home" else "login"
 
-    NavHost(navController = navController, startDestination = startDestination) {
+    AnimatedNavHost(
+        navController = navController,
+        startDestination = startDestination,
+        enterTransition = {
+            slideInHorizontally(
+                initialOffsetX = { 1000 },
+                animationSpec = tween(700, easing = FastOutSlowInEasing)
+            ) + fadeIn(animationSpec = tween(700)) + scaleIn(
+                initialScale = 0.9f,
+                animationSpec = tween(500)
+            )
+        },
+        exitTransition = {
+            slideOutHorizontally(
+                targetOffsetX = { -800 },
+                animationSpec = tween(600)
+            ) + fadeOut(animationSpec = tween(600))
+        },
+        popEnterTransition = {
+            slideInHorizontally(
+                initialOffsetX = { -1000 },
+                animationSpec = tween(700, easing = LinearOutSlowInEasing)
+            ) + fadeIn(animationSpec = tween(700)) + scaleIn(
+                initialScale = 0.9f,
+                animationSpec = tween(500)
+            )
+        },
+        popExitTransition = {
+            slideOutHorizontally(
+                targetOffsetX = { 800 },
+                animationSpec = tween(600, easing = FastOutLinearInEasing)
+            ) + fadeOut(animationSpec = tween(600)) + scaleOut(
+                targetScale = 1.2f,
+                animationSpec = tween(500)
+            )
+        }
+    ){
         composable("login") { AdminLoginScreen(navController, firebaseAuth) }
         composable("home") { AdminHome(firebaseAuth, navController)}
         composable("check_mfa") { CheckMfaEnrollment(firebaseAuth, navController) }
@@ -96,6 +145,10 @@ fun AdminAppNavHost() {
 
             VerifyOtpScreen(navController, verifyID,firebaseAuth,phone,route)
         }
+
+        //ewallet settings
+        composable("generate_pin") { GenerateTopupPinScreen(navController) }
+
     }
 }
 

@@ -206,7 +206,7 @@ fun AdminHome(firebaseAuth: FirebaseAuth, navController: NavController) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
 
-        Text(text = "Settings", color = Color.Gray, fontSize = 20.sp, modifier = Modifier
+        Text(text = " Account Settings", color = Color.Gray, fontSize = 20.sp, modifier = Modifier
             .fillMaxWidth()
             .padding(8.dp))
 
@@ -231,7 +231,21 @@ fun AdminHome(firebaseAuth: FirebaseAuth, navController: NavController) {
             ProfileCard(title = "Enable 2FA Login", img = "authentication", onClick = {navController.navigate("check_mfa")})
             Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
-            ProfileCard(title = "Edit Personal Info",img = "edit", onClick = { })
+
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp)
+        ) {
+            Text(text = "eWallet Settings", color = Color.Gray, fontSize = 20.sp, modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp))
+
+            ProfileCard(title = "Generate New Reload PIN", img = "authentication", onClick = {navController.navigate("generate_pin")})
+            Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
+
+            ProfileCard(title = "Adjust User eWallet Balance",img = "edit", onClick = { })
             Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
         }
