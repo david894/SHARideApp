@@ -9,6 +9,17 @@ import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -48,6 +59,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import coil.compose.rememberAsyncImagePainter
+import com.google.accompanist.navigation.animation.AnimatedNavHost
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.firebase.Firebase
@@ -77,6 +89,7 @@ import java.io.FileOutputStream
 import java.util.Locale
 import java.util.UUID
 
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun AppNavHost(
     firebaseAuth: FirebaseAuth,
@@ -94,7 +107,43 @@ fun AppNavHost(
         // Determine the start destination based on user login status
         val startDestination = if (firebaseAuth.currentUser != null) "home" else "intro"
 
-        NavHost(navController = navController, startDestination = startDestination) {
+        AnimatedNavHost(
+            navController = navController,
+            startDestination = startDestination,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { 1000 },
+                    animationSpec = tween(700, easing = FastOutSlowInEasing)
+                ) + fadeIn(animationSpec = tween(700)) + scaleIn(
+                    initialScale = 0.9f,
+                    animationSpec = tween(500)
+                )
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -800 },
+                    animationSpec = tween(600)
+                ) + fadeOut(animationSpec = tween(600))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -1000 },
+                    animationSpec = tween(700, easing = LinearOutSlowInEasing)
+                ) + fadeIn(animationSpec = tween(700)) + scaleIn(
+                    initialScale = 0.9f,
+                    animationSpec = tween(500)
+                )
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { 800 },
+                    animationSpec = tween(600, easing = FastOutLinearInEasing)
+                ) + fadeOut(animationSpec = tween(600)) + scaleOut(
+                    targetScale = 1.2f,
+                    animationSpec = tween(500)
+                )
+            }
+        ){
             composable("intro") { IntroScreen(navController) }
             composable("login") { LoginScreen(navController, firebaseAuth) }
             composable("signup") { SignupIntroScreen(navController) }
