@@ -1,4 +1,4 @@
-package com.kxxr.sharide.db
+package com.kxxr.logiclibrary.eWallet
 
 import android.content.Context
 

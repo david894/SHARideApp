@@ -1,9 +1,6 @@
 package com.kxxr.sharide.screen
 
 import android.annotation.SuppressLint
-import android.content.Context
-import android.util.Base64
-import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -49,7 +46,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
 import com.kxxr.sharide.R
-import java.security.MessageDigest
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import androidx.compose.foundation.layout.*
@@ -69,12 +65,18 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
-import com.google.firebase.Timestamp
-import com.kxxr.sharide.DataClass.Transaction
-import com.kxxr.sharide.db.PinAttemptManager
+import com.kxxr.logiclibrary.User.loadWalletBalance
+import com.kxxr.logiclibrary.eWallet.PinAttemptManager
+import com.kxxr.logiclibrary.eWallet.Transaction
+import com.kxxr.logiclibrary.eWallet.hashAnswer
+import com.kxxr.logiclibrary.eWallet.hashPin
+import com.kxxr.logiclibrary.eWallet.storeEWalletData
+import com.kxxr.logiclibrary.eWallet.updateUserPin
+import com.kxxr.logiclibrary.eWallet.validateAnswers
+import com.kxxr.logiclibrary.eWallet.validateTopUpPin
+import com.kxxr.logiclibrary.eWallet.verifyCurrentPin
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.TimeZone
 
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
@@ -340,73 +342,6 @@ fun PinInputDialog(
 
 }
 
-
-fun hashPin(pin: String): String {
-    val digest = MessageDigest.getInstance("SHA-256")
-    val hashBytes = digest.digest(pin.toByteArray())
-    return hashBytes.joinToString("") { "%02x".format(it) }
-}
-
-fun storeEWalletData(
-    pin: String,
-    securityQuestion1: String, securityAnswer1: String,
-    securityQuestion2: String, securityAnswer2: String,
-    securityQuestion3: String, securityAnswer3: String,
-    onSuccess: () -> Unit,
-    onFailure: (Exception) -> Unit
-) {
-    val userId = FirebaseAuth.getInstance().currentUser?.uid
-
-    if (userId != null) {
-        val hashedPin = hashPin(pin)
-        // Reference to Firestore
-        val firestore = FirebaseFirestore.getInstance()
-        val documentRef = firestore.collection("eWallet").document(userId)
-
-        // Check if document exists first
-        documentRef.get()
-            .addOnSuccessListener { documentSnapshot ->
-                if (documentSnapshot.exists()) {
-                    // Document already exists, return an error
-                    onFailure(Exception("eWallet account already exists for this user."))
-                } else {
-                    // Document does not exist, proceed with creating a new one
-                    val eWalletData = hashMapOf(
-                        "userId" to userId,
-                        "pinCode" to hashedPin,
-                        "balance" to 0.00,
-                        "securityQuestion1" to securityQuestion1,
-                        "securityAnswer1" to securityAnswer1,
-                        "securityQuestion2" to securityQuestion2,
-                        "securityAnswer2" to securityAnswer2,
-                        "securityQuestion3" to securityQuestion3,
-                        "securityAnswer3" to securityAnswer3
-                    )
-
-                    // Store data in Firestore
-                    documentRef.set(eWalletData)
-                        .addOnSuccessListener {
-                            onSuccess()
-                        }
-                        .addOnFailureListener { e ->
-                            onFailure(e)
-                        }
-                }
-            }
-            .addOnFailureListener { e ->
-                onFailure(Exception("Failed to check for existing document: ${e.message}"))
-            }
-    } else {
-        onFailure(Exception("User not authenticated"))
-    }
-}
-
-fun hashAnswer(answer: String): String {
-    val digest = MessageDigest.getInstance("SHA-256")
-    val hashBytes = digest.digest(answer.toByteArray())
-    return Base64.encodeToString(hashBytes, Base64.NO_WRAP)
-}
-
 @Composable
 fun SetSecurityQuestionsScreen(navController: NavController) {
     // Load questions from XML resource
@@ -608,6 +543,7 @@ fun SecurityQuestionDropdown(
     }
 }
 
+
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
 fun EWalletDashboardScreen(navController: NavController) {
@@ -625,14 +561,7 @@ fun EWalletDashboardScreen(navController: NavController) {
         isLoading = true
 
         // Fetch balance
-        if (userId != null) {
-            firestore.collection("eWallet").document(userId).get()
-                .addOnSuccessListener { document ->
-                    if (document.exists()) {
-                        balance = document.getDouble("balance") ?: 0.0
-                    }
-                }
-        }
+        loadWalletBalance(firestore, userId!!, onResult = { bal -> balance = bal })
 
         if (userId != null) {
             firestore.collection("Transaction")
@@ -790,7 +719,7 @@ fun ActionButton(label: String, img: String, onClick: () -> Unit) {
 
 @Composable
 fun TransactionItem(transaction: Transaction) {
-    val color = if (transaction.amount >= 0) Color.Green else Color.Red
+    val color = if (transaction.amount >= 0) Color(0xFF008000) else Color(0xFFCC0000)
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -817,8 +746,6 @@ fun TransactionItem(transaction: Transaction) {
         }
     }
 }
-
-
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
@@ -974,127 +901,6 @@ fun TopUpScreen(navController: NavController) {
 
 }
 
-fun validateTopUpPin(
-    userId: String,
-    pin: String,
-    onSuccess: (String,String) -> Unit,
-    onFailure: (String) -> Unit
-) {
-    val firestore = FirebaseFirestore.getInstance()
-
-    firestore.collection("Topup")
-        .whereEqualTo("TopupPIN", pin)
-        .get()
-        .addOnSuccessListener { documents ->
-            if (!documents.isEmpty) {
-                val document = documents.documents[0]
-                val amount = document.get("amount")?.toString()?.toDoubleOrNull() ?: 0.0
-
-                // Valid PIN found, update user balance
-                updateUserBalance(userId, amount
-                    ,onSuccess = { balance ->
-                        deleteReloadPIN(pin
-                            ,onSuccess = { message->
-                                recordTransaction(userId, amount,"Top Up","add")
-                                onSuccess(balance, amount.toString())
-                            }
-                            ,onFailure={ error ->
-                                onFailure(error)
-                            }
-                        )
-                    }
-                    ,onFailure={ error ->
-                        onFailure(error)
-                    }
-                )
-            } else {
-                onFailure("Invalid Reload PIN") // Invalid PIN
-            }
-        }
-        .addOnFailureListener {
-            onFailure("Error Validating PIN")
-        }
-}
-
-fun updateUserBalance(userId: String, amount: Double,onSuccess: (String) -> Unit,onFailure: (String) -> Unit) {
-    val firestore = FirebaseFirestore.getInstance()
-
-    val userRef = firestore.collection("eWallet").document(userId)
-    userRef.get().addOnSuccessListener { document ->
-        if (document.exists()) {
-            val currentBalance = document.getDouble("balance") ?: 0.0
-            userRef.update("balance", currentBalance + amount)
-            val balance = currentBalance + amount
-            onSuccess(balance.toString())
-        }
-    }.addOnFailureListener{
-        onFailure("Error Update Balance")
-    }
-}
-
-fun deleteReloadPIN(pin: String,onSuccess: (String) -> Unit,onFailure: (String) -> Unit) {
-    val firestore = FirebaseFirestore.getInstance()
-
-    firestore.collection("Topup")
-        .whereEqualTo("TopupPIN", pin) // Find the document with this PIN
-        .get()
-        .addOnSuccessListener { documents ->
-            for (document in documents) {
-                firestore.collection("Topup").document(document.id)
-                    .delete()
-                    .addOnSuccessListener {
-                        onSuccess("Success")
-                        Log.d("Firestore", "Successfully deleted the reload PIN")
-                    }
-                    .addOnFailureListener { e ->
-                        onFailure("Error Delete reload PIN")
-                        Log.e("Firestore", "Error deleting document", e)
-                    }
-            }
-        }
-        .addOnFailureListener { e ->
-            Log.e("Firestore", "Error finding document", e)
-        }
-}
-
-fun recordTransaction(userId: String, amount: Double, description: String, operator: String) {
-    val firestore = FirebaseFirestore.getInstance()
-// Set Malaysia Time Zone (MYT)
-    val timeZone = TimeZone.getTimeZone("Asia/Kuala_Lumpur")
-    val sdf = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
-    sdf.timeZone = timeZone
-
-    val currentDate = Timestamp.now() // Firestore's Timestamp
-    val formattedDate = sdf.format(currentDate.toDate()) // Format with MYT Time Zone
-
-    // Format amount with operator
-    val formattedAmount = when (operator.lowercase()) {
-        "add" -> "+${"%.2f".format(amount)}"
-        "minus" -> "-${"%.2f".format(amount)}"
-        else -> "%.2f".format(amount) // No operator, just the amount
-    }
-
-    // Prepare transaction data
-    val transaction = hashMapOf(
-        "userId" to userId,
-        "date" to formattedDate, // Store Timestamp
-        "amount" to formattedAmount,
-        "description" to description
-    )
-
-    // Add transaction to Firestore
-    firestore.collection("Transaction")
-        .add(transaction)
-        .addOnSuccessListener {
-            println("Transaction Recorded Successfully")
-        }
-        .addOnFailureListener { e ->
-            println("Failed to Record Transaction: ${e.message}")
-        }
-}
-
-
-
 @Composable
 fun TopUpSuccessScreen(navController: NavController, topUpAmount: Double, newBalance: Double) {
     Column(
@@ -1245,45 +1051,7 @@ fun ChangePaymentPIN(navController: NavController) {
     }
 }
 
-fun verifyCurrentPin(
-    context: Context,
-    userId: String,
-    enteredPin: String,
-    onSuccess: () -> Unit,
-    onFailure: (String) -> Unit,
-    onLockout: () -> Unit
-) {
-    val firestore = FirebaseFirestore.getInstance()
-    val hashedPin = hashPin(enteredPin)
 
-    firestore.collection("eWallet")
-        .document(userId)
-        .get()
-        .addOnSuccessListener { document ->
-            if (document.exists()) {
-                val storedHashedPin = document.getString("pinCode") ?: ""
-
-                if (storedHashedPin == hashedPin) {
-                    PinAttemptManager.resetAttempts(context) // Reset attempts on success
-                    onSuccess()
-                } else {
-                    PinAttemptManager.incrementAttempts(context) // Increment attempt count
-
-                    if (PinAttemptManager.isLockedOut(context)) {
-                        onLockout() // Lock the user out after 3 failed attempts
-                    } else {
-                        val attemptsLeft = 3 - PinAttemptManager.getAttempts(context)
-                        onFailure("Incorrect PIN. You have $attemptsLeft attempts left.")
-                    }
-                }
-            } else {
-                onFailure("User data not found.")
-            }
-        }
-        .addOnFailureListener { e ->
-            onFailure("Error: ${e.localizedMessage}")
-        }
-}
 
 @Composable
 fun ResetPinScreen(navController: NavController) {
@@ -1385,9 +1153,7 @@ fun ResetPinScreen(navController: NavController) {
     LoadingDialog(text = "Loading...", showDialog = showDialog, onDismiss = { showDialog = false })
 }
 
-fun validateAnswers(userAnswers: List<String>, correctAnswers: List<String>): Boolean {
-    return userAnswers.map { hashAnswer(it) } == correctAnswers
-}
+
 
 @Composable
 fun UpdatePinScreen(navController: NavController) {
@@ -1457,20 +1223,7 @@ fun UpdatePinScreen(navController: NavController) {
     LoadingDialog(text = "Updating PIN...", showDialog = showDialog, onDismiss = { showDialog = false })
 }
 
-fun updateUserPin(userId: String, newPin: String, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
-    val firestore = FirebaseFirestore.getInstance()
-    val hashedPin = hashPin(newPin) // Hash PIN before storing
 
-    val userRef = firestore.collection("eWallet").document(userId)
-
-    userRef.update("pinCode", hashedPin)
-        .addOnSuccessListener {
-            onSuccess()
-        }
-        .addOnFailureListener { exception ->
-            onFailure(exception)
-        }
-}
 
 @Composable
 fun ResetSecurityQuestions(navController: NavController) {

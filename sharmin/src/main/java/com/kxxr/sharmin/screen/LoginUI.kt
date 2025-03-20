@@ -148,7 +148,12 @@ fun AdminAppNavHost() {
 
         //ewallet settings
         composable("generate_pin") { GenerateTopupPinScreen(navController) }
+        composable("search_user") { SearchUserScreen(navController) }
+        composable("adjust_bal/{userId}") { backStackEntry ->
+            val userId = backStackEntry.arguments?.getString("userId").orEmpty()
 
+            AdjustBalanceScreen(navController, userId)
+        }
     }
 }
 
