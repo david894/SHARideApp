@@ -1,6 +1,7 @@
 package com.kxxr.sharide.screen
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -36,6 +37,7 @@ fun MatchingScreen(navController: NavController, firestore: FirebaseFirestore) {
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var matchingRides by remember { mutableStateOf<List<DocumentSnapshot>?>(null) } // Keep DocumentSnapshot
+    var showDialog by remember { mutableStateOf(false) }
 
     val user = FirebaseAuth.getInstance().currentUser
     val userId = user?.uid ?: ""
@@ -67,8 +69,22 @@ fun MatchingScreen(navController: NavController, firestore: FirebaseFirestore) {
             isLoading = false
         })
     }
+    // Disable Android back button on this screen
+    BackHandler {
+        // Do nothing to prevent back navigation
+    }
+
 
     MatchingScreenContent(location, destination, isLoading, matchingRides, searchId, firestore, navController)
+}
+// Function to cancel ride in Firebase
+fun cancelRide(searchId: String?, firestore: FirebaseFirestore, onComplete: () -> Unit) {
+    searchId?.let { id ->
+        firestore.collection("searches").document(id)
+            .delete()
+            .addOnSuccessListener { onComplete() }
+            .addOnFailureListener { onComplete() } // Still navigate even if deletion fails
+    } ?: onComplete()
 }
 
 @Composable

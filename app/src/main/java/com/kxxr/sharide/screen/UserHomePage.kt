@@ -350,18 +350,56 @@ fun ProfileHeader(
 
 
 @Composable
-fun RideSearchReminder(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore, navController: NavController, isDriver: Boolean) {
-    val items = remember { mutableStateListOf<Ride>() }
+fun RideSearchReminder(
+    firebaseAuth: FirebaseAuth,
+    firestore: FirebaseFirestore,
+    navController: NavController,
+    isDriver: Boolean
+) {
+    val rideItems = remember { mutableStateListOf<Ride>() }
+    val searchItems = remember { mutableStateListOf<Ride>() }
     val userId = firebaseAuth.currentUser?.uid ?: ""
-    val collectionName = if (isDriver) "rides" else "searchs" // Use correct Firestore collection
-    val fieldFilter = if (isDriver) "driverId" else "passengerId"
+    val driverIdsStringMap = remember { mutableStateMapOf<String, String>() }
+
     val titleText = if (isDriver) "Ride Reminder" else "Search Reminder"
     val emptyText = if (isDriver) "No rides available" else "No active searches"
-    val driverIdsStringMap = remember { mutableStateMapOf<String, String>() } // Store driverIdsString per searchId
-    LaunchedEffect(userId) {
-        if (userId.isNotEmpty()) {
-            firestore.collection(collectionName)
-                .whereEqualTo(fieldFilter, userId) // Fetch relevant documents
+
+    // Fetch rides for drivers
+    LaunchedEffect(userId, isDriver) {
+        if (userId.isNotEmpty() && isDriver) {
+            firestore.collection("rides")
+                .whereEqualTo("driverId", userId)
+                .addSnapshotListener { documents, error ->
+                    if (error != null || documents == null) return@addSnapshotListener
+
+                    val currentTime = System.currentTimeMillis()
+                    val itemList = documents.mapNotNull { doc ->
+                        val date = doc.getString("date") ?: return@mapNotNull null
+                        val time = doc.getString("time") ?: return@mapNotNull null
+                        val timestamp = convertToTimestamp(date, time)
+                        val timeLeftMillis = timestamp - currentTime
+                        val status = if (timeLeftMillis > 0) formatTimeLeft(timeLeftMillis) else "Completed"
+
+                        Ride(
+                            id = doc.id,
+                            status = status,
+                            timeLeftMillis = timeLeftMillis,
+                            date = date,
+                            time = time
+                        )
+                    }.sortedByDescending { it.timeLeftMillis }
+
+                    rideItems.clear()
+                    rideItems.addAll(itemList)
+                }
+        }
+    }
+
+    // Fetch searches for passengers
+    LaunchedEffect(userId, isDriver) {
+        if (userId.isNotEmpty() && !isDriver) {
+            firestore.collection("searchs")
+                .whereEqualTo("passengerId", userId)
                 .addSnapshotListener { documents, error ->
                     if (error != null || documents == null) return@addSnapshotListener
 
@@ -372,14 +410,11 @@ fun RideSearchReminder(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore,
                         val searchId = doc.id
                         val timestamp = convertToTimestamp(date, time)
                         val timeLeftMillis = timestamp - currentTime
-                        val timeLeftText = formatTimeLeft(timeLeftMillis)
-                        val status = if (timeLeftMillis > 0) timeLeftText else if (isDriver) "Completed" else "Expired"
+                        val status = if (timeLeftMillis > 0) formatTimeLeft(timeLeftMillis) else "Expired"
 
-                        // Fetch driverIdsString only for passengers
-                        if (!isDriver) {
-                            val driverIdsString = doc.getString("driverIdsString") ?: ""
-                            driverIdsStringMap[searchId] = driverIdsString
-                        }
+                        // Fetch driverIdsString
+                        val driverIdsString = doc.getString("driverIdsString") ?: ""
+                        driverIdsStringMap[searchId] = driverIdsString
 
                         Ride(
                             id = doc.id,
@@ -388,13 +423,15 @@ fun RideSearchReminder(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore,
                             date = date,
                             time = time
                         )
-                    }.sortedByDescending { it.timeLeftMillis } // Sort upcoming items
+                    }.sortedByDescending { it.timeLeftMillis }
 
-                    items.clear()
-                    items.addAll(itemList)
+                    searchItems.clear()
+                    searchItems.addAll(itemList)
                 }
         }
     }
+
+    val items = if (isDriver) rideItems else searchItems
 
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         Spacer(modifier = Modifier.height(16.dp))
@@ -405,21 +442,20 @@ fun RideSearchReminder(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore,
             Text(text = emptyText, fontSize = 16.sp, color = Color.Gray)
         } else {
             LazyColumn(
-                modifier = Modifier.heightIn(max = 200.dp) // Limit height to fit 3 items, enable scroll
+                modifier = Modifier.heightIn(max = 200.dp)
             ) {
                 items(items) { item ->
-                    val driverIdsString = driverIdsStringMap[item.id] ?: "" // Get driverIdsString for this search
+                    val driverIdsString = driverIdsStringMap[item.id] ?: ""
 
                     RideItem(
                         title = if (isDriver) "Ride ${items.indexOf(item) + 1}" else "Search ${items.indexOf(item) + 1}",
                         status = item.status,
                         statusColor = getStatusColor(item.status),
-                        isDriver = isDriver, // Pass the user mode
+                        isDriver = isDriver,
                         onClick = {
                             if (isDriver) {
-                                navController.navigate("ride_detail")  ///${item.id}
-                            }
-                            else{
+                                navController.navigate("ride_detail/${item.id}")
+                            } else {
                                 navController.navigate("request_ride/$driverIdsString")
                             }
                         }
@@ -429,7 +465,6 @@ fun RideSearchReminder(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore,
         }
     }
 }
-
 
 fun convertToTimestamp(date: String, time: String): Long {
     val formatter = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())

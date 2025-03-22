@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -27,13 +28,16 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
@@ -62,7 +66,7 @@ fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, 
                         val driver = DriverInfo(
                             driverId = driverDoc.id,
                             name = driverDoc.getString("name") ?: "Unknown",
-                            imageUrl = driverDoc.getString("profilePic") ?: "",
+                            imageUrl = driverDoc.getString("profileImageUrl") ?: "",
                             rating = driverDoc.getDouble("rating") ?: 4.5,
                             price = "RM 1" // Example price
                         )
@@ -130,15 +134,16 @@ fun DriverCard(
     driver: DriverInfo,
     onRequestClick: () -> Unit
 ) {
-    val userName = fetchUserName(firebaseAuth, firestore)
-    val profileImage = fetchProfileImage(firebaseAuth)
+    var userName by remember { mutableStateOf("Unknown") }
+    var profileImageUrl by remember { mutableStateOf("") }
+    var rideDetails by remember { mutableStateOf<RideDetails?>(null) }
 
-    val rideDetails = remember { mutableStateOf<RideDetails?>(null) }
-
-    // Fetch ride details when the Composable is launched
+    // Fetch both ride and driver details when the Composable is launched
     LaunchedEffect(driver.driverId) {
-        fetchRideDetails(firestore, driver.driverId) { fetchedDetails ->
-            rideDetails.value = fetchedDetails
+        fetchRideAndDriverDetails(firestore, driver.driverId) { fetchedRide, name, imageUrl ->
+            rideDetails = fetchedRide
+            userName = name.ifEmpty { "Unknown" }
+            profileImageUrl = imageUrl
         }
     }
 
@@ -165,16 +170,21 @@ fun DriverCard(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Profile Image or Default Icon
-                if (profileImage != null) {
-                    Image(
-                        bitmap = profileImage.asImageBitmap(),
+                if (profileImageUrl.isNotEmpty()) {
+                    AsyncImage(
+                        model = profileImageUrl,
                         contentDescription = "Driver Image",
-                        modifier = Modifier.size(60.dp)
+                        modifier = Modifier
+                            .size(60.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
                     )
                 } else {
                     Icon(
-                        Icons.Default.Person, contentDescription = "Default Driver",
-                        tint = Color.White, modifier = Modifier.size(60.dp)
+                        Icons.Default.Person,
+                        contentDescription = "Default Driver",
+                        tint = Color.White,
+                        modifier = Modifier.size(60.dp)
                     )
                 }
 
@@ -186,7 +196,7 @@ fun DriverCard(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // 🚀 Show Ride Details from Firestore
-                rideDetails.value?.let {
+                rideDetails?.let {
                     Text("📍 Location: ${it.location}", color = Color.White, fontSize = 14.sp)
                     Text("🚏 Stop: ${it.stop}", color = Color.White, fontSize = 14.sp)
                     Text("🕒 Time: ${it.time}", color = Color.White, fontSize = 14.sp)
@@ -206,33 +216,47 @@ fun DriverCard(
 }
 
 
-fun fetchRideDetails(
+fun fetchRideAndDriverDetails(
     firestore: FirebaseFirestore,
     driverId: String,
-    onResult: (RideDetails?) -> Unit
+    onResult: (RideDetails?, String, String) -> Unit
 ) {
     firestore.collection("rides")
-        .whereEqualTo("driverId", driverId) // Find the ride for the given driverId
+        .whereEqualTo("driverId", driverId)
         .limit(1)
         .get()
-        .addOnSuccessListener { documents ->
-            val doc = documents.firstOrNull()
-            if (doc != null) {
-                val rideDetails = RideDetails(
-                    time = doc.getString("time") ?: "N/A",
-                    destination = doc.getString("destination") ?: "N/A",
-                    stop = doc.getString("stop") ?: "N/A",
-                    location = doc.getString("location") ?: "N/A"
+        .addOnSuccessListener { rideDocs ->
+            val rideDoc = rideDocs.firstOrNull()
+            val rideDetails = rideDoc?.let {
+                RideDetails(
+                    time = it.getString("time") ?: "N/A",
+                    destination = it.getString("destination") ?: "N/A",
+                    stop = it.getString("stop") ?: "N/A",
+                    location = it.getString("location") ?: "N/A"
                 )
-                onResult(rideDetails) // Pass the retrieved details
-            } else {
-                onResult(null) // No ride found
             }
+
+            // Fetch driver details from "users"
+            firestore.collection("users")
+                .whereEqualTo("firebaseUserId", driverId)
+                .limit(1)
+                .get()
+                .addOnSuccessListener { userDocs ->
+                    val userDoc = userDocs.firstOrNull()
+                    val name = userDoc?.getString("name") ?: "Unknown"
+                    val imageUrl = userDoc?.getString("profileImageUrl") ?: ""
+
+                    onResult(rideDetails, name, imageUrl)
+                }
+                .addOnFailureListener {
+                    onResult(rideDetails, "Unknown", "")
+                }
         }
         .addOnFailureListener {
-            onResult(null) // Handle failure
+            onResult(null, "Unknown", "")
         }
 }
+
 
 data class RideDetails(
     val time: String,
