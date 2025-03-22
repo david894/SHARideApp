@@ -51,7 +51,7 @@ fun MatchingScreen(navController: NavController, firestore: FirebaseFirestore) {
                     destination = dest
                     isLoading = false
                     val passengerSearch = mapOf("location" to loc, "destination" to dest, "date" to date, "passengerId" to userId)
-                    findMatchingRides(firestore, passengerSearch, { rides ->
+                    findMatchingRides(firestore, { rides ->
                         matchingRides = rides
                     }, {
                         errorMessage = "No matching rides found."
@@ -128,16 +128,25 @@ fun MatchingScreenContent(
                 )
 
                 val driverIds = matchingRides.mapNotNull { it.getString("driverId") }
+                val rideIds = matchingRides.mapNotNull { it.id } // ✅ Get ride IDs
+
                 val driverIdsString = driverIds.joinToString(",")
+                val rideIdsString = rideIds.joinToString(",") // ✅ Convert to string
 
                 Button(onClick = {
-                    // ✅ Update Firestore's "searchs" collection with driverIdsString
+                    // ✅ Update Firestore's "searchs" collection with driverIdsString and rideIdsString
                     if (searchId != null) {
                         firestore.collection("searchs")
                             .document(searchId)
-                            .update("driverIdsString", driverIdsString)
+                            .update(
+                                mapOf(
+                                    "driverIdsString" to driverIdsString,
+                                    "rideIdsString" to rideIdsString // ✅ Store ride IDs
+                                )
+                            )
                             .addOnSuccessListener {
-                                navController.navigate("request_ride/$driverIdsString")
+                                // ✅ Navigate to the next screen with both values
+                                navController.navigate("request_ride/$driverIdsString/$rideIdsString")
                             }
                             .addOnFailureListener { e ->
                                 Toast.makeText(

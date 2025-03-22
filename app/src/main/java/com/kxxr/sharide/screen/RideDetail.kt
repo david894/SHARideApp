@@ -2,6 +2,7 @@
 
 package com.kxxr.sharide.screen
 
+import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -62,89 +63,126 @@ import com.google.firebase.ktx.Firebase
 import com.kxxr.sharide.R
 
 @Composable
-fun RideDetailScreen(navController: NavController) {
+fun RideDetailScreen(navController: NavController, index: Int, rideId: String) {
+    val db = Firebase.firestore
+
+    // Fetch ride details using produceState
+    val rideState by produceState<RideDetail?>(initialValue = null, rideId) {
+        db.collection("rides").document(rideId).get()
+            .addOnSuccessListener { document ->
+                value = document.toObject(RideDetail::class.java)
+            }
+            .addOnFailureListener { exception ->
+                Log.e("Firestore", "Error fetching ride", exception)
+            }
+    }
+
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Ride 3", fontSize = 20.sp, fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            )
-        }
+        topBar = { RideDetailTopBar(navController, index) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(16.dp)
-                .verticalScroll(rememberScrollState()) // Allow entire screen to scroll
+                .verticalScroll(rememberScrollState())
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Route Details with Vertical Connector
-            Row {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.Blue, modifier = Modifier.size(24.dp))
-                    Box(modifier = Modifier.width(2.dp).height(20.dp).background(Color.Blue))
-                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.Blue, modifier = Modifier.size(24.dp))
+            when {
+                rideState == null -> {
+                    Text("Loading ride details...", fontSize = 16.sp, color = Color.Gray)
                 }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Column {
-                    Text("TARUMT MAIN CAMPUS BUS STOP 2", fontSize = 16.sp)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("PV16 BUS STOP", fontSize = 16.sp)
+                rideState != null -> {
+                    rideState?.let { ride ->
+                        RouteDetails(ride.location, ride.destination)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Divider(color = Color.LightGray, thickness = 1.dp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        RideTimeSection(ride.time)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Divider(color = Color.LightGray, thickness = 1.dp)
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
                 }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Top Divider
-            Divider(color = Color.LightGray, thickness = 1.dp)
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Ride Time
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = Icons.Default.AccessTime, contentDescription = null, tint = Color.Blue)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("9:30AM", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Bottom Divider
-            Divider(color = Color.LightGray, thickness = 1.dp)
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Passenger Cards with weight to prevent pushing button off-screen
-            LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-                items(passengerList) { passenger ->
-                    PassengerCard(passenger)
+                else -> {
+                    Text("Error loading ride details. Please try again.", color = Color.Red)
                 }
             }
 
+            PassengerListSection()
             Spacer(modifier = Modifier.height(16.dp))
-
-            // Cancel Ride Button now always visible
-            Button(
-                onClick = { /* Handle cancel ride */ },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
-            ) {
-                Text("Cancel Ride", color = Color.White)
-            }
+            CancelRideButton()
         }
     }
 }
+
+// **Update TopBar to Show Ride Index**
+@Composable
+fun RideDetailTopBar(navController: NavController, index: Int) {
+    TopAppBar(
+        title = { Text("Ride $index", fontSize = 20.sp, fontWeight = FontWeight.Bold) },
+        navigationIcon = {
+            IconButton(onClick = { navController.popBackStack() }) {
+                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+            }
+        }
+    )
+}
+
+// **Update RouteDetails to Accept Dynamic Data**
+@Composable
+fun RouteDetails(pickupLocation: String, destination: String) {
+    Row {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.Blue, modifier = Modifier.size(24.dp))
+            Box(modifier = Modifier.width(2.dp).height(20.dp).background(Color.Blue))
+            Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.Blue, modifier = Modifier.size(24.dp))
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Column {
+            Text(pickupLocation, fontSize = 16.sp)
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(destination, fontSize = 16.sp)
+        }
+    }
+}
+
+// **Update RideTimeSection to Show Firebase Time**
+@Composable
+fun RideTimeSection(time: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(imageVector = Icons.Default.AccessTime, contentDescription = null, tint = Color.Blue)
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(time, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+// Passenger List Section
+@Composable
+fun PassengerListSection() {
+    Column {
+        passengerList.forEach { passenger ->
+            PassengerCard(passenger)
+        }
+    }
+}
+
+// Cancel Ride Button
+@Composable
+fun CancelRideButton() {
+    Button(
+        onClick = { /* Handle cancel ride */ },
+        modifier = Modifier.fillMaxWidth(),
+        colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+    ) {
+        Text("Cancel Ride", color = Color.White)
+    }
+}
+
 
 @Composable
 fun PassengerCard(passenger: Passenger) {
@@ -269,3 +307,11 @@ val passengerList = listOf(
     Passenger("Empty", 0.0, 0, R.drawable.profile_ico, "9.40")
 )
 
+
+data class RideDetail(
+    val rideId: String = "",
+    val driverId: String = "",
+    val location: String = "",  // Ensure lowercase 'l'
+    val destination: String = "",
+    val time: String = ""
+)

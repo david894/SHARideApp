@@ -401,6 +401,7 @@ fun ConfirmSearchButton(
                 "vehicleType" to vehicleType,
                 "capacity" to capacity,
                 "driverIdsString" to "",
+                "rideIdsString" to "",
                 "timestamp" to FieldValue.serverTimestamp() // Add server timestamp
             )
 

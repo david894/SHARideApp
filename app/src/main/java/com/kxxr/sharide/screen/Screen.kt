@@ -55,9 +55,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import coil.compose.rememberAsyncImagePainter
 import com.google.accompanist.navigation.animation.AnimatedNavHost
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -207,25 +209,26 @@ fun AppNavHost(
             composable("notification") { NotificationScreen(navController, firebaseAuth, firestore,context) }
             composable("matching_screen") { MatchingScreen(navController,firestore) }
             composable("search_ride") { SearchRideScreen(navController) }
-            composable("request_ride/{rideId}") { backStackEntry ->
+            composable("request_ride/{driverId}/{rideId}") { backStackEntry ->
+                val driverId = backStackEntry.arguments?.getString("driverId") ?: ""
                 val rideId = backStackEntry.arguments?.getString("rideId") ?: ""
-                RideRequestScreen(firebaseAuth,navController, rideId)
-            }
-            composable("requested_ride/{rideId}/{driverId}/{driverName}/{passengerId}") { backStackEntry ->
-                val rideId = backStackEntry.arguments?.getString("rideId") ?: "Unknown Ride"
-                val driverId = backStackEntry.arguments?.getString("driverId") ?: "Unknown Driver ID"
-                val driverName = backStackEntry.arguments?.getString("driverName") ?: "Unknown Driver"
-                val passengerId = backStackEntry.arguments?.getString("passengerId") ?: "Unknown Passenger"
-
-                SendRequestToDriver(navController, firestore, rideId, driverId, passengerId, driverName)
+                RideRequestScreen(firebaseAuth,navController,driverId, rideId)
             }
 
-            composable("ride_detail") { RideDetailScreen(navController) }
-//            composable("ride_detail/{rideId}/{driverId}") { backStackEntry ->
-//                val rideId = backStackEntry.arguments?.getString("rideId") ?: ""
-//                val driverId = backStackEntry.arguments?.getString("driverId") ?: ""
-//                RideDetailScreen(rideId = rideId, driverId = driverId)
-//            }
+
+            composable(
+                "ride_detail/{index}/{rideId}",
+                arguments = listOf(
+                    navArgument("index") { type = NavType.IntType },
+                    navArgument("rideId") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val index = backStackEntry.arguments?.getInt("index") ?: 0
+                val rideId = backStackEntry.arguments?.getString("rideId") ?: ""
+
+                RideDetailScreen(navController, index, rideId)
+            }
+
 
 
 

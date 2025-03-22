@@ -109,10 +109,14 @@ fun getDriverPreference(context: Context): Boolean {
 }
 
 
-
-// Displays driver screen with map, driver location, reminder list, create ride...
 @Composable
-fun ShowUserScreen(navController: NavController?, firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore, isDriver: Boolean, onRoleChange: (Boolean) -> Unit) {
+fun ShowUserScreen(
+    navController: NavController?,
+    firebaseAuth: FirebaseAuth,
+    firestore: FirebaseFirestore,
+    isDriver: Boolean,
+    onRoleChange: (Boolean) -> Unit
+) {
     val context = LocalContext.current
     val fusedLocationProviderClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var userLocation by remember { mutableStateOf<LatLng?>(null) }
@@ -130,20 +134,20 @@ fun ShowUserScreen(navController: NavController?, firebaseAuth: FirebaseAuth, fi
             e.printStackTrace()
         }
     }
+
     // Exit if navController is null
     val safeNavController = navController ?: return
 
-    // Scaffold Layout for Bottom Navigation
     Scaffold(
-        bottomBar = { BottomNavBar("home", navController) } // Bottom Navigation Bar
+        bottomBar = { BottomNavBar("home", navController) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues) // Prevents overlapping
+                .padding(paddingValues)
         ) {
-
             ProfileHeader(firebaseAuth, firestore, isDriver, onRoleChange, navController)
+
             Box(modifier = Modifier.weight(1f)) {
                 GoogleMap(
                     modifier = Modifier.fillMaxSize(),
@@ -154,10 +158,19 @@ fun ShowUserScreen(navController: NavController?, firebaseAuth: FirebaseAuth, fi
                     userLocation?.let { Marker(state = MarkerState(position = it), title = "You are here") }
                 }
             }
-            RideSearchReminder(firebaseAuth, firestore, navController, isDriver)
+
+            if (isDriver) {
+                RideReminder(firebaseAuth, firestore, safeNavController)
+            } else {
+                SearchReminder(firebaseAuth, firestore, safeNavController)
+            }
+
             Button(
                 onClick = { navController.navigate(if (isDriver) "create_ride" else "search_ride") },
-                modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .height(50.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0075FD))
             ) {
                 Text(text = if (isDriver) "Create Ride" else "Search Ride", color = Color.White, fontSize = 18.sp)
@@ -165,6 +178,7 @@ fun ShowUserScreen(navController: NavController?, firebaseAuth: FirebaseAuth, fi
         }
     }
 }
+
 
 // Profile header with user info and icons
 @Composable
@@ -350,23 +364,17 @@ fun ProfileHeader(
 
 
 @Composable
-fun RideSearchReminder(
+fun RideReminder(
     firebaseAuth: FirebaseAuth,
     firestore: FirebaseFirestore,
-    navController: NavController,
-    isDriver: Boolean
+    navController: NavController
 ) {
     val rideItems = remember { mutableStateListOf<Ride>() }
-    val searchItems = remember { mutableStateListOf<Ride>() }
     val userId = firebaseAuth.currentUser?.uid ?: ""
-    val driverIdsStringMap = remember { mutableStateMapOf<String, String>() }
-
-    val titleText = if (isDriver) "Ride Reminder" else "Search Reminder"
-    val emptyText = if (isDriver) "No rides available" else "No active searches"
 
     // Fetch rides for drivers
-    LaunchedEffect(userId, isDriver) {
-        if (userId.isNotEmpty() && isDriver) {
+    LaunchedEffect(userId) {
+        if (userId.isNotEmpty()) {
             firestore.collection("rides")
                 .whereEqualTo("driverId", userId)
                 .addSnapshotListener { documents, error ->
@@ -395,9 +403,28 @@ fun RideSearchReminder(
         }
     }
 
+    ReminderContent(
+        title = "Ride Reminder",
+        emptyText = "No rides available",
+        items = rideItems,
+        isDriver = true,
+        navController = navController
+    )
+}
+
+@Composable
+fun SearchReminder(
+    firebaseAuth: FirebaseAuth,
+    firestore: FirebaseFirestore,
+    navController: NavController
+) {
+    val searchItems = remember { mutableStateListOf<Ride>() }
+    val userId = firebaseAuth.currentUser?.uid ?: ""
+    val driverIdsStringMap = remember { mutableStateMapOf<String, String>() }
+    val rideIdsStringMap = remember { mutableStateMapOf<String, String>() }
     // Fetch searches for passengers
-    LaunchedEffect(userId, isDriver) {
-        if (userId.isNotEmpty() && !isDriver) {
+    LaunchedEffect(userId) {
+        if (userId.isNotEmpty()) {
             firestore.collection("searchs")
                 .whereEqualTo("passengerId", userId)
                 .addSnapshotListener { documents, error ->
@@ -416,6 +443,9 @@ fun RideSearchReminder(
                         val driverIdsString = doc.getString("driverIdsString") ?: ""
                         driverIdsStringMap[searchId] = driverIdsString
 
+                        // Fetch rideIdsString
+                        val rideIdsString = doc.getString("rideIdsString") ?: ""
+                        rideIdsStringMap[searchId] = rideIdsString
                         Ride(
                             id = doc.id,
                             status = status,
@@ -431,11 +461,30 @@ fun RideSearchReminder(
         }
     }
 
-    val items = if (isDriver) rideItems else searchItems
+    ReminderContent(
+        title = "Search Reminder",
+        emptyText = "No active searches",
+        items = searchItems,
+        isDriver = false,
+        navController = navController,
+        driverIdsStringMap = driverIdsStringMap,
+        rideIdsStringMap = rideIdsStringMap
+        )
+}
 
+@Composable
+fun ReminderContent(
+    title: String,
+    emptyText: String,
+    items: List<Ride>,
+    isDriver: Boolean,
+    navController: NavController,
+    driverIdsStringMap: Map<String, String> = emptyMap(),
+    rideIdsStringMap: Map<String, String> = emptyMap()
+) {
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         Spacer(modifier = Modifier.height(16.dp))
-        Text(text = titleText, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+        Text(text = title, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
         Spacer(modifier = Modifier.height(8.dp))
 
         if (items.isEmpty()) {
@@ -445,18 +494,19 @@ fun RideSearchReminder(
                 modifier = Modifier.heightIn(max = 200.dp)
             ) {
                 items(items) { item ->
+                    val index = items.indexOf(item)
                     val driverIdsString = driverIdsStringMap[item.id] ?: ""
-
+                    val rideIdsString = rideIdsStringMap[item.id] ?: ""
                     RideItem(
-                        title = if (isDriver) "Ride ${items.indexOf(item) + 1}" else "Search ${items.indexOf(item) + 1}",
+                        title = if (isDriver) "Ride ${index + 1}" else "Search ${index + 1}",
                         status = item.status,
                         statusColor = getStatusColor(item.status),
                         isDriver = isDriver,
                         onClick = {
                             if (isDriver) {
-                                navController.navigate("ride_detail/${item.id}")
+                                navController.navigate("ride_detail/${ index+1 }/${item.id}") // Pass index & ride ID
                             } else {
-                                navController.navigate("request_ride/$driverIdsString")
+                                navController.navigate("request_ride/$driverIdsString/$rideIdsString")
                             }
                         }
                     )
@@ -465,6 +515,7 @@ fun RideSearchReminder(
         }
     }
 }
+
 
 fun convertToTimestamp(date: String, time: String): Long {
     val formatter = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())

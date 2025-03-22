@@ -42,45 +42,54 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable
-fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, rideId: String) {
+fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, driverId: String, rideId: String) {
     val firestore = FirebaseFirestore.getInstance()
     var driverList by remember { mutableStateOf<List<DriverInfo>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) } // Show loading until data is fetched
+    var rideDriverPairs by remember { mutableStateOf<List<Pair<RideInfo, DriverInfo>>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
 
-    // Fetch driver details
-    LaunchedEffect(rideId) {
+    LaunchedEffect(driverId, rideId) {
         isLoading = true
 
-        // Ensure rideId contains multiple IDs, and split them properly
-        val driverIds = rideId.split(",").map { it.trim() }//.distinct()
+        // Convert driverId and rideId strings into lists
+        val driverIds = driverId.split(",").map { it.trim() }
+        val rideIds = rideId.split(",").map { it.trim() }
 
-        if (driverIds.isEmpty()) {
-            isLoading = false // No drivers found
-        } else {
-            val tempDriverList = mutableListOf<DriverInfo>()
+        if (driverIds.size != rideIds.size) {
+            isLoading = false // Prevent mismatched data issues
+            return@LaunchedEffect
+        }
 
-            driverIds.forEach { driverId ->
-                firestore.collection("users").document(driverId)
-                    .get()
-                    .addOnSuccessListener { driverDoc ->
-                        val driver = DriverInfo(
-                            driverId = driverDoc.id,
-                            name = driverDoc.getString("name") ?: "Unknown",
-                            imageUrl = driverDoc.getString("profileImageUrl") ?: "",
-                            rating = driverDoc.getDouble("rating") ?: 4.5,
-                            price = "RM 1" // Example price
-                        )
-                        tempDriverList.add(driver)
-                        driverList = tempDriverList.toList() // Ensure proper recomposition
-                    }
-                    .addOnFailureListener {
-                        isLoading = false // Stop loading if there’s an error
-                    }
-                    .addOnCompleteListener {
-                        isLoading = false // Data fetching completed
-                    }
+        val tempRideDriverPairs = mutableListOf<Pair<RideInfo, DriverInfo>>()
+
+        // Fetch driver and ride details together
+        rideIds.zip(driverIds).forEach { (rideId, driverId) ->
+            val driverRef = firestore.collection("users").document(driverId)
+            val rideRef = firestore.collection("rides").document(rideId)
+
+            driverRef.get().addOnSuccessListener { driverDoc ->
+                rideRef.get().addOnSuccessListener { rideDoc ->
+                    val driver = DriverInfo(
+                        driverId = driverDoc.id,
+                        name = driverDoc.getString("name") ?: "Unknown",
+                        imageUrl = driverDoc.getString("profileImageUrl") ?: "",
+                        rating = driverDoc.getDouble("rating") ?: 4.5,
+                        price = "RM 1"
+                    )
+
+                    val ride = RideInfo(
+                        rideId = rideDoc.id,
+                        pickupLocation = rideDoc.getString("pickupLocation") ?: "Unknown",
+                        destination = rideDoc.getString("destination") ?: "Unknown",
+                        time = rideDoc.getString("time") ?: "Unknown"
+                    )
+
+                    tempRideDriverPairs.add(ride to driver)
+                    rideDriverPairs = tempRideDriverPairs.toList() // Ensure recomposition
+                }
             }
         }
+        isLoading = false
     }
 
     Scaffold(
@@ -101,21 +110,19 @@ fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, 
                 .padding(paddingValues),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Matched Driver List", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("Matched Drivers and Rides", fontSize = 20.sp, fontWeight = FontWeight.Bold)
 
             when {
                 isLoading -> CircularProgressIndicator()
-                driverList.isEmpty() -> Text("No drivers found", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                rideDriverPairs.isEmpty() -> Text("No drivers or rides found", fontSize = 16.sp, fontWeight = FontWeight.Medium)
                 else -> {
                     LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(16.dp), // Add space between cards
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), // Add padding to screen,
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        itemsIndexed(driverList) { index, driver ->
-                            DriverCard(firebaseAuth, firestore, index + 1, driver) {
-                                navController.navigate("requested_ride/$rideId/${driver.name}")
-                            }
+                        itemsIndexed(rideDriverPairs) { index, (ride, driver) ->
+                            DriverCard(navController, firebaseAuth, firestore, index + 1, driver, ride.rideId)
                         }
                     }
                 }
@@ -128,11 +135,13 @@ fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, 
 
 @Composable
 fun DriverCard(
+    navController: NavController,
     firebaseAuth: FirebaseAuth,
     firestore: FirebaseFirestore,
     driverNumber: Int,
     driver: DriverInfo,
-    onRequestClick: () -> Unit
+    rideId: String
+
 ) {
     var userName by remember { mutableStateOf("Unknown") }
     var profileImageUrl by remember { mutableStateOf("") }
@@ -140,7 +149,7 @@ fun DriverCard(
 
     // Fetch both ride and driver details when the Composable is launched
     LaunchedEffect(driver.driverId) {
-        fetchRideAndDriverDetails(firestore, driver.driverId) { fetchedRide, name, imageUrl ->
+        fetchRideAndDriverDetails(firestore, driver.driverId, rideId) { fetchedRide, name, imageUrl ->
             rideDetails = fetchedRide
             userName = name.ifEmpty { "Unknown" }
             profileImageUrl = imageUrl
@@ -205,7 +214,15 @@ fun DriverCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
-                    onClick = onRequestClick,
+                    onClick = {
+                        sendRequestToDriver(
+                            firestore = firestore,
+                            rideId = rideId,
+                            driverId = driver.driverId,
+                            passengerId = firebaseAuth.currentUser?.uid ?: "",
+                            onSuccess = { navController.navigate("home") }
+                        )
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
                 ) {
                     Text("Request")
@@ -219,14 +236,13 @@ fun DriverCard(
 fun fetchRideAndDriverDetails(
     firestore: FirebaseFirestore,
     driverId: String,
+    rideId: String,
     onResult: (RideDetails?, String, String) -> Unit
 ) {
-    firestore.collection("rides")
-        .whereEqualTo("driverId", driverId)
-        .limit(1)
+    // Fetch specific ride details using rideId
+    firestore.collection("rides").document(rideId)
         .get()
-        .addOnSuccessListener { rideDocs ->
-            val rideDoc = rideDocs.firstOrNull()
+        .addOnSuccessListener { rideDoc ->
             val rideDetails = rideDoc?.let {
                 RideDetails(
                     time = it.getString("time") ?: "N/A",
@@ -272,48 +288,30 @@ data class DriverInfo(
     val rating: Double,
     val price: String
 )
+data class RideInfo(
+    val rideId: String,
+    val pickupLocation: String,
+    val destination: String,
+    val time: String
+)
 
-@Composable
-fun SendRequestToDriver(
-    navController: NavController,
+fun sendRequestToDriver(
     firestore: FirebaseFirestore,
     rideId: String,
     driverId: String,
     passengerId: String,
-    driverName: String
+    onSuccess: () -> Unit
 ) {
-    val context = LocalContext.current
+    val request = hashMapOf(
+        "rideId" to rideId,
+        "driverId" to driverId,
+        "passengerId" to passengerId,
+        "status" to "pending",
+        "timestamp" to System.currentTimeMillis()
+    )
 
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text("Confirm Ride with $driverName", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text("Ride ID: $rideId", fontSize = 16.sp)
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(onClick = {
-            val request = hashMapOf(
-                "rideId" to rideId,
-                "driverId" to driverId,
-                "passengerId" to passengerId,
-                "status" to "pending",  // Initially set as "pending"
-                "timestamp" to System.currentTimeMillis()
-            )
-
-            firestore.collection("requests")
-                .add(request)
-                .addOnSuccessListener {
-                    Toast.makeText(context, "Request Sent!", Toast.LENGTH_SHORT).show()
-                    navController.popBackStack()
-                }
-                .addOnFailureListener {
-                    Toast.makeText(context, "Failed to send request", Toast.LENGTH_SHORT).show()
-                }
-        }) {
-            Text("Send Request")
-        }
-    }
+    firestore.collection("requests")
+        .add(request)
+        .addOnSuccessListener { onSuccess() }
+        .addOnFailureListener { /* Handle failure if needed */ }
 }

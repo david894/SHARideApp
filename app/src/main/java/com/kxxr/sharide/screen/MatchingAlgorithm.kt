@@ -5,7 +5,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.QuerySnapshot
 fun findMatchingRides(
     firestore: FirebaseFirestore,
-    passengerSearch: Map<String, Any>,
     onMatchFound: (List<DocumentSnapshot>) -> Unit,
     onNoMatch: () -> Unit
 ) {
@@ -15,7 +14,7 @@ fun findMatchingRides(
 
                 // ✅ Get matching ride documents
                 val matchingRides = ridesSnapshot.documents.filter { ride ->
-                    getMatchingDrivers(listOf(ride), searchSnapshot, usersSnapshot, passengerSearch).isNotEmpty()
+                    getMatchingDrivers(listOf(ride), searchSnapshot, usersSnapshot).isNotEmpty()
                 }
 
                 if (matchingRides.isNotEmpty()) {
@@ -62,7 +61,6 @@ fun getMatchingDrivers(
     rideSnapshot: List<DocumentSnapshot>,
     searchSnapshot: QuerySnapshot,
     usersSnapshot: QuerySnapshot,
-    passengerSearch: Map<String, Any>
 ): List<DocumentSnapshot> {
     val matchingRides = mutableListOf<DocumentSnapshot>()
 
@@ -82,10 +80,6 @@ fun getMatchingDrivers(
 
         searchSnapshot.documents.forEach { search ->
             val searchDate = search.getString("date") ?: return@forEach
-
-            // ✅ First check: Ride date must match search date
-            if (rideDate != searchDate) return@forEach
-
             val searchLocation = search.getString("location") ?: return@forEach
             val searchDestination = search.getString("destination") ?: return@forEach
             val searchTime = search.getString("time") ?: "00:00"
@@ -94,7 +88,7 @@ fun getMatchingDrivers(
             val passengerCapacity = search.getLong("capacity")?.toInt() ?: 1
 
             // ✅ Check all conditions only if the date matches
-            val isMatch = isTimeValid(searchTimeMinutes, rideTimeMinutes) &&
+            val isMatch = isDateValid(rideDate,searchDate) && isTimeValid(searchTimeMinutes, rideTimeMinutes) &&
                     isLocationValid(searchLocation, rideLocation, rideStop) &&
                     isDestinationValid(searchDestination, rideStop, rideDestination) &&
                     isGenderValid(driverGender, genderPreference) &&
@@ -112,6 +106,9 @@ fun getMatchingDrivers(
 
 
 
+fun isDateValid(searchDate: String, rideDate: String): Boolean {
+    return rideDate == searchDate
+}
 
 fun isTimeValid(searchTimeMinutes: Int, rideTimeMinutes: Int): Boolean {
     val timeDiff = kotlin.math.abs(rideTimeMinutes - searchTimeMinutes)
