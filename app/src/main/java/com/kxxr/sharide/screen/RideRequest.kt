@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -27,56 +28,68 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable
-fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, rideId: String) {
+fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, driverId: String, rideId: String) {
     val firestore = FirebaseFirestore.getInstance()
     var driverList by remember { mutableStateOf<List<DriverInfo>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) } // Show loading until data is fetched
+    var rideDriverPairs by remember { mutableStateOf<List<Pair<RideInfo, DriverInfo>>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
 
-    // Fetch driver details
-    LaunchedEffect(rideId) {
+    LaunchedEffect(driverId, rideId) {
         isLoading = true
 
-        // Ensure rideId contains multiple IDs, and split them properly
-        val driverIds = rideId.split(",").map { it.trim() }//.distinct()
+        // Convert driverId and rideId strings into lists
+        val driverIds = driverId.split(",").map { it.trim() }
+        val rideIds = rideId.split(",").map { it.trim() }
 
-        if (driverIds.isEmpty()) {
-            isLoading = false // No drivers found
-        } else {
-            val tempDriverList = mutableListOf<DriverInfo>()
+        if (driverIds.size != rideIds.size) {
+            isLoading = false // Prevent mismatched data issues
+            return@LaunchedEffect
+        }
 
-            driverIds.forEach { driverId ->
-                firestore.collection("users").document(driverId)
-                    .get()
-                    .addOnSuccessListener { driverDoc ->
-                        val driver = DriverInfo(
-                            driverId = driverDoc.id,
-                            name = driverDoc.getString("name") ?: "Unknown",
-                            imageUrl = driverDoc.getString("profilePic") ?: "",
-                            rating = driverDoc.getDouble("rating") ?: 4.5,
-                            price = "RM 1" // Example price
-                        )
-                        tempDriverList.add(driver)
-                        driverList = tempDriverList.toList() // Ensure proper recomposition
-                    }
-                    .addOnFailureListener {
-                        isLoading = false // Stop loading if there’s an error
-                    }
-                    .addOnCompleteListener {
-                        isLoading = false // Data fetching completed
-                    }
+        val tempRideDriverPairs = mutableListOf<Pair<RideInfo, DriverInfo>>()
+
+        // Fetch driver and ride details together
+        rideIds.zip(driverIds).forEach { (rideId, driverId) ->
+            val driverRef = firestore.collection("users").document(driverId)
+            val rideRef = firestore.collection("rides").document(rideId)
+
+            driverRef.get().addOnSuccessListener { driverDoc ->
+                rideRef.get().addOnSuccessListener { rideDoc ->
+                    val driver = DriverInfo(
+                        driverId = driverDoc.id,
+                        name = driverDoc.getString("name") ?: "Unknown",
+                        imageUrl = driverDoc.getString("profileImageUrl") ?: "",
+                        rating = driverDoc.getDouble("rating") ?: 4.5,
+                        price = "RM 1"
+                    )
+
+                    val ride = RideInfo(
+                        rideId = rideDoc.id,
+                        pickupLocation = rideDoc.getString("pickupLocation") ?: "Unknown",
+                        destination = rideDoc.getString("destination") ?: "Unknown",
+                        time = rideDoc.getString("time") ?: "Unknown"
+                    )
+
+                    tempRideDriverPairs.add(ride to driver)
+                    rideDriverPairs = tempRideDriverPairs.toList() // Ensure recomposition
+                }
             }
         }
+        isLoading = false
     }
 
     Scaffold(
@@ -97,21 +110,19 @@ fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, 
                 .padding(paddingValues),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Matched Driver List", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("Matched Drivers and Rides", fontSize = 20.sp, fontWeight = FontWeight.Bold)
 
             when {
                 isLoading -> CircularProgressIndicator()
-                driverList.isEmpty() -> Text("No drivers found", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                rideDriverPairs.isEmpty() -> Text("No drivers or rides found", fontSize = 16.sp, fontWeight = FontWeight.Medium)
                 else -> {
                     LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(16.dp), // Add space between cards
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), // Add padding to screen,
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        itemsIndexed(driverList) { index, driver ->
-                            DriverCard(firebaseAuth, firestore, index + 1, driver) {
-                                navController.navigate("requested_ride/$rideId/${driver.name}")
-                            }
+                        itemsIndexed(rideDriverPairs) { index, (ride, driver) ->
+                            DriverCard(navController, firebaseAuth, firestore, index + 1, driver, ride.rideId)
                         }
                     }
                 }
@@ -124,21 +135,24 @@ fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, 
 
 @Composable
 fun DriverCard(
+    navController: NavController,
     firebaseAuth: FirebaseAuth,
     firestore: FirebaseFirestore,
     driverNumber: Int,
     driver: DriverInfo,
-    onRequestClick: () -> Unit
+    rideId: String
+
 ) {
-    val userName = fetchUserName(firebaseAuth, firestore)
-    val profileImage = fetchProfileImage(firebaseAuth)
+    var userName by remember { mutableStateOf("Unknown") }
+    var profileImageUrl by remember { mutableStateOf("") }
+    var rideDetails by remember { mutableStateOf<RideDetails?>(null) }
 
-    val rideDetails = remember { mutableStateOf<RideDetails?>(null) }
-
-    // Fetch ride details when the Composable is launched
+    // Fetch both ride and driver details when the Composable is launched
     LaunchedEffect(driver.driverId) {
-        fetchRideDetails(firestore, driver.driverId) { fetchedDetails ->
-            rideDetails.value = fetchedDetails
+        fetchRideAndDriverDetails(firestore, driver.driverId, rideId) { fetchedRide, name, imageUrl ->
+            rideDetails = fetchedRide
+            userName = name.ifEmpty { "Unknown" }
+            profileImageUrl = imageUrl
         }
     }
 
@@ -165,16 +179,21 @@ fun DriverCard(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Profile Image or Default Icon
-                if (profileImage != null) {
-                    Image(
-                        bitmap = profileImage.asImageBitmap(),
+                if (profileImageUrl.isNotEmpty()) {
+                    AsyncImage(
+                        model = profileImageUrl,
                         contentDescription = "Driver Image",
-                        modifier = Modifier.size(60.dp)
+                        modifier = Modifier
+                            .size(60.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
                     )
                 } else {
                     Icon(
-                        Icons.Default.Person, contentDescription = "Default Driver",
-                        tint = Color.White, modifier = Modifier.size(60.dp)
+                        Icons.Default.Person,
+                        contentDescription = "Default Driver",
+                        tint = Color.White,
+                        modifier = Modifier.size(60.dp)
                     )
                 }
 
@@ -186,7 +205,7 @@ fun DriverCard(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // 🚀 Show Ride Details from Firestore
-                rideDetails.value?.let {
+                rideDetails?.let {
                     Text("📍 Location: ${it.location}", color = Color.White, fontSize = 14.sp)
                     Text("🚏 Stop: ${it.stop}", color = Color.White, fontSize = 14.sp)
                     Text("🕒 Time: ${it.time}", color = Color.White, fontSize = 14.sp)
@@ -195,7 +214,15 @@ fun DriverCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
-                    onClick = onRequestClick,
+                    onClick = {
+                        sendRequestToDriver(
+                            firestore = firestore,
+                            rideId = rideId,
+                            driverId = driver.driverId,
+                            passengerId = firebaseAuth.currentUser?.uid ?: "",
+                            onSuccess = { navController.navigate("home") }
+                        )
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
                 ) {
                     Text("Request")
@@ -206,33 +233,46 @@ fun DriverCard(
 }
 
 
-fun fetchRideDetails(
+fun fetchRideAndDriverDetails(
     firestore: FirebaseFirestore,
     driverId: String,
-    onResult: (RideDetails?) -> Unit
+    rideId: String,
+    onResult: (RideDetails?, String, String) -> Unit
 ) {
-    firestore.collection("rides")
-        .whereEqualTo("driverId", driverId) // Find the ride for the given driverId
-        .limit(1)
+    // Fetch specific ride details using rideId
+    firestore.collection("rides").document(rideId)
         .get()
-        .addOnSuccessListener { documents ->
-            val doc = documents.firstOrNull()
-            if (doc != null) {
-                val rideDetails = RideDetails(
-                    time = doc.getString("time") ?: "N/A",
-                    destination = doc.getString("destination") ?: "N/A",
-                    stop = doc.getString("stop") ?: "N/A",
-                    location = doc.getString("location") ?: "N/A"
+        .addOnSuccessListener { rideDoc ->
+            val rideDetails = rideDoc?.let {
+                RideDetails(
+                    time = it.getString("time") ?: "N/A",
+                    destination = it.getString("destination") ?: "N/A",
+                    stop = it.getString("stop") ?: "N/A",
+                    location = it.getString("location") ?: "N/A"
                 )
-                onResult(rideDetails) // Pass the retrieved details
-            } else {
-                onResult(null) // No ride found
             }
+
+            // Fetch driver details from "users"
+            firestore.collection("users")
+                .whereEqualTo("firebaseUserId", driverId)
+                .limit(1)
+                .get()
+                .addOnSuccessListener { userDocs ->
+                    val userDoc = userDocs.firstOrNull()
+                    val name = userDoc?.getString("name") ?: "Unknown"
+                    val imageUrl = userDoc?.getString("profileImageUrl") ?: ""
+
+                    onResult(rideDetails, name, imageUrl)
+                }
+                .addOnFailureListener {
+                    onResult(rideDetails, "Unknown", "")
+                }
         }
         .addOnFailureListener {
-            onResult(null) // Handle failure
+            onResult(null, "Unknown", "")
         }
 }
+
 
 data class RideDetails(
     val time: String,
@@ -248,48 +288,30 @@ data class DriverInfo(
     val rating: Double,
     val price: String
 )
+data class RideInfo(
+    val rideId: String,
+    val pickupLocation: String,
+    val destination: String,
+    val time: String
+)
 
-@Composable
-fun SendRequestToDriver(
-    navController: NavController,
+fun sendRequestToDriver(
     firestore: FirebaseFirestore,
     rideId: String,
     driverId: String,
     passengerId: String,
-    driverName: String
+    onSuccess: () -> Unit
 ) {
-    val context = LocalContext.current
+    val request = hashMapOf(
+        "rideId" to rideId,
+        "driverId" to driverId,
+        "passengerId" to passengerId,
+        "status" to "pending",
+        "timestamp" to System.currentTimeMillis()
+    )
 
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text("Confirm Ride with $driverName", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text("Ride ID: $rideId", fontSize = 16.sp)
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(onClick = {
-            val request = hashMapOf(
-                "rideId" to rideId,
-                "driverId" to driverId,
-                "passengerId" to passengerId,
-                "status" to "pending",  // Initially set as "pending"
-                "timestamp" to System.currentTimeMillis()
-            )
-
-            firestore.collection("requests")
-                .add(request)
-                .addOnSuccessListener {
-                    Toast.makeText(context, "Request Sent!", Toast.LENGTH_SHORT).show()
-                    navController.popBackStack()
-                }
-                .addOnFailureListener {
-                    Toast.makeText(context, "Failed to send request", Toast.LENGTH_SHORT).show()
-                }
-        }) {
-            Text("Send Request")
-        }
-    }
+    firestore.collection("requests")
+        .add(request)
+        .addOnSuccessListener { onSuccess() }
+        .addOnFailureListener { /* Handle failure if needed */ }
 }

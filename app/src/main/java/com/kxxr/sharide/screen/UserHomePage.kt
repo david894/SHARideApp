@@ -109,10 +109,14 @@ fun getDriverPreference(context: Context): Boolean {
 }
 
 
-
-// Displays driver screen with map, driver location, reminder list, create ride...
 @Composable
-fun ShowUserScreen(navController: NavController?, firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore, isDriver: Boolean, onRoleChange: (Boolean) -> Unit) {
+fun ShowUserScreen(
+    navController: NavController?,
+    firebaseAuth: FirebaseAuth,
+    firestore: FirebaseFirestore,
+    isDriver: Boolean,
+    onRoleChange: (Boolean) -> Unit
+) {
     val context = LocalContext.current
     val fusedLocationProviderClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var userLocation by remember { mutableStateOf<LatLng?>(null) }
@@ -130,20 +134,20 @@ fun ShowUserScreen(navController: NavController?, firebaseAuth: FirebaseAuth, fi
             e.printStackTrace()
         }
     }
+
     // Exit if navController is null
     val safeNavController = navController ?: return
 
-    // Scaffold Layout for Bottom Navigation
     Scaffold(
-        bottomBar = { BottomNavBar("home", navController) } // Bottom Navigation Bar
+        bottomBar = { BottomNavBar("home", navController) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues) // Prevents overlapping
+                .padding(paddingValues)
         ) {
-
             ProfileHeader(firebaseAuth, firestore, isDriver, onRoleChange, navController)
+
             Box(modifier = Modifier.weight(1f)) {
                 GoogleMap(
                     modifier = Modifier.fillMaxSize(),
@@ -154,10 +158,19 @@ fun ShowUserScreen(navController: NavController?, firebaseAuth: FirebaseAuth, fi
                     userLocation?.let { Marker(state = MarkerState(position = it), title = "You are here") }
                 }
             }
-            RideSearchReminder(firebaseAuth, firestore, navController, isDriver)
+
+            if (isDriver) {
+                RideReminder(firebaseAuth, firestore, safeNavController)
+            } else {
+                SearchReminder(firebaseAuth, firestore, safeNavController)
+            }
+
             Button(
                 onClick = { navController.navigate(if (isDriver) "create_ride" else "search_ride") },
-                modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .height(50.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0075FD))
             ) {
                 Text(text = if (isDriver) "Create Ride" else "Search Ride", color = Color.White, fontSize = 18.sp)
@@ -165,6 +178,7 @@ fun ShowUserScreen(navController: NavController?, firebaseAuth: FirebaseAuth, fi
         }
     }
 }
+
 
 // Profile header with user info and icons
 @Composable
@@ -350,18 +364,69 @@ fun ProfileHeader(
 
 
 @Composable
-fun RideSearchReminder(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore, navController: NavController, isDriver: Boolean) {
-    val items = remember { mutableStateListOf<Ride>() }
+fun RideReminder(
+    firebaseAuth: FirebaseAuth,
+    firestore: FirebaseFirestore,
+    navController: NavController
+) {
+    val rideItems = remember { mutableStateListOf<Ride>() }
     val userId = firebaseAuth.currentUser?.uid ?: ""
-    val collectionName = if (isDriver) "rides" else "searchs" // Use correct Firestore collection
-    val fieldFilter = if (isDriver) "driverId" else "passengerId"
-    val titleText = if (isDriver) "Ride Reminder" else "Search Reminder"
-    val emptyText = if (isDriver) "No rides available" else "No active searches"
-    val driverIdsStringMap = remember { mutableStateMapOf<String, String>() } // Store driverIdsString per searchId
+
+    // Fetch rides for drivers
     LaunchedEffect(userId) {
         if (userId.isNotEmpty()) {
-            firestore.collection(collectionName)
-                .whereEqualTo(fieldFilter, userId) // Fetch relevant documents
+            firestore.collection("rides")
+                .whereEqualTo("driverId", userId)
+                .addSnapshotListener { documents, error ->
+                    if (error != null || documents == null) return@addSnapshotListener
+
+                    val currentTime = System.currentTimeMillis()
+                    val itemList = documents.mapNotNull { doc ->
+                        val date = doc.getString("date") ?: return@mapNotNull null
+                        val time = doc.getString("time") ?: return@mapNotNull null
+                        val timestamp = convertToTimestamp(date, time)
+                        val timeLeftMillis = timestamp - currentTime
+                        val status = if (timeLeftMillis > 0) formatTimeLeft(timeLeftMillis) else "Completed"
+
+                        Ride(
+                            id = doc.id,
+                            status = status,
+                            timeLeftMillis = timeLeftMillis,
+                            date = date,
+                            time = time
+                        )
+                    }.sortedByDescending { it.timeLeftMillis }
+
+                    rideItems.clear()
+                    rideItems.addAll(itemList)
+                }
+        }
+    }
+
+    ReminderContent(
+        title = "Ride Reminder",
+        emptyText = "No rides available",
+        items = rideItems,
+        isDriver = true,
+        navController = navController
+    )
+}
+
+@Composable
+fun SearchReminder(
+    firebaseAuth: FirebaseAuth,
+    firestore: FirebaseFirestore,
+    navController: NavController
+) {
+    val searchItems = remember { mutableStateListOf<Ride>() }
+    val userId = firebaseAuth.currentUser?.uid ?: ""
+    val driverIdsStringMap = remember { mutableStateMapOf<String, String>() }
+    val rideIdsStringMap = remember { mutableStateMapOf<String, String>() }
+    // Fetch searches for passengers
+    LaunchedEffect(userId) {
+        if (userId.isNotEmpty()) {
+            firestore.collection("searchs")
+                .whereEqualTo("passengerId", userId)
                 .addSnapshotListener { documents, error ->
                     if (error != null || documents == null) return@addSnapshotListener
 
@@ -372,15 +437,15 @@ fun RideSearchReminder(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore,
                         val searchId = doc.id
                         val timestamp = convertToTimestamp(date, time)
                         val timeLeftMillis = timestamp - currentTime
-                        val timeLeftText = formatTimeLeft(timeLeftMillis)
-                        val status = if (timeLeftMillis > 0) timeLeftText else if (isDriver) "Completed" else "Expired"
+                        val status = if (timeLeftMillis > 0) formatTimeLeft(timeLeftMillis) else "Expired"
 
-                        // Fetch driverIdsString only for passengers
-                        if (!isDriver) {
-                            val driverIdsString = doc.getString("driverIdsString") ?: ""
-                            driverIdsStringMap[searchId] = driverIdsString
-                        }
+                        // Fetch driverIdsString
+                        val driverIdsString = doc.getString("driverIdsString") ?: ""
+                        driverIdsStringMap[searchId] = driverIdsString
 
+                        // Fetch rideIdsString
+                        val rideIdsString = doc.getString("rideIdsString") ?: ""
+                        rideIdsStringMap[searchId] = rideIdsString
                         Ride(
                             id = doc.id,
                             status = status,
@@ -388,39 +453,60 @@ fun RideSearchReminder(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore,
                             date = date,
                             time = time
                         )
-                    }.sortedByDescending { it.timeLeftMillis } // Sort upcoming items
+                    }.sortedByDescending { it.timeLeftMillis }
 
-                    items.clear()
-                    items.addAll(itemList)
+                    searchItems.clear()
+                    searchItems.addAll(itemList)
                 }
         }
     }
 
+    ReminderContent(
+        title = "Search Reminder",
+        emptyText = "No active searches",
+        items = searchItems,
+        isDriver = false,
+        navController = navController,
+        driverIdsStringMap = driverIdsStringMap,
+        rideIdsStringMap = rideIdsStringMap
+        )
+}
+
+@Composable
+fun ReminderContent(
+    title: String,
+    emptyText: String,
+    items: List<Ride>,
+    isDriver: Boolean,
+    navController: NavController,
+    driverIdsStringMap: Map<String, String> = emptyMap(),
+    rideIdsStringMap: Map<String, String> = emptyMap()
+) {
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         Spacer(modifier = Modifier.height(16.dp))
-        Text(text = titleText, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+        Text(text = title, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
         Spacer(modifier = Modifier.height(8.dp))
 
         if (items.isEmpty()) {
             Text(text = emptyText, fontSize = 16.sp, color = Color.Gray)
         } else {
             LazyColumn(
-                modifier = Modifier.heightIn(max = 200.dp) // Limit height to fit 3 items, enable scroll
+                modifier = Modifier.heightIn(max = 200.dp)
             ) {
                 items(items) { item ->
-                    val driverIdsString = driverIdsStringMap[item.id] ?: "" // Get driverIdsString for this search
-
+                    val index = items.indexOf(item)
+                    val driverIdsString = driverIdsStringMap[item.id] ?: ""
+                    val rideIdsString = rideIdsStringMap[item.id] ?: ""
                     RideItem(
-                        title = if (isDriver) "Ride ${items.indexOf(item) + 1}" else "Search ${items.indexOf(item) + 1}",
+                        title = if (isDriver) "Ride ${index + 1}" else "Search ${index + 1}",
                         status = item.status,
                         statusColor = getStatusColor(item.status),
-                        isDriver = isDriver, // Pass the user mode
+                        isDriver = isDriver,
                         onClick = {
                             if (isDriver) {
-                                navController.navigate("ride_detail")  ///${item.id}
-                            }
-                            else{
-                                navController.navigate("request_ride/$driverIdsString")
+                                navController.navigate("ride_detail/${ index+1 }/${item.id}") // Pass index & ride ID
+                            } else {
+                                navController.navigate("request_ride/$driverIdsString/$rideIdsString")
                             }
                         }
                     )
