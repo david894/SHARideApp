@@ -1,4 +1,4 @@
-package com.kxxr.sharide.DataClass
+package com.kxxr.logiclibrary.SignUp
 
 data class VehicleData(
     val carMake: String,

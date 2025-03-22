@@ -388,6 +388,9 @@ fun SearchUserScreen(navController: NavController) {
                 showDialog = true
                 searchUsers(firestore, searchQuery, context) {
                     users = it
+                    if(users.isEmpty()){
+                        Toast.makeText(context, "No user found!", Toast.LENGTH_SHORT).show()
+                    }
                     showDialog = false
                 }
             },

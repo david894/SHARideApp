@@ -249,7 +249,27 @@ fun AdminHome(firebaseAuth: FirebaseAuth, navController: NavController) {
             Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
         }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp)
+        ) {
+            Text(text = "User Settings", color = Color.Gray, fontSize = 20.sp, modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp))
 
+            ProfileCard(title = "Review User Verification Case", img = "profile_ico", onClick = {navController.navigate("reviewUserScreen")})
+            Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
+
+            ProfileCard(title = "Review Driver Verification Case",img = "car_front", onClick = {navController.navigate("search_user")})
+            Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
+
+            ProfileCard(title = "View User Details",img = "search", onClick = {navController.navigate("search_user")})
+            Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
+
+            ProfileCard(title = "Ban User",img = "ban", onClick = {navController.navigate("search_user")})
+            Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
+        }
         Spacer(modifier = Modifier.height(50.dp)) // Pushes Log Out button to bottom
 
         // **Log Out Button**
@@ -268,9 +288,11 @@ fun AdminHome(firebaseAuth: FirebaseAuth, navController: NavController) {
             Text(text = "Log Out", color = Color.White, fontSize = 16.sp)
         }
 
-        Spacer(modifier = Modifier.height(150.dp))
+        Spacer(modifier = Modifier.height(15.dp))
 
         Text(text = "© SHARide 2025 \n Ziegler Tan & David Ng\nTARUMT Project ONLY", color = Color.LightGray, fontSize = 16.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+        Spacer(modifier = Modifier.height(35.dp))
+
     }
 
     if (showEmailDialog) {

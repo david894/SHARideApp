@@ -22,7 +22,7 @@ fun searchUsers(
         .get()
         .addOnSuccessListener { snapshot ->
             if (snapshot.isEmpty) {
-                Toast.makeText(context, "No user found!", Toast.LENGTH_SHORT).show()
+                //Toast.makeText(context, "No user found!", Toast.LENGTH_SHORT).show()
                 onResult(emptyList())
                 return@addOnSuccessListener
             }

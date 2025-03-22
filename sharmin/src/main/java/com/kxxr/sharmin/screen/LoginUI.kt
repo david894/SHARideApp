@@ -154,6 +154,13 @@ fun AdminAppNavHost() {
 
             AdjustBalanceScreen(navController, userId)
         }
+
+        //user settings
+        composable("reviewUserScreen") { ReviewUserScreen(navController) }
+        composable("caseDetail/{caseId}") { backStackEntry ->
+            val caseId = backStackEntry.arguments?.getString("caseId") ?: ""
+            CaseDetailScreen(navController, caseId)
+        }
     }
 }
 

@@ -2,6 +2,7 @@ package com.kxxr.logiclibrary.AiDetector
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.net.Uri
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.FaceDetection
@@ -10,6 +11,7 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.io.File
 import java.io.FileOutputStream
+import java.util.Locale
 
 fun extractInfoFromIdCard(
     context: Context,
@@ -36,7 +38,16 @@ fun extractInfoFromIdCard(
                     if (Regex("[0-9]{2}[A-z]{1}").containsMatchIn(text)){
                         studentId = text // Matches Student ID pattern
                     } else if (text.contains(" ") && !Regex("\\d").containsMatchIn(text)) {
-                        name = text // Heuristics for Name
+                        if(text.contains("Faculty",ignoreCase = true) || text.contains("Accountancy",ignoreCase = true) ||
+                            text.contains("Business",ignoreCase = true) || text.contains("Science",ignoreCase = true) ||
+                            text.contains("Information",ignoreCase = true) || text.contains("University",ignoreCase = true) ||
+                            text.contains("Engineering",ignoreCase = true) || text.contains("Communication",ignoreCase = true))
+                        { }else{
+                            name = text // Heuristics for Name
+
+                        }
+                    }else if (text.contains("STAFF",ignoreCase = true)){
+                        studentId = "STAFF"
                     }
                 }
             }
@@ -98,4 +109,58 @@ fun saveBitmapToCache(context: Context, bitmap: Bitmap, fileName: String): Strin
     }
 
     return file.absolutePath // Return the file path for later use
+}
+
+fun detectPlateNumber(
+    context: Context,
+    imageUri: Uri,
+    expectedPlateNumber: String,
+    onResult: (Boolean, String) -> Unit // (isMatch, message)
+) {
+    val inputImage = InputImage.fromFilePath(context, imageUri)
+    val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+
+    if (expectedPlateNumber.isBlank()) {
+        onResult(false, "Plate Number Not Found")
+        return
+    }
+
+    recognizer.process(inputImage)
+        .addOnSuccessListener { visionText ->
+            val extractedText = visionText.text?.uppercase(Locale.getDefault()) ?: ""
+
+            // Ensure extracted text is not empty
+            if (extractedText.isBlank()) {
+                onResult(false, "No Text Detected in Image")
+                return@addOnSuccessListener
+            }
+
+            // Ensure plate number is correctly formatted
+            val plateParts = expectedPlateNumber.trim().split(" ")
+            if (plateParts.size < 2) {
+                onResult(false, "Invalid Plate Number Format")
+                return@addOnSuccessListener
+            }
+
+            val firstPart = plateParts.getOrNull(0) ?: ""
+            val secondPart = plateParts.getOrNull(1) ?: ""
+
+            // Ensure BOTH parts exist separately in the extracted text
+            val firstPartMatch = "\\b$firstPart\\b".toRegex().containsMatchIn(extractedText)
+            val secondPartMatch = "\\b$secondPart\\b".toRegex().containsMatchIn(extractedText)
+
+            if (firstPartMatch && secondPartMatch) {
+                onResult(true, "Plate Number Matched")
+            } else {
+                onResult(false, "Plate Number Not Found")
+            }
+        }
+        .addOnFailureListener {
+            onResult(false, "Failed to process image")
+        }
+}
+
+fun rotateBitmap(bitmap: Bitmap, degrees: Float): Bitmap {
+    val matrix = Matrix().apply { postRotate(degrees) }
+    return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 }
