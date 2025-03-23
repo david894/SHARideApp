@@ -55,8 +55,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
+import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import coil.compose.rememberAsyncImagePainter
 import com.google.accompanist.navigation.animation.AnimatedNavHost
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -78,7 +80,6 @@ import com.kxxr.logiclibrary.Login.handleMultiFactorAuthentication
 import com.kxxr.logiclibrary.Login.resetPassword
 import com.kxxr.logiclibrary.Login.signInWithEmailPassword
 import com.kxxr.logiclibrary.Network.NetworkViewModel
-import com.kxxr.logiclibrary.SignUp.VehicleData
 import com.kxxr.logiclibrary.SignUp.handleVehicleSubmission
 import com.kxxr.logiclibrary.SignUp.loadVehicleData
 import com.kxxr.logiclibrary.SignUp.performSignUp
@@ -88,9 +89,7 @@ import com.kxxr.logiclibrary.SignUp.uploadImagesAndSaveData
 import com.kxxr.logiclibrary.SignUp.uploadToFirebaseStorage
 import com.kxxr.sharide.R
 import kotlinx.coroutines.delay
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.util.Locale
 import java.util.UUID
 
 @OptIn(ExperimentalAnimationApi::class)
@@ -216,21 +215,18 @@ fun AppNavHost(
                 val rideId = backStackEntry.arguments?.getString("rideId") ?: ""
                 RideRequestScreen(firebaseAuth,navController,driverId, rideId)
             }
-            composable("requested_ride/{rideId}/{driverId}/{driverName}/{passengerId}") { backStackEntry ->
-                val rideId = backStackEntry.arguments?.getString("rideId") ?: "Unknown Ride"
-                val driverId = backStackEntry.arguments?.getString("driverId") ?: "Unknown Driver ID"
-                val driverName = backStackEntry.arguments?.getString("driverName") ?: "Unknown Driver"
-                val passengerId = backStackEntry.arguments?.getString("passengerId") ?: "Unknown Passenger"
+            composable(
+                "ride_detail/{index}/{rideId}",
+                arguments = listOf(
+                    navArgument("index") { type = NavType.IntType },
+                    navArgument("rideId") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val index = backStackEntry.arguments?.getInt("index") ?: 0
+                val rideId = backStackEntry.arguments?.getString("rideId") ?: ""
 
-                //SendRequestToDriver(navController, firestore, rideId, driverId, passengerId, driverName)
+                RideDetailScreen(navController, index, rideId)
             }
-
-            //composable("ride_detail") { RideDetailScreen(navController) }
-//            composable("ride_detail/{rideId}/{driverId}") { backStackEntry ->
-//                val rideId = backStackEntry.arguments?.getString("rideId") ?: ""
-//                val driverId = backStackEntry.arguments?.getString("driverId") ?: ""
-//                RideDetailScreen(rideId = rideId, driverId = driverId)
-//            }
 
 
 
