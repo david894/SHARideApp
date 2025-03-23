@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.PhoneMultiFactorInfo
@@ -162,27 +163,16 @@ fun AdminHome(firebaseAuth: FirebaseAuth, navController: NavController) {
         Text(text = "Admin Dashboard", fontSize = 26.sp,color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp))
 
         Spacer(modifier = Modifier.height(16.dp))
-
-        profileBitmap?.let {
-            Image(
-                bitmap = it.asImageBitmap(),
-                contentDescription = "Profile Picture",
-                modifier = Modifier
-                    .size(120.dp)
-                    .clip(CircleShape)
-                    .align(Alignment.End)
-                    .fillMaxWidth()
-            )
-        } ?: Image(
-            painter = painterResource(id = R.drawable.profile_ico),
-            contentDescription = "Profile Picture",
+        Image(
+            painter = rememberAsyncImagePainter(profileImageUrl),
+            contentDescription = "Selfie Image",
             modifier = Modifier
                 .size(120.dp)
                 .clip(CircleShape)
                 .align(Alignment.End)
-                .fillMaxWidth(),
-            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White)
+                .fillMaxWidth()
         )
+
     }
 
     Column(

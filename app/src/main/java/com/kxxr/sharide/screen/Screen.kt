@@ -70,6 +70,7 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.kxxr.logiclibrary.AiDetector.detectFaceFromIdCard
+import com.kxxr.logiclibrary.AiDetector.detectPlateNumber
 import com.kxxr.logiclibrary.AiDetector.extractInfoFromIdCard
 import com.kxxr.logiclibrary.AiDetector.saveBitmapToCache
 import com.kxxr.logiclibrary.Login.handleGoogleSignIn
@@ -78,6 +79,13 @@ import com.kxxr.logiclibrary.Login.resetPassword
 import com.kxxr.logiclibrary.Login.signInWithEmailPassword
 import com.kxxr.logiclibrary.Network.NetworkViewModel
 import com.kxxr.logiclibrary.SignUp.VehicleData
+import com.kxxr.logiclibrary.SignUp.handleVehicleSubmission
+import com.kxxr.logiclibrary.SignUp.loadVehicleData
+import com.kxxr.logiclibrary.SignUp.performSignUp
+import com.kxxr.logiclibrary.SignUp.saveDriverToFirestore
+import com.kxxr.logiclibrary.SignUp.uploadDriverData
+import com.kxxr.logiclibrary.SignUp.uploadImagesAndSaveData
+import com.kxxr.logiclibrary.SignUp.uploadToFirebaseStorage
 import com.kxxr.sharide.R
 import kotlinx.coroutines.delay
 import java.io.ByteArrayOutputStream
@@ -1177,177 +1185,10 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
                     && isReEmailValid && isRePasswordValid)
                 {
                     showDialog = true
-                    // Check if the email is already registered
-                    firebaseAuth.fetchSignInMethodsForEmail(email)
-                        .addOnCompleteListener { task ->
-                            if (task.isSuccessful) {
-                                val signInMethods = task.result?.signInMethods
-                                if (signInMethods.isNullOrEmpty()) {
-                                    // Email is NOT registered, now check studentId in Firestore
-                                    // Check for duplicate studentId in Firestore
-                                    firestore.collection("users")
-                                        .whereEqualTo("studentId", userid)
-                                        .get()
-                                        .addOnSuccessListener { querySnapshot ->
-                                            if (querySnapshot.isEmpty) {
-
-                                                // No duplicate studentId, proceed with sign-up
-                                                firebaseAuth.createUserWithEmailAndPassword(
-                                                    email,
-                                                    password
-                                                )
-                                                    .addOnCompleteListener { task ->
-                                                        if (task.isSuccessful) {
-                                                            // Get the Firebase user ID
-                                                            val firebaseUserId =
-                                                                task.result?.user?.uid
-
-                                                            val firebaseUser = task.result?.user
-
-                                                            // Send email verification
-                                                            firebaseUser?.sendEmailVerification()
-                                                                ?.addOnSuccessListener {
-                                                                    Toast.makeText(
-                                                                        context,
-                                                                        "Verification email sent!",
-                                                                        Toast.LENGTH_SHORT
-                                                                    ).show()
-                                                                }?.addOnFailureListener { e ->
-                                                                Toast.makeText(
-                                                                    context,
-                                                                    "Failed to send verification email: ${e.message}",
-                                                                    Toast.LENGTH_SHORT
-                                                                ).show()
-                                                            }
-                                                            
-                                                            // Upload profile picture to Firebase Storage
-                                                            val storageReference =
-                                                                FirebaseStorage.getInstance()
-                                                                    .reference
-                                                                    .child("ProfilePic/$firebaseUserId.png")
-
-                                                            val byteArrayOutputStream =
-                                                                ByteArrayOutputStream()
-                                                            profilePicture.compress(
-                                                                Bitmap.CompressFormat.PNG,
-                                                                100,
-                                                                byteArrayOutputStream
-                                                            )
-                                                            val profilePicData =
-                                                                byteArrayOutputStream.toByteArray()
-
-                                                            val uploadTask =
-                                                                storageReference.putBytes(
-                                                                    profilePicData
-                                                                )
-                                                            uploadTask.addOnSuccessListener {
-                                                                // Get the download URL for the uploaded profile picture
-                                                                storageReference.downloadUrl.addOnSuccessListener { uri ->
-                                                                    val profileImageUrl =
-                                                                        uri.toString()
-
-                                                                    // Save user data to Firestore
-                                                                    val userData = hashMapOf(
-                                                                        "firebaseUserId" to firebaseUserId, // Firebase Authentication user ID
-                                                                        "name" to userName,
-                                                                        "studentId" to userid,
-                                                                        "email" to email,
-                                                                        "phoneNumber" to phoneNumber,
-                                                                        "gender" to gender,
-                                                                        "profileImageUrl" to profileImageUrl // Save URL of the uploaded image
-                                                                    )
-                                                                    firestore.collection("users")
-                                                                        .add(userData)
-                                                                        .addOnSuccessListener {
-                                                                            showDialog = false
-                                                                            Toast.makeText(
-                                                                                context,
-                                                                                "User Registered Successfully",
-                                                                                Toast.LENGTH_SHORT
-                                                                            ).show()
-                                                                            firebaseAuth.signOut()
-                                                                            navController.navigate("emailverify")
-                                                                        }
-                                                                        .addOnFailureListener { e ->
-                                                                            showDialog = false
-                                                                            Toast.makeText(
-                                                                                context,
-                                                                                "Error saving user data: ${e.message}",
-                                                                                Toast.LENGTH_SHORT
-                                                                            ).show()
-                                                                        }
-                                                                }.addOnFailureListener { e ->
-                                                                    showDialog = false
-                                                                    Toast.makeText(
-                                                                        context,
-                                                                        "Error getting image URL: ${e.message}",
-                                                                        Toast.LENGTH_SHORT
-                                                                    ).show()
-                                                                }
-                                                            }.addOnFailureListener { e ->
-                                                                showDialog = false
-                                                                Toast.makeText(
-                                                                    context,
-                                                                    "Error uploading profile picture: ${e.message}",
-                                                                    Toast.LENGTH_SHORT
-                                                                ).show()
-                                                            }
-                                                        } else {
-                                                            showDialog = false
-                                                            // Show error if Firebase Authentication failed
-                                                            Toast.makeText(
-                                                                context,
-                                                                "Error: ${task.exception?.message}",
-                                                                Toast.LENGTH_SHORT
-                                                            ).show()
-                                                        }
-                                                    }
-                                            } else {
-                                                showDialog = false
-                                                // Duplicate studentId found
-                                                navController.navigate("duplicateID")
-                                                Toast.makeText(
-                                                    context,
-                                                    "Student ID already exists. Please use a different ID.",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
-                                            }
-                                        }
-                                        .addOnFailureListener { e ->
-                                            showDialog = false
-
-                                            // Handle Firestore query failure
-                                            Toast.makeText(
-                                                context,
-                                                "Error checking Student ID: ${e.message}",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-                                } else {
-                                    Toast.makeText(
-                                        context,
-                                        "Please fill in all fields correctly",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-
-                            } else {
-                                showDialog = false
-                                duplicateEmail = true
-                                Toast.makeText(
-                                    context,
-                                    "Email already registered",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        }.addOnFailureListener { e ->
-                            showDialog = false
-                            Toast.makeText(
-                                context,
-                                "Error checking email: ${e.message}",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
+                    performSignUp(firebaseAuth, firestore, email,
+                        password, userid, userName, phoneNumber, gender, profilePicture,
+                        context, navController, { showDialog = false }
+                    )
                 }else{
                     Toast.makeText(context, "Please fill in all fields correctly", Toast.LENGTH_SHORT).show()
                 }
@@ -1929,63 +1770,6 @@ fun CustomerServiceScreen(navController: NavController) {
 
         // Show Loading Dialog
         LoadingDialog(text= "Uploading..." , showDialog = showDialog, onDismiss = { showDialog = false })
-    }
-}
-
-private fun uploadImagesAndSaveData(
-    context: Context,
-    firestore: FirebaseFirestore,
-    firebaseStorage: FirebaseStorage,
-    caseId: String,
-    name: String,
-    phone: String,
-    email: String,
-    gender: String,
-    studentId: String,
-    studentIdUri: Uri,
-    selfieUri: Uri,
-    onUploadComplete: () -> Unit,
-    onError: () -> Unit
-) {
-    val studentIdRef = firebaseStorage.reference.child("ID Case/$caseId/student_id.jpg")
-    val selfieRef = firebaseStorage.reference.child("ID Case/$caseId/selfie.jpg")
-
-    // Upload Student ID
-    studentIdRef.putFile(studentIdUri).addOnSuccessListener {
-        studentIdRef.downloadUrl.addOnSuccessListener { studentIdUrl ->
-            // Upload Selfie
-            selfieRef.putFile(selfieUri).addOnSuccessListener {
-                selfieRef.downloadUrl.addOnSuccessListener { selfieUrl ->
-                    // Save details to Firestore
-                    val userData = hashMapOf(
-                        "caseId" to caseId,
-                        "name" to name,
-                        "phone" to phone,
-                        "email" to email,
-                        "gender" to gender,
-                        "studentId" to studentId,
-                        "studentIdLink" to studentIdUrl.toString(),
-                        "selfieLink" to selfieUrl.toString(),
-                        "status" to "",
-                        "remark" to ""
-                    )
-                    firestore.collection("ID Case").document(caseId)
-                        .set(userData)
-                        .addOnSuccessListener {
-                            Toast.makeText(context, "Submitted Successfully", Toast.LENGTH_SHORT).show()
-                            onUploadComplete()
-                        }
-                        .addOnFailureListener { e ->
-                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                            onError()
-                        }
-                }
-            }.addOnFailureListener { e ->
-                Toast.makeText(context, "Error uploading selfie: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }.addOnFailureListener { e ->
-        Toast.makeText(context, "Error uploading ID: ${e.message}", Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -2685,40 +2469,25 @@ fun DriverSignUpScreen(navController: NavController, drivingid: String, lesen: S
                         .addOnSuccessListener { querySnapshot ->
                             if (querySnapshot.isEmpty) {
                                 // Upload lesen and profile picture to Firebase Storage
-                                uploadToFirebaseStorage(
-                                    userId,
-                                    "Driving Lesen",
-                                    "lesen.png",
-                                    lesen,
-                                    firebaseStorage
+                                uploadToFirebaseStorage(userId, "Driving Lesen",
+                                    "lesen.png", lesen, firebaseStorage
                                 ) { lesenUrl ->
                                     uploadToFirebaseStorage(
-                                        userId,
-                                        "Driving Lesen",
-                                        "profile_picture.png",
-                                        profilePicture,
-                                        firebaseStorage
+                                        userId, "Driving Lesen", "profile_picture.png",
+                                        profilePicture, firebaseStorage
                                     ) { selfieUrl ->
                                         val selfieBitmap = MediaStore.Images.Media.getBitmap(
                                             context.contentResolver,
                                             selfieUri
                                         )
                                         uploadToFirebaseStorage(
-                                            userId,
-                                            "Driving Lesen",
-                                            "selfie.png",
-                                            selfieBitmap,
-                                            firebaseStorage
+                                            userId, "Driving Lesen", "selfie.png",
+                                            selfieBitmap, firebaseStorage
                                         ) { profileUrl ->
                                             // Save data to Firestore
-                                            saveDriverToFirestore(
-                                                userId,
-                                                name,
-                                                driverid,
-                                                profileUrl,
-                                                lesenUrl,
-                                                selfieUrl,
-                                                firestore
+                                            saveDriverToFirestore(userId, name,
+                                                driverid, profileUrl, lesenUrl,
+                                                selfieUrl, firestore
                                             ) {
                                                 showDialog = false
                                                 navController.navigate("addnewcar") // Navigate to the next screen
@@ -2746,65 +2515,6 @@ fun DriverSignUpScreen(navController: NavController, drivingid: String, lesen: S
         // Show Loading Dialog
         LoadingDialog(text= "Uploading..." , showDialog = showDialog, onDismiss = { showDialog = false })
     }
-}
-
-// Helper function to upload images to Firebase Storage
-private fun uploadToFirebaseStorage(
-    userId: String,
-    folderName: String,
-    fileName: String,
-    bitmap: Bitmap?,
-    storage: FirebaseStorage,
-    onComplete: (String) -> Unit
-) {
-    if (bitmap == null) {
-        onComplete("")
-        return
-    }
-
-    val storageRef = storage.reference.child("$folderName/$userId/$fileName")
-    val baos = ByteArrayOutputStream()
-    bitmap.compress(Bitmap.CompressFormat.PNG, 100, baos)
-    val data = baos.toByteArray()
-
-    storageRef.putBytes(data)
-        .addOnSuccessListener {
-            storageRef.downloadUrl.addOnSuccessListener { uri ->
-                onComplete(uri.toString())
-            }
-        }
-        .addOnFailureListener {
-            onComplete("")
-        }
-}
-
-// Helper function to save driver data to Firestore
-private fun saveDriverToFirestore(
-    userId: String,
-    name: String,
-    drivingId: String,
-    profileUrl: String,
-    lesenUrl: String,
-    selfieUrl: String,
-    firestore: FirebaseFirestore,
-    onComplete: () -> Unit
-) {
-    val driverData = hashMapOf(
-        "userId" to userId,
-        "name" to name,
-        "drivingId" to drivingId,
-        "vehicleId" to "",
-        "vehiclePlate" to "",
-        "profilePicture" to profileUrl, // Save profile picture URL
-        "lesen" to lesenUrl,           // Save lesen URL
-        "selfie" to selfieUrl,
-        "status" to "Active"
-    )
-
-    firestore.collection("driver").document(userId)
-        .set(driverData)
-        .addOnSuccessListener { onComplete() }
-        .addOnFailureListener { onComplete() }
 }
 
 @Composable
@@ -3315,186 +3025,6 @@ fun AddNewVehicle(navController: NavController) {
     }
 }
 
-fun loadVehicleData(userId: String, onResult: (VehicleData?) -> Unit) {
-    val firestore = FirebaseFirestore.getInstance()
-    firestore.collection("Vehicle")
-        .whereEqualTo("UserID", userId)
-        .get()
-        .addOnSuccessListener { querySnapshot ->
-            if (!querySnapshot.isEmpty) {
-                val document = querySnapshot.documents[0]
-                val vehicle = VehicleData(
-                    carMake = document.getString("CarMake") ?: "",
-                    carModel = document.getString("CarModel") ?: "",
-                    carColor = document.getString("CarColour") ?: "",
-                    registrationNum = document.getString("CarRegistrationNumber") ?: "",
-                    carFrontPhoto = document.getString("CarFrontPhoto") ?: "",
-                    carBackPhoto = document.getString("CarBackPhoto") ?: ""
-                )
-                onResult(vehicle)
-            } else {
-                onResult(null) // No vehicle found
-            }
-        }
-        .addOnFailureListener {
-            onResult(null) // Handle error
-        }
-}
-
-fun handleVehicleSubmission(
-    context: Context,
-    navController: NavController,
-    userId: String,
-    caseId: String,
-    carMake: String,
-    carModel: String,
-    carColor: String,
-    registrationNum: String,
-    carFrontUri: Uri?,
-    carBackUri: Uri?,
-    verificationStatus: String,
-    backVerificationStatus: String,
-    onComplete: () -> Unit
-) {
-    val firestore = FirebaseFirestore.getInstance()
-    val firebaseStorage = FirebaseStorage.getInstance()
-
-    // Validate inputs
-    if (
-        carMake.isEmpty() || carModel.isEmpty() || carColor.isEmpty() || registrationNum.isEmpty()
-        || carFrontUri == null || carBackUri == null
-        || !verificationStatus.contains("Matched") || !backVerificationStatus.contains("Matched")
-    ) {
-        Toast.makeText(context, "Please fill up all the details", Toast.LENGTH_SHORT).show()
-        onComplete()
-        return
-    }
-
-    // Check if the plate number already exists
-    firestore.collection("Vehicle")
-        .whereEqualTo("CarRegistrationNumber", registrationNum)
-        .get()
-        .addOnSuccessListener { querySnapshot ->
-            if (!querySnapshot.isEmpty) {
-                Toast.makeText(context, "Duplicate Car Plate!", Toast.LENGTH_SHORT).show()
-                navController.navigate("duplicatecar")
-                onComplete()
-                return@addOnSuccessListener
-            }
-
-            // Proceed with uploading images
-            val carFrontRef = firebaseStorage.reference.child("Vehicle Photo/$caseId/car_front.jpg")
-            val carBackRef = firebaseStorage.reference.child("Vehicle Photo/$caseId/car_back.jpg")
-
-            carFrontRef.putFile(carFrontUri).addOnSuccessListener {
-                carFrontRef.downloadUrl.addOnSuccessListener { frontUrl ->
-
-                    carBackRef.putFile(carBackUri).addOnSuccessListener {
-                        carBackRef.downloadUrl.addOnSuccessListener { backUrl ->
-
-                            // Save details to Firestore
-                            val vehicleData = hashMapOf(
-                                "caseId" to caseId,
-                                "CarMake" to carMake,
-                                "CarModel" to carModel,
-                                "CarColour" to carColor,
-                                "CarRegistrationNumber" to registrationNum,
-                                "CarFrontPhoto" to frontUrl.toString(),
-                                "CarBackPhoto" to backUrl.toString(),
-                                "status" to "Active",
-                                "UserID" to userId
-                            )
-
-                            firestore.collection("Vehicle")
-                                .document(caseId)
-                                .set(vehicleData)
-                                .addOnSuccessListener {
-                                    // Update driver details
-                                    firestore.collection("driver")
-                                        .document(userId)
-                                        .update(
-                                            mapOf(
-                                                "vehicleId" to caseId,
-                                                "vehiclePlate" to registrationNum
-                                            )
-                                        )
-                                        .addOnSuccessListener {
-                                            Toast.makeText(context, "Submitted Successfully", Toast.LENGTH_SHORT).show()
-                                            navController.navigate("driversuccess")
-                                            onComplete()
-                                        }
-                                        .addOnFailureListener { e ->
-                                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                                            onComplete()
-                                        }
-                                }
-                                .addOnFailureListener { e ->
-                                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                                    onComplete()
-                                }
-                        }
-                    }.addOnFailureListener { e ->
-                        Toast.makeText(context, "Error uploading back photo: ${e.message}", Toast.LENGTH_SHORT).show()
-                        onComplete()
-                    }
-                }
-            }.addOnFailureListener { e ->
-                Toast.makeText(context, "Error uploading front photo: ${e.message}", Toast.LENGTH_SHORT).show()
-                onComplete()
-            }
-        }
-}
-
-fun detectPlateNumber(
-    context: Context,
-    imageUri: Uri,
-    expectedPlateNumber: String,
-    onResult: (Boolean, String) -> Unit // (isMatch, message)
-) {
-    val inputImage = InputImage.fromFilePath(context, imageUri)
-    val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-
-    if (expectedPlateNumber.isBlank()) {
-        onResult(false, "Plate Number Not Found")
-        return
-    }
-
-    recognizer.process(inputImage)
-        .addOnSuccessListener { visionText ->
-            val extractedText = visionText.text?.uppercase(Locale.getDefault()) ?: ""
-
-            // Ensure extracted text is not empty
-            if (extractedText.isBlank()) {
-                onResult(false, "No Text Detected in Image")
-                return@addOnSuccessListener
-            }
-
-            // Ensure plate number is correctly formatted
-            val plateParts = expectedPlateNumber.trim().split(" ")
-            if (plateParts.size < 2) {
-                onResult(false, "Invalid Plate Number Format")
-                return@addOnSuccessListener
-            }
-
-            val firstPart = plateParts.getOrNull(0) ?: ""
-            val secondPart = plateParts.getOrNull(1) ?: ""
-
-            // Ensure BOTH parts exist separately in the extracted text
-            val firstPartMatch = "\\b$firstPart\\b".toRegex().containsMatchIn(extractedText)
-            val secondPartMatch = "\\b$secondPart\\b".toRegex().containsMatchIn(extractedText)
-
-            if (firstPartMatch && secondPartMatch) {
-                onResult(true, "Plate Number Matched")
-            } else {
-                onResult(false, "Plate Number Not Found")
-            }
-        }
-        .addOnFailureListener {
-            onResult(false, "Failed to process image")
-        }
-}
-
-
 @Composable
 fun DriverSuccess(navController: NavController) {
     Column(
@@ -3956,125 +3486,12 @@ fun DriverCustomerService(navController: NavController) {
                 showDialog = true
 
                 if(IDUri != null && name.isNotEmpty() && driverid.isNotEmpty() && selfieUri != null && carmake.isNotEmpty() && carmodel.isNotEmpty() && carcolor.isNotEmpty() && registrationnum.isNotEmpty() && carfronturi != null && carbackuri != null){
-                    // Upload lesen and profile picture to Firebase Storage
-                    val driverIDUrl =
-                        firebaseStorage.reference.child("Driver Case/$caseId/driver_id.jpg")
-                    val driverselfieUrl =
-                        firebaseStorage.reference.child("Driver Case/$caseId/selfie.jpg")
-                    val carfrontUrl =
-                        firebaseStorage.reference.child("Driver Case/$caseId/car_front.jpg")
-                    val carbackUrl =
-                        firebaseStorage.reference.child("Driver Case/$caseId/car_back.jpg")
-
-                    // Upload Front
-                    carfronturi?.let {
-                        carfrontUrl.putFile(it).addOnSuccessListener {
-                            carfrontUrl.downloadUrl.addOnSuccessListener { fronturl ->
-                                // Upload Back
-                                carbackuri?.let { it1 ->
-                                    carbackUrl.putFile(it1).addOnSuccessListener {
-                                        carbackUrl.downloadUrl.addOnSuccessListener { backUrl ->
-                                            driverselfieUrl.putFile(selfieUri!!).addOnSuccessListener {
-                                                driverselfieUrl.downloadUrl.addOnSuccessListener { selfieUrl ->
-                                                    driverIDUrl.putFile(IDUri!!).addOnSuccessListener {
-                                                        driverIDUrl.downloadUrl.addOnSuccessListener { idcardurl ->
-                                                            // Save details to Firestore
-                                                            val userData = hashMapOf(
-                                                                "caseId" to caseId,
-                                                                "driverName" to name,
-                                                                "driverId" to driverid,
-                                                                "IDPhoto" to idcardurl.toString(),
-                                                                "driverSelfie" to selfieUrl.toString(),
-                                                                "CarMake" to carmake,
-                                                                "CarModel" to carmodel,
-                                                                "CarColour" to carcolor,
-                                                                "CarRegistrationNumber" to registrationnum,
-                                                                "CarFrontPhoto" to fronturl.toString(),
-                                                                "CarBackPhoto" to backUrl.toString(),
-                                                                "status" to "",
-                                                                "remark" to "",
-                                                                "UserID" to userId
-                                                            )
-                                                            firestore.collection("Driver Case")
-                                                                .document(caseId)
-                                                                .set(userData)
-                                                                .addOnSuccessListener {
-                                                                    showDialog = false
-                                                                    Toast.makeText(
-                                                                        context,
-                                                                        "Submitted Successfully",
-                                                                        Toast.LENGTH_SHORT
-                                                                    ).show()
-                                                                    navController.navigate("ReportSubmitted/home")
-                                                                }.addOnFailureListener { e ->
-                                                                    showDialog = false
-                                                                    Toast.makeText(
-                                                                        context,
-                                                                        "Error: ${e.message}",
-                                                                        Toast.LENGTH_SHORT
-                                                                    ).show()
-                                                                }
-                                                        }.addOnFailureListener { e ->
-                                                            showDialog = false
-                                                            Toast.makeText(
-                                                                context,
-                                                                "Error: ${e.message}",
-                                                                Toast.LENGTH_SHORT
-                                                            ).show()
-                                                        }
-                                                    }.addOnFailureListener { e ->
-                                                        showDialog = false
-                                                        Toast.makeText(
-                                                            context,
-                                                            "Error: ${e.message}",
-                                                            Toast.LENGTH_SHORT
-                                                        ).show()
-                                                    }
-
-
-                                                }.addOnFailureListener { e ->
-                                                    showDialog = false
-                                                    Toast.makeText(
-                                                        context,
-                                                        "Error: ${e.message}",
-                                                        Toast.LENGTH_SHORT
-                                                    ).show()
-                                                }
-                                            }.addOnFailureListener { e ->
-                                                showDialog = false
-                                                Toast.makeText(
-                                                    context,
-                                                    "Error uploading Driver ID: ${e.message}",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
-                                            }
-                                        }.addOnFailureListener { e ->
-                                            showDialog = false
-                                            Toast.makeText(
-                                                context,
-                                                "Error download Car Back Pic Link: ${e.message}",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-                                    }.addOnFailureListener { e ->
-                                        showDialog = false
-                                        Toast.makeText(
-                                            context,
-                                            "Error uploading Car Back Pic: ${e.message}",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
-                                }
-                            }
-                        }.addOnFailureListener { e ->
-                            showDialog = false
-                            Toast.makeText(
-                                context,
-                                "Error uploading Car Front Pic: ${e.message}",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    }
+                    uploadDriverData(firebaseStorage, firestore, caseId,
+                        name, driverid, IDUri!!, selfieUri!!, carmake,
+                        carmodel, carcolor, registrationnum, carfronturi!!,
+                        carbackuri!!, userId, context, navController,
+                        onUploadFinished = { showDialog = false }
+                    )
                 }else{
                     showDialog = false
                     Toast.makeText(context, "Please fill up all the details", Toast.LENGTH_SHORT).show()

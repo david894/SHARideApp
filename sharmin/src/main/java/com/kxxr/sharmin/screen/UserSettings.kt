@@ -25,8 +25,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardColors
 import androidx.compose.material3.Icon
@@ -70,25 +72,25 @@ import com.kxxr.sharmin.R
 import org.json.JSONObject
 import com.android.volley.Request
 import com.android.volley.toolbox.JsonObjectRequest
+import com.google.android.gms.common.internal.StringResourceValueReader
 import com.kxxr.logiclibrary.SignUp.saveUserData
 import com.kxxr.logiclibrary.SignUp.uploadProfilePicture
 
-// Helper function to send email
 fun sendEmail(context: Context, recipient: String, subject: String, content: String) {
-    val intent = Intent(Intent.ACTION_SENDTO).apply {
-        data = Uri.parse("mailto:") // Only open email clients
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "message/rfc822" // Ensure only email apps respond
         putExtra(Intent.EXTRA_EMAIL, arrayOf(recipient)) // Recipient(s)
         putExtra(Intent.EXTRA_SUBJECT, subject) // Email subject
         putExtra(Intent.EXTRA_TEXT, content) // Email content
     }
 
-    if (intent.resolveActivity(context.packageManager) != null) {
-        context.startActivity(intent) // Launch the email app
-    } else {
-        // Fallback if no email client is available
+    try {
+        context.startActivity(Intent.createChooser(intent, "Choose Email Client"))
+    } catch (e: Exception) {
         Toast.makeText(context, "No email app found", Toast.LENGTH_SHORT).show()
     }
 }
+
 
 // Main Screen to Search and Select User
 @Composable
@@ -262,6 +264,7 @@ fun CaseDetailScreen(navController: NavController, caseId: String) {
     var profileBitmap = painterResourceToBitmap(context, R.drawable.pre_profile)
     var showDialog by remember { mutableStateOf(false) }
     var newFirebaseID by remember { mutableStateOf("") }
+    var showEmailDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(caseId) {
         showDialog = true
@@ -545,14 +548,14 @@ fun CaseDetailScreen(navController: NavController, caseId: String) {
                                 updateDupUser(firestore, dupIDUsers[userIDIndex], idCase, context)
                                 updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
                                 showDialog = false
-                                navController.popBackStack()
+                                showEmailDialog = true
 
                             }else if (overwrite == "Email"){
                                 showDialog = true
                                 updateDupUser(firestore, dupEmailUsers[userEmailIndex], idCase, context)
                                 updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
                                 showDialog = false
-                                navController.popBackStack()
+                                showEmailDialog = true
 
                             }
                         }else if(dupIDUsers.isEmpty() || dupEmailUsers.isEmpty()){
@@ -561,26 +564,27 @@ fun CaseDetailScreen(navController: NavController, caseId: String) {
                                 updateDupUser(firestore, dupIDUsers[userIDIndex], idCase, context)
                                 updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
                                 showDialog = false
-                                navController.popBackStack()
+                                showEmailDialog = true
 
                             }else if (dupEmailUsers.isNotEmpty()){
                                 showDialog = true
                                 updateDupUser(firestore, dupEmailUsers[userEmailIndex], idCase, context)
                                 updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
                                 showDialog = false
-                                navController.popBackStack()
+                                showEmailDialog = true
 
                             }else{
                                 showDialog = true
 
                                 // Replace with your API key and endpoint URL
-                                val apiKey = "AIzaSyCMG3slHffpcOR5TT_2MIV1H_6C4byomxA"
+                                val apiKey = context.getString(R.string.rest_api)
                                 val url = "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$apiKey"
+                                val userpass = context.getString(R.string.signup_pass)
 
                                 // Create the JSON payload
                                 val jsonRequest = JSONObject().apply {
                                     put("email", idCase.email)
-                                    put("password", "userpassword")
+                                    put("password", userpass)
                                     put("returnSecureToken", true)
                                 }
 
@@ -589,6 +593,10 @@ fun CaseDetailScreen(navController: NavController, caseId: String) {
                                     { response ->
                                         // Handle the successful response here
                                         newFirebaseID = response.getString("localId")
+                                        val idToken = response.optString("idToken")
+
+                                        sendEmailVerificationUsingVolley(context, apiKey, idToken, onSuccess = {})
+
                                         rotatedBitmap?.let {
                                             detectFaceFromIdCard(it) { faceBitmap ->
                                                 if (faceBitmap != null) {
@@ -603,20 +611,22 @@ fun CaseDetailScreen(navController: NavController, caseId: String) {
                                                 idCase.studentId, idCase.email, idCase.phone, idCase.gender, imageUrl,
                                                 context, navController,"admin", onFinish={
                                                     resetPassword(idCase.email,context, onSuccess = {}, onFailure = {})
+
                                                     updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
-                                                    navController.popBackStack()
+                                                    showEmailDialog = true
                                                     showDialog = false
                                                 }
                                             )
                                         }, { e ->
                                             Toast.makeText(context, "Error uploading image: ${e.message}", Toast.LENGTH_SHORT).show()
+                                            showDialog = false
                                         })
                                     },
                                     { error ->
                                         // Handle error
-                                        error.printStackTrace()
+                                        Toast.makeText(context, "Failed to create user account", Toast.LENGTH_SHORT).show()
+                                        showDialog = false
                                     })
-
                                 // Add the request to the RequestQueue
                                 Volley.newRequestQueue(context).add(request)
                             }
@@ -642,7 +652,7 @@ fun CaseDetailScreen(navController: NavController, caseId: String) {
                     decision = "Rejected"
                     if(remark.isNotEmpty()){
                         updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
-                        navController.popBackStack()
+                        showEmailDialog = true
                     }else{
                         Toast.makeText(context, "Please enter a remark", Toast.LENGTH_SHORT).show()
                     }
@@ -653,6 +663,77 @@ fun CaseDetailScreen(navController: NavController, caseId: String) {
                 colors = ButtonColors(containerColor = Color(0xFFCC0000), contentColor = Color.White, disabledContentColor = Color.Gray, disabledContainerColor = Color.LightGray)
             ) {
                 Text("Reject")
+            }
+            if (showEmailDialog) {
+                AlertDialog(
+                    onDismissRequest = {
+                        showEmailDialog = false
+                        navController.popBackStack()
+                    },
+                    title = { Text("Update Case Successfully !") },
+                    text = { Text("Would you like to email the user with the case update?") },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                showEmailDialog = false
+                                navController.popBackStack()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+                        ) {
+                            Text("No Thanks")
+                        }
+                        Button(
+                            onClick = {
+                                showEmailDialog = false
+                                val emailContent =
+                                    if (decision == "Approved") {
+                                    """
+                                        Dear ${idCase.name},
+                                        
+                                        We are pleased to inform you that your case has been $decision.
+                                        
+                                        Here are your login details:
+                                        Email: ${idCase.email}
+                                        Password:  ${context.getString(R.string.signup_pass)}
+                                        
+                                        Please change your password after logging in for security purposes.
+                        
+                                        If you have any questions, feel free to contact support.
+                        
+                                        Best regards,
+                                        Your SHARide Team
+                                    """.trimIndent()
+                                } else {
+                                    """
+                                        Dear ${idCase.name},
+                                        
+                                        Unfortunately, your case has been $decision.
+                        
+                                        Reason for Rejection:
+                                        $remark
+                                        
+                                        If you believe this was an error, please contact our support team.
+                        
+                                        Best regards,
+                                        Your SHARide Team
+                                    """.trimIndent()
+                                }
+                                sendEmail(
+                                    context = context,
+                                    recipient = idCase.email, // Replace with dynamic user email
+                                    subject = "Case Update Notification from SHARide Team",
+                                    content = emailContent
+                                )
+                                navController.popBackStack()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+                        ) {
+                            Text("Send Email")
+                        }
+                    },
+                    containerColor = Color.White,
+                    shape = RoundedCornerShape(16.dp)
+                )
             }
         }
         // Show Loading Dialog
@@ -714,4 +795,31 @@ fun updateDupUser(
         .addOnFailureListener{
             Toast.makeText(context, "Failed to update user", Toast.LENGTH_SHORT).show()
         }
+}
+
+fun sendEmailVerificationUsingVolley(
+    context: Context,
+    apiKey: String,
+    idToken: String,
+    onSuccess: () -> Unit,
+) {
+    val url = "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=$apiKey"
+
+    val jsonBody = JSONObject().apply {
+        put("requestType", "VERIFY_EMAIL")
+        put("idToken", idToken)
+    }
+
+    val request = JsonObjectRequest(
+        Request.Method.POST, url, jsonBody,
+        { response ->
+            Toast.makeText(context, "Verification email sent!", Toast.LENGTH_SHORT).show()
+            onSuccess()
+        },
+        { error ->
+            Toast.makeText(context, "Failed to send verification email", Toast.LENGTH_SHORT).show()
+        }
+    )
+
+    Volley.newRequestQueue(context).add(request)
 }

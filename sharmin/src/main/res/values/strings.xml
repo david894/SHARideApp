@@ -1,3 +1,6 @@
 <resources>
     <string name="app_name">SHARmin</string>
+
+    <string name = "rest_api">AIzaSyCMG3slHffpcOR5TT_2MIV1H_6C4byomxA</string>
+    <string name="signup_pass">userPassword1</string>
 </resources>
