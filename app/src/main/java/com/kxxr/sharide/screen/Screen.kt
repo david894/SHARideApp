@@ -747,7 +747,12 @@ fun SignupIntroScreen(navController: NavController) {
                 }
             )
         }
-
+        TextButton(
+            onClick = { navController.navigate("customerServiceTARUMTID") },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = "Contact Customer Service", color = Color.Blue, fontSize = 16.sp)
+        }
         Spacer(modifier = Modifier.height(60.dp))
     }
 }
