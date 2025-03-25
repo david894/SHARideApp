@@ -31,6 +31,7 @@ import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardColors
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -50,6 +51,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -75,6 +77,7 @@ import com.android.volley.toolbox.JsonObjectRequest
 import com.google.android.gms.common.internal.StringResourceValueReader
 import com.kxxr.logiclibrary.SignUp.saveUserData
 import com.kxxr.logiclibrary.SignUp.uploadProfilePicture
+import com.kxxr.logiclibrary.eWallet.loadAvailablePins
 
 fun sendEmail(context: Context, recipient: String, subject: String, content: String) {
     val intent = Intent(Intent.ACTION_SEND).apply {
@@ -101,6 +104,9 @@ fun ReviewUserScreen(navController: NavController) {
     var idCases by remember { mutableStateOf<List<UserCase>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
     var showDialog by remember { mutableStateOf(false) }
+    var isAvaliableOpen by remember { mutableStateOf(false) }
+    var isCompleteOpen by remember { mutableStateOf(false) }
+    var completeIDCases by remember { mutableStateOf<List<UserCase>>(emptyList()) }
 
     LaunchedEffect(Unit) {
         showDialog = true
@@ -163,16 +169,69 @@ fun ReviewUserScreen(navController: NavController) {
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Text("Available Case", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        HorizontalDivider(thickness = 2.dp)
+        Spacer(modifier = Modifier.height(24.dp))
 
-        if(idCases.isEmpty()){
-            Text("No pending cases to review.")
+        Row (
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+                .clip(RoundedCornerShape(10.dp)) // Rounded edges like a pebble
+                .border(1.dp, Color.LightGray, RoundedCornerShape(10.dp)) // Floating shadow effect
+                .clickable(
+                    onClick = {
+                        isAvaliableOpen = !isAvaliableOpen
+                        if (isAvaliableOpen) SearchPendingCases(firestore,"",context) { cases ->
+                            idCases = cases
+                        }
+                    }
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ){
+            Text(if (isAvaliableOpen) "Hide Pending Case ▲ " else "Show Pending Case ▼", modifier = Modifier.padding(start = 10.dp))
+        }
+        if(isAvaliableOpen){
+            if(idCases.isEmpty()){
+                Text("No pending cases to review.")
+            }
+
+            Column {
+                idCases.forEach { idCase ->
+                    IdCaseCard(idCase) {
+                        navController.navigate("caseDetail/${idCase.caseId}")
+                    }
+                }
+            }
         }
 
-        Column {
-            idCases.forEach { idCase ->
-                IdCaseCard(idCase) {
-                    navController.navigate("caseDetail/${idCase.caseId}")
+        Row (
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+                .clip(RoundedCornerShape(10.dp)) // Rounded edges like a pebble
+                .border(1.dp, Color.LightGray, RoundedCornerShape(10.dp)) // Floating shadow effect
+                .clickable(
+                    onClick = {
+                        isCompleteOpen = !isCompleteOpen
+                        if (isCompleteOpen) CompleteIDCase(firestore,context) { cases ->
+                            completeIDCases = cases
+                        }
+                    }
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ){
+            Text(if (isCompleteOpen) "Hide Completed Case ▲ " else "Show Completed Case ▼", modifier = Modifier.padding(start = 10.dp))
+        }
+        if(isCompleteOpen){
+            if(idCases.isEmpty()){
+                Text("No completed cases to review.")
+            }
+
+            Column {
+                completeIDCases.forEach { idCase ->
+                    IdCaseCard(idCase) {
+                        navController.navigate("caseDetail/${idCase.caseId}")
+                    }
                 }
             }
         }
@@ -199,7 +258,9 @@ fun IdCaseCard(idCase: UserCase, onClick: () -> Unit) {
             Text("Name: ${idCase.name}", fontWeight = FontWeight.Bold)
             Text("Email: ${idCase.email}")
             Text("ID: ${idCase.studentId}")
-
+            if(idCase.status != ""){
+                Text("Status: ${idCase.status}",color = if(idCase.status == "Approved") Color(0xFF008000) else Color(0xFFCC0000))
+            }
             Spacer(modifier = Modifier.height(10.dp))
 
             Button(
@@ -245,6 +306,30 @@ fun SearchPendingCases(firestore: FirebaseFirestore, query: String, context: Con
         }
 }
 
+// Load ID cases with empty status
+fun CompleteIDCase(firestore: FirebaseFirestore, context: Context, onResult: (List<UserCase>) -> Unit) {
+
+    firestore.collection("ID Case")
+        .whereIn("status", listOf("Approved", "Rejected")) // Fetch both approve and reject statuses
+        .get()
+        .addOnSuccessListener { snapshot ->
+            if (snapshot.isEmpty) {
+                Toast.makeText(context, "No case found!", Toast.LENGTH_SHORT).show()
+                onResult(emptyList())
+                return@addOnSuccessListener
+            }
+
+            val cases = snapshot.documents.mapNotNull { doc ->
+                doc.toObject(UserCase::class.java)
+            }
+            onResult(cases)
+        }
+        .addOnFailureListener { e ->
+            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            onResult(emptyList()) // Handle error case by returning null
+        }
+}
+
 @Composable
 fun CaseDetailScreen(navController: NavController, caseId: String) {
     val firestore = FirebaseFirestore.getInstance()
@@ -265,6 +350,7 @@ fun CaseDetailScreen(navController: NavController, caseId: String) {
     var showDialog by remember { mutableStateOf(false) }
     var newFirebaseID by remember { mutableStateOf("") }
     var showEmailDialog by remember { mutableStateOf(false) }
+    var emailContent by remember { mutableStateOf("") }
 
     LaunchedEffect(caseId) {
         showDialog = true
@@ -386,284 +472,329 @@ fun CaseDetailScreen(navController: NavController, caseId: String) {
             )
 
             Spacer(modifier = Modifier.height(16.dp))
-            Text("Conflict User Details :", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            Spacer(modifier = Modifier.height(16.dp))
-            if(dupIDUsers.isNotEmpty()){
-                dupIDUsers.forEachIndexed{ index,dupIDUsers ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { userIDIndex = index }
-                    ) {
-                        RadioButton(
-                            selected = userIDIndex == index,
-                            onClick = { userIDIndex = index },
-                            colors = RadioButtonDefaults.colors(
-                                selectedColor = Color.Blue,
-                                unselectedColor = Color.Gray
+            if(idCase.status == ""){
+                Text("Conflict User Details :", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Spacer(modifier = Modifier.height(16.dp))
+                if(dupIDUsers.isNotEmpty()){
+                    dupIDUsers.forEachIndexed{ index,dupIDUsers ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { userIDIndex = index }
+                        ) {
+                            RadioButton(
+                                selected = userIDIndex == index,
+                                onClick = { userIDIndex = index },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = Color.Blue,
+                                    unselectedColor = Color.Gray
+                                )
                             )
-                        )
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
 
-                        Column {
-                            Text("${index + 1}. Conflict ID Personal Info:", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Column {
+                                Text("${index + 1}. Conflict ID Personal Info:", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Spacer(modifier = Modifier.height(8.dp))
 
-                            // User Details
-                            Text("Name: ${dupIDUsers.name}")
-                            Spacer(modifier = Modifier.height(8.dp))
+                                // User Details
+                                Text("Name: ${dupIDUsers.name}")
+                                Spacer(modifier = Modifier.height(8.dp))
 
-                            Text("Email: ${dupIDUsers.email}")
-                            Spacer(modifier = Modifier.height(8.dp))
+                                Text("Email: ${dupIDUsers.email}")
+                                Spacer(modifier = Modifier.height(8.dp))
 
-                            Text("Phone: ${dupIDUsers.phoneNumber}")
-                            Spacer(modifier = Modifier.height(8.dp))
+                                Text("Phone: ${dupIDUsers.phoneNumber}")
+                                Spacer(modifier = Modifier.height(8.dp))
 
-                            Text("Student ID: ${dupIDUsers.studentId}")
-                            Spacer(modifier = Modifier.height(8.dp))
+                                Text("Student ID: ${dupIDUsers.studentId}")
+                                Spacer(modifier = Modifier.height(8.dp))
 
-                            Text("Gender: ${if(dupIDUsers.gender == "M")"Male" else "Female" }")
-                            Spacer(modifier = Modifier.height(8.dp))
+                                Text("Gender: ${if(dupIDUsers.gender == "M")"Male" else "Female" }")
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
                         }
                     }
+                }else{
+                    Text("No ID conflict user found.")
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
-            }else{
-                Text("No ID conflict user found.")
-                Spacer(modifier = Modifier.height(8.dp))
-            }
 
-            if(dupEmailUsers.isNotEmpty()){
-                dupEmailUsers.forEachIndexed { index, dupEmailUsers ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { userEmailIndex = index }
-                    ) {
-                        RadioButton(
-                            selected = userEmailIndex == index,
-                            onClick = { userEmailIndex = index },
-                            colors = RadioButtonDefaults.colors(
-                                selectedColor = Color.Blue,
-                                unselectedColor = Color.Gray
+                if(dupEmailUsers.isNotEmpty()){
+                    dupEmailUsers.forEachIndexed { index, dupEmailUsers ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { userEmailIndex = index }
+                        ) {
+                            RadioButton(
+                                selected = userEmailIndex == index,
+                                onClick = { userEmailIndex = index },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = Color.Blue,
+                                    unselectedColor = Color.Gray
+                                )
                             )
-                        )
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
 
-                        Column {
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Column {
+                                Spacer(modifier = Modifier.height(16.dp))
 
-                            Text(
-                                "${index + 1}. Conflict Email Personal Info:",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    "${index + 1}. Conflict Email Personal Info:",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 18.sp
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
 
-                            // User Details
-                            Text("Name: ${dupEmailUsers.name}")
-                            Spacer(modifier = Modifier.height(8.dp))
+                                // User Details
+                                Text("Name: ${dupEmailUsers.name}")
+                                Spacer(modifier = Modifier.height(8.dp))
 
-                            Text("Email: ${dupEmailUsers.email}")
-                            Spacer(modifier = Modifier.height(8.dp))
+                                Text("Email: ${dupEmailUsers.email}")
+                                Spacer(modifier = Modifier.height(8.dp))
 
-                            Text("Phone: ${dupEmailUsers.phoneNumber}")
-                            Spacer(modifier = Modifier.height(8.dp))
+                                Text("Phone: ${dupEmailUsers.phoneNumber}")
+                                Spacer(modifier = Modifier.height(8.dp))
 
-                            Text("Student ID: ${dupEmailUsers.studentId}")
-                            Spacer(modifier = Modifier.height(8.dp))
+                                Text("Student ID: ${dupEmailUsers.studentId}")
+                                Spacer(modifier = Modifier.height(8.dp))
 
-                            Text("Gender: ${if (dupEmailUsers.gender == "M") "Male" else "Female"}")
-                            Spacer(modifier = Modifier.height(8.dp))
+                                Text("Gender: ${if (dupEmailUsers.gender == "M") "Male" else "Female"}")
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
                         }
                     }
+                }else{
+                    Text("No Email conflict user found.")
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
-            }else{
-                Text("No Email conflict user found.")
-                Spacer(modifier = Modifier.height(8.dp))
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Remark for this case:", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                OutlinedTextField(
+                    value = remark,
+                    onValueChange = { remark = it },
+                    label = { Text("* Remark") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if(dupIDUsers.isNotEmpty() && dupEmailUsers.isNotEmpty()){
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Row(
+                            modifier = Modifier.clickable { overwrite = "ID" },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = overwrite == "ID",
+                                onClick = { overwrite = "ID" },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = Color.Blue,
+                                    unselectedColor = Color.Gray
+                                )
+                            )
+                            Text(text = "Overwrite ID User")
+                        }
+                        Spacer(modifier = Modifier.width(28.dp))
+                        Row(
+                            modifier = Modifier.clickable { overwrite = "Email" },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = overwrite == "Email",
+                                onClick = { overwrite = "Email" },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = Color.Blue,
+                                    unselectedColor = Color.Gray
+                                )
+                            )
+                            Text(text = "Overwrite Email User")
+                        }
+                    }
+
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Approve Button
+                Button(
+                    onClick = {
+                        decision = "Approved"
+                        if(remark.isNotEmpty()){
+                            if(dupIDUsers.isNotEmpty() && dupEmailUsers.isNotEmpty() && overwrite != ""){
+                                if(overwrite == "ID"){
+                                    showDialog = true
+                                    updateDupUser(firestore, dupIDUsers[userIDIndex], idCase, context)
+                                    updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
+                                    showDialog = false
+                                    showEmailDialog = true
+
+                                }else if (overwrite == "Email"){
+                                    showDialog = true
+                                    updateDupUser(firestore, dupEmailUsers[userEmailIndex], idCase, context)
+                                    updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
+                                    showDialog = false
+                                    showEmailDialog = true
+
+                                }
+                            }else if(dupIDUsers.isEmpty() || dupEmailUsers.isEmpty()){
+                                if(dupIDUsers.isNotEmpty() ){
+                                    showDialog = true
+                                    updateDupUser(firestore, dupIDUsers[userIDIndex], idCase, context)
+                                    updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
+                                    showDialog = false
+                                    showEmailDialog = true
+
+                                }else if (dupEmailUsers.isNotEmpty()){
+                                    showDialog = true
+                                    updateDupUser(firestore, dupEmailUsers[userEmailIndex], idCase, context)
+                                    updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
+                                    showDialog = false
+                                    showEmailDialog = true
+
+                                }else{
+                                    showDialog = true
+
+                                    // Replace with your API key and endpoint URL
+                                    val apiKey = context.getString(R.string.rest_api)
+                                    val url = "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$apiKey"
+                                    val userpass = context.getString(R.string.signup_pass)
+
+                                    // Create the JSON payload
+                                    val jsonRequest = JSONObject().apply {
+                                        put("email", idCase.email)
+                                        put("password", userpass)
+                                        put("returnSecureToken", true)
+                                    }
+
+                                    // Create the Volley request
+                                    val request = JsonObjectRequest(Request.Method.POST, url, jsonRequest,
+                                        { response ->
+                                            // Handle the successful response here
+                                            newFirebaseID = response.getString("localId")
+                                            val idToken = response.optString("idToken")
+
+                                            sendEmailVerificationUsingVolley(context, apiKey, idToken, onSuccess = {})
+
+                                            rotatedBitmap?.let {
+                                                detectFaceFromIdCard(it) { faceBitmap ->
+                                                    if (faceBitmap != null) {
+                                                        // Save the face image
+                                                        profileBitmap = faceBitmap
+                                                    }
+                                                }
+                                            }
+
+                                            uploadProfilePicture(newFirebaseID, profileBitmap, { imageUrl ->
+                                                saveUserData(firestore, newFirebaseID, idCase.name,
+                                                    idCase.studentId, idCase.email, idCase.phone, idCase.gender, imageUrl,
+                                                    context, navController,"admin", onFinish={
+                                                        resetPassword(idCase.email,context, onSuccess = {}, onFailure = {})
+
+                                                        updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
+                                                        showEmailDialog = true
+                                                        showDialog = false
+                                                    }
+                                                )
+                                            }, { e ->
+                                                Toast.makeText(context, "Error uploading image: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                showDialog = false
+                                            })
+                                        },
+                                        { error ->
+                                            // Handle error
+                                            Toast.makeText(context, "Failed to create user account", Toast.LENGTH_SHORT).show()
+                                            showDialog = false
+                                        })
+                                    // Add the request to the RequestQueue
+                                    Volley.newRequestQueue(context).add(request)
+                                }
+                            }else{
+                                Toast.makeText(context, "Please select which user to overwrite", Toast.LENGTH_SHORT).show()
+                            }
+                        }else{
+                            Toast.makeText(context, "Please enter a remark", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    colors = ButtonColors(containerColor = Color(0xFF008000), contentColor = Color.White, disabledContentColor = Color.Gray, disabledContainerColor = Color.LightGray)
+                ) {
+                    Text("Approve")
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Reject Button
+                Button(
+                    onClick = {
+                        decision = "Rejected"
+                        if(remark.isNotEmpty()){
+                            updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
+                            showEmailDialog = true
+                        }else{
+                            Toast.makeText(context, "Please enter a remark", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    colors = ButtonColors(containerColor = Color(0xFFCC0000), contentColor = Color.White, disabledContentColor = Color.Gray, disabledContainerColor = Color.LightGray)
+                ) {
+                    Text("Reject")
+                }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Remark for this case:", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            OutlinedTextField(
-                value = remark,
-                onValueChange = { remark = it },
-                label = { Text("* Remark") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(100.dp)
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if(dupIDUsers.isNotEmpty() && dupEmailUsers.isNotEmpty()){
+            if(idCase.status != ""){
+                OutlinedTextField(
+                    value = idCase.remark,
+                    onValueChange = { remark = it },
+                    enabled = false,
+                    label = { Text("* Remark") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Case Status: ${idCase.status}",color = if(idCase.status == "Approved") Color(0xFF008000) else Color(0xFFCC0000),
+                    fontWeight = FontWeight.Bold, fontSize = 18.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(16.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center
-                ) {
-                    Row(
-                        modifier = Modifier.clickable { overwrite = "ID" },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(
-                            selected = overwrite == "ID",
-                            onClick = { overwrite = "ID" },
-                            colors = RadioButtonDefaults.colors(
-                                selectedColor = Color.Blue,
-                                unselectedColor = Color.Gray
+                ){
+                    Button(
+                        onClick = {
+                            showEmailDialog = false
+                            emailContent(idCase.status, idCase.email, idCase.name, idCase.remark, context, onResult = {
+                                emailContent = it
+                            })
+
+                            sendEmail(
+                                context = context,
+                                recipient = idCase.email, // Replace with dynamic user email
+                                subject = "Case Update Notification from SHARide Team",
+                                content = emailContent
                             )
-                        )
-                        Text(text = "Overwrite ID User")
-                    }
-                    Spacer(modifier = Modifier.width(28.dp))
-                    Row(
-                        modifier = Modifier.clickable { overwrite = "Email" },
-                        verticalAlignment = Alignment.CenterVertically
+                            navController.popBackStack()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
                     ) {
-                        RadioButton(
-                            selected = overwrite == "Email",
-                            onClick = { overwrite = "Email" },
-                            colors = RadioButtonDefaults.colors(
-                                selectedColor = Color.Blue,
-                                unselectedColor = Color.Gray
-                            )
-                        )
-                        Text(text = "Overwrite Email User")
+                        Text("Resend Email")
                     }
                 }
+                Spacer(modifier = Modifier.height(30.dp))
 
             }
-            Spacer(modifier = Modifier.height(16.dp))
 
-            // Approve Button
-            Button(
-                onClick = {
-                    decision = "Approved"
-                    if(remark.isNotEmpty()){
-                        if(dupIDUsers.isNotEmpty() && dupEmailUsers.isNotEmpty() && overwrite != ""){
-                            if(overwrite == "ID"){
-                                showDialog = true
-                                updateDupUser(firestore, dupIDUsers[userIDIndex], idCase, context)
-                                updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
-                                showDialog = false
-                                showEmailDialog = true
-
-                            }else if (overwrite == "Email"){
-                                showDialog = true
-                                updateDupUser(firestore, dupEmailUsers[userEmailIndex], idCase, context)
-                                updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
-                                showDialog = false
-                                showEmailDialog = true
-
-                            }
-                        }else if(dupIDUsers.isEmpty() || dupEmailUsers.isEmpty()){
-                            if(dupIDUsers.isNotEmpty() ){
-                                showDialog = true
-                                updateDupUser(firestore, dupIDUsers[userIDIndex], idCase, context)
-                                updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
-                                showDialog = false
-                                showEmailDialog = true
-
-                            }else if (dupEmailUsers.isNotEmpty()){
-                                showDialog = true
-                                updateDupUser(firestore, dupEmailUsers[userEmailIndex], idCase, context)
-                                updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
-                                showDialog = false
-                                showEmailDialog = true
-
-                            }else{
-                                showDialog = true
-
-                                // Replace with your API key and endpoint URL
-                                val apiKey = context.getString(R.string.rest_api)
-                                val url = "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$apiKey"
-                                val userpass = context.getString(R.string.signup_pass)
-
-                                // Create the JSON payload
-                                val jsonRequest = JSONObject().apply {
-                                    put("email", idCase.email)
-                                    put("password", userpass)
-                                    put("returnSecureToken", true)
-                                }
-
-                                // Create the Volley request
-                                val request = JsonObjectRequest(Request.Method.POST, url, jsonRequest,
-                                    { response ->
-                                        // Handle the successful response here
-                                        newFirebaseID = response.getString("localId")
-                                        val idToken = response.optString("idToken")
-
-                                        sendEmailVerificationUsingVolley(context, apiKey, idToken, onSuccess = {})
-
-                                        rotatedBitmap?.let {
-                                            detectFaceFromIdCard(it) { faceBitmap ->
-                                                if (faceBitmap != null) {
-                                                    // Save the face image
-                                                    profileBitmap = faceBitmap
-                                                }
-                                            }
-                                        }
-
-                                        uploadProfilePicture(newFirebaseID, profileBitmap, { imageUrl ->
-                                            saveUserData(firestore, newFirebaseID, idCase.name,
-                                                idCase.studentId, idCase.email, idCase.phone, idCase.gender, imageUrl,
-                                                context, navController,"admin", onFinish={
-                                                    resetPassword(idCase.email,context, onSuccess = {}, onFailure = {})
-
-                                                    updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
-                                                    showEmailDialog = true
-                                                    showDialog = false
-                                                }
-                                            )
-                                        }, { e ->
-                                            Toast.makeText(context, "Error uploading image: ${e.message}", Toast.LENGTH_SHORT).show()
-                                            showDialog = false
-                                        })
-                                    },
-                                    { error ->
-                                        // Handle error
-                                        Toast.makeText(context, "Failed to create user account", Toast.LENGTH_SHORT).show()
-                                        showDialog = false
-                                    })
-                                // Add the request to the RequestQueue
-                                Volley.newRequestQueue(context).add(request)
-                            }
-                        }else{
-                            Toast.makeText(context, "Please select which user to overwrite", Toast.LENGTH_SHORT).show()
-                        }
-                    }else{
-                        Toast.makeText(context, "Please enter a remark", Toast.LENGTH_SHORT).show()
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                colors = ButtonColors(containerColor = Color(0xFF008000), contentColor = Color.White, disabledContentColor = Color.Gray, disabledContainerColor = Color.LightGray)
-            ) {
-                Text("Approve")
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Reject Button
-            Button(
-                onClick = {
-                    decision = "Rejected"
-                    if(remark.isNotEmpty()){
-                        updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
-                        showEmailDialog = true
-                    }else{
-                        Toast.makeText(context, "Please enter a remark", Toast.LENGTH_SHORT).show()
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                colors = ButtonColors(containerColor = Color(0xFFCC0000), contentColor = Color.White, disabledContentColor = Color.Gray, disabledContainerColor = Color.LightGray)
-            ) {
-                Text("Reject")
-            }
             if (showEmailDialog) {
                 AlertDialog(
                     onDismissRequest = {
@@ -685,39 +816,10 @@ fun CaseDetailScreen(navController: NavController, caseId: String) {
                         Button(
                             onClick = {
                                 showEmailDialog = false
-                                val emailContent =
-                                    if (decision == "Approved") {
-                                    """
-                                        Dear ${idCase.name},
-                                        
-                                        We are pleased to inform you that your case has been $decision.
-                                        
-                                        Here are your login details:
-                                        Email: ${idCase.email}
-                                        Password:  ${context.getString(R.string.signup_pass)}
-                                        
-                                        Please change your password after logging in for security purposes.
-                        
-                                        If you have any questions, feel free to contact support.
-                        
-                                        Best regards,
-                                        Your SHARide Team
-                                    """.trimIndent()
-                                } else {
-                                    """
-                                        Dear ${idCase.name},
-                                        
-                                        Unfortunately, your case has been $decision.
-                        
-                                        Reason for Rejection:
-                                        $remark
-                                        
-                                        If you believe this was an error, please contact our support team.
-                        
-                                        Best regards,
-                                        Your SHARide Team
-                                    """.trimIndent()
-                                }
+                                emailContent(decision, idCase.email, idCase.name, remark, context, onResult = {
+                                    emailContent = it
+                                })
+
                                 sendEmail(
                                     context = context,
                                     recipient = idCase.email, // Replace with dynamic user email
@@ -750,7 +852,45 @@ fun loadCaseById(firestore: FirebaseFirestore, caseId: String, onResult: (UserCa
             doc.toObject(UserCase::class.java)?.let { onResult(it) }
         }
 }
+fun emailContent(decision:String, userEmail:String, userName:String,remark:String, context: Context,onResult: (String) -> Unit){
+    if (decision == "Approved") {
+        onResult(
+            """
+            Dear ${userName},
+            
+            We are pleased to inform you that your case has been $decision.
+            
+            Here are your login details:
+            Email: ${userEmail}
+            Password:  ${context.getString(R.string.signup_pass)}
+            
+            Please change your password after logging in for security purposes.
+    
+            If you have any questions, feel free to contact support.
+    
+            Best regards,
+            Your SHARide Team
+            """.trimIndent()
+        )
+    } else {
+        onResult(
+            """
+            Dear ${userName},
+            
+            Unfortunately, your case has been $decision.
+    
+            Reason for Rejection:
+            $remark
+            
+            If you believe this was an error, please contact our support team.
+    
+            Best regards,
+            Your SHARide Team
+        """.trimIndent()
+        )
 
+    }
+}
 // Update case status and remark
 fun updateCaseStatus(
     firestore: FirebaseFirestore,
@@ -823,3 +963,4 @@ fun sendEmailVerificationUsingVolley(
 
     Volley.newRequestQueue(context).add(request)
 }
+
