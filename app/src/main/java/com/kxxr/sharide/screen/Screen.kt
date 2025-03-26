@@ -2016,6 +2016,13 @@ fun DriverSignupIntroScreen(navController: NavController) {
             )
         }
         Spacer(modifier = Modifier.height(60.dp))
+        // "Contact Customer Service" Button
+        TextButton(
+            onClick = { navController.navigate("driverCustomerService") },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = "Contact Customer Service", color = Color.Blue, fontSize = 16.sp)
+        }
     }
 }
 
