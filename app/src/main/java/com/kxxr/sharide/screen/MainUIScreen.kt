@@ -515,6 +515,12 @@ fun BottomNavBar(screen: String, navController: NavController) {
                     onClick = { navController.navigate("ewallet") }
                 )
                 BottomNavItem(
+                    icon = R.drawable.chat_ico, // ✅ Added Chat Icon
+                    label = "Chat",
+                    isSelected = screen == "chat",
+                    onClick = { navController.navigate("chat") } // Navigate to Chat Screen
+                )
+                BottomNavItem(
                     icon = R.drawable.profile_ico,
                     label = "Profile",
                     isSelected = screen == "profile",

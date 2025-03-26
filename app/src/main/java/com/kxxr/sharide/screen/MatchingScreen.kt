@@ -180,7 +180,7 @@ fun fetchLatestSearchId(userId: String, onSuccess: (String?) -> Unit, onFailure:
         .limit(1)
         .get()
         .addOnSuccessListener { documents ->
-            if (!documents.isEmpty) {
+            if (!documents  .isEmpty) {
                 onSuccess(documents.documents[0].id)
             } else {
                 onSuccess(null)

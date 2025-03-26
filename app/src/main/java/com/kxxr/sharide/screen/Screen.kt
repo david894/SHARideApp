@@ -228,6 +228,20 @@ fun AppNavHost(
                 RideDetailScreen(navController, index, rideId)
             }
 
+            // ✅ Chat Screen Route with Arguments
+            composable(
+                route = "chat/{chatId}/{senderId}",
+                arguments = listOf(
+                    navArgument("chatId") { type = NavType.StringType },
+                    navArgument("senderId") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val chatId = backStackEntry.arguments?.getString("chatId") ?: ""
+                val senderId = backStackEntry.arguments?.getString("senderId") ?: ""
+
+                ChatScreen(firestore = FirebaseFirestore.getInstance(), chatId = chatId, senderId = senderId)
+            }
+
 
 
             // eWallet

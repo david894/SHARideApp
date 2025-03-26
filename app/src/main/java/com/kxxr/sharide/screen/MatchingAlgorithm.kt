@@ -2,6 +2,7 @@ package com.kxxr.sharide.screen
 
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
 fun findMatchingRides(
     firestore: FirebaseFirestore,
@@ -42,10 +43,13 @@ fun fetchSearches(
     onSuccess: (QuerySnapshot) -> Unit
 ) {
     firestore.collection("searchs")
+        .orderBy("timestamp", Query.Direction.DESCENDING) // Order by latest timestamp
+        .limit(1) // Get only the latest search
         .get()
         .addOnSuccessListener(onSuccess)
         .addOnFailureListener { }
 }
+
 
 fun fetchUsers(
     firestore: FirebaseFirestore,
