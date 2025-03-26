@@ -374,6 +374,7 @@ fun handleVehicleSubmission(
     // Check if the plate number already exists
     firestore.collection("Vehicle")
         .whereEqualTo("CarRegistrationNumber", registrationNum)
+        .whereEqualTo("status","Active")
         .get()
         .addOnSuccessListener { querySnapshot ->
             if (!querySnapshot.isEmpty) {

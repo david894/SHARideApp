@@ -1226,12 +1226,9 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
 
     var rotation by remember { mutableStateOf(0f) }
     var rotatedBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var rotationFront by remember { mutableStateOf(0f) }
     var rotatedFrontBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var rotationBack by remember { mutableStateOf(0f) }
     var rotatedBackBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var showDialog by remember { mutableStateOf(false) }
-    var newFirebaseID by remember { mutableStateOf("") }
     var showEmailDialog by remember { mutableStateOf(false) }
     var emailContent by remember { mutableStateOf("") }
 
@@ -1651,7 +1648,10 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
                             Text(text = "Overwrite Driver & Vehicle")
                         }
                     }
-
+                }else if (dupVehicle.isNotEmpty()){
+                    overwrite = "Vehicle"
+                }else if (dupDriverID.isNotEmpty()){
+                    overwrite = "Driver"
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -1660,6 +1660,18 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
                     onClick = {
                         decision = "Approved"
                         if(remark.isNotEmpty()){
+                            if(overwrite == "" && dupDriverID.isNotEmpty() && dupVehicle.isNotEmpty()){
+                                Toast.makeText(context, "Please select which item to overwrite", Toast.LENGTH_SHORT).show()
+                            }
+                            if(overwrite == "" && dupDriverID.isEmpty() && dupVehicle.isEmpty()){
+
+                            }
+                            if(overwrite == "Driver" && dupDriverID.isNotEmpty()){
+
+                            }
+                            if(overwrite == "Vehicle" && dupVehicle.isNotEmpty()){
+
+                            }
 
                         }else{
                             Toast.makeText(context, "Please enter a remark", Toast.LENGTH_SHORT).show()
