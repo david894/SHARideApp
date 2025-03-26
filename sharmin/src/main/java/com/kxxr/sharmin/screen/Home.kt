@@ -251,7 +251,7 @@ fun AdminHome(firebaseAuth: FirebaseAuth, navController: NavController) {
             ProfileCard(title = "Review User Verification Case", img = "profile_ico", onClick = {navController.navigate("reviewUserScreen")})
             Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
-            ProfileCard(title = "Review Driver Verification Case",img = "car_front", onClick = {navController.navigate("search_user")})
+            ProfileCard(title = "Review Driver Verification Case",img = "car_front", onClick = {navController.navigate("reviewDriverScreen")})
             Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
             ProfileCard(title = "View User Details",img = "search", onClick = {navController.navigate("search_user")})

@@ -4,8 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.net.Uri
-import android.provider.MediaStore
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
@@ -78,6 +76,12 @@ import com.google.android.gms.common.internal.StringResourceValueReader
 import com.kxxr.logiclibrary.SignUp.saveUserData
 import com.kxxr.logiclibrary.SignUp.uploadProfilePicture
 import com.kxxr.logiclibrary.eWallet.loadAvailablePins
+import com.kxxr.sharmin.DataClass.DriverCase
+import com.kxxr.logiclibrary.Driver.Driver
+import com.kxxr.logiclibrary.Driver.Vehicle
+import com.kxxr.logiclibrary.Driver.searchDriver
+import com.kxxr.logiclibrary.Driver.searchVehicle
+import com.kxxr.logiclibrary.User.loadUserDetails
 
 fun sendEmail(context: Context, recipient: String, subject: String, content: String) {
     val intent = Intent(Intent.ACTION_SEND).apply {
@@ -223,7 +227,7 @@ fun ReviewUserScreen(navController: NavController) {
             Text(if (isCompleteOpen) "Hide Completed Case ▲ " else "Show Completed Case ▼", modifier = Modifier.padding(start = 10.dp))
         }
         if(isCompleteOpen){
-            if(idCases.isEmpty()){
+            if(completeIDCases.isEmpty()){
                 Text("No completed cases to review.")
             }
 
@@ -306,7 +310,6 @@ fun SearchPendingCases(firestore: FirebaseFirestore, query: String, context: Con
         }
 }
 
-// Load ID cases with empty status
 fun CompleteIDCase(firestore: FirebaseFirestore, context: Context, onResult: (List<UserCase>) -> Unit) {
 
     firestore.collection("ID Case")
@@ -633,14 +636,14 @@ fun CaseDetailScreen(navController: NavController, caseId: String) {
                                 if(overwrite == "ID"){
                                     showDialog = true
                                     updateDupUser(firestore, dupIDUsers[userIDIndex], idCase, context)
-                                    updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
+                                    updateCaseStatus(firestore, idCase.caseId, decision, remark, "ID",context)
                                     showDialog = false
                                     showEmailDialog = true
 
                                 }else if (overwrite == "Email"){
                                     showDialog = true
                                     updateDupUser(firestore, dupEmailUsers[userEmailIndex], idCase, context)
-                                    updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
+                                    updateCaseStatus(firestore, idCase.caseId, decision, remark, "ID",context)
                                     showDialog = false
                                     showEmailDialog = true
 
@@ -649,14 +652,14 @@ fun CaseDetailScreen(navController: NavController, caseId: String) {
                                 if(dupIDUsers.isNotEmpty() ){
                                     showDialog = true
                                     updateDupUser(firestore, dupIDUsers[userIDIndex], idCase, context)
-                                    updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
+                                    updateCaseStatus(firestore, idCase.caseId, decision, remark, "ID",context)
                                     showDialog = false
                                     showEmailDialog = true
 
                                 }else if (dupEmailUsers.isNotEmpty()){
                                     showDialog = true
                                     updateDupUser(firestore, dupEmailUsers[userEmailIndex], idCase, context)
-                                    updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
+                                    updateCaseStatus(firestore, idCase.caseId, decision, remark, "ID",context)
                                     showDialog = false
                                     showEmailDialog = true
 
@@ -699,7 +702,7 @@ fun CaseDetailScreen(navController: NavController, caseId: String) {
                                                     context, navController,"admin", onFinish={
                                                         resetPassword(idCase.email,context, onSuccess = {}, onFailure = {})
 
-                                                        updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
+                                                        updateCaseStatus(firestore, idCase.caseId, decision, remark, "ID",context)
                                                         showEmailDialog = true
                                                         showDialog = false
                                                     }
@@ -738,7 +741,7 @@ fun CaseDetailScreen(navController: NavController, caseId: String) {
                     onClick = {
                         decision = "Rejected"
                         if(remark.isNotEmpty()){
-                            updateCaseStatus(firestore, idCase.caseId, decision, remark, context)
+                            updateCaseStatus(firestore, idCase.caseId, decision, remark, "ID",context)
                             showEmailDialog = true
                         }else{
                             Toast.makeText(context, "Please enter a remark", Toast.LENGTH_SHORT).show()
@@ -852,6 +855,14 @@ fun loadCaseById(firestore: FirebaseFirestore, caseId: String, onResult: (UserCa
             doc.toObject(UserCase::class.java)?.let { onResult(it) }
         }
 }
+fun loadCaseByDriver(firestore: FirebaseFirestore, caseId: String, onResult: (DriverCase) -> Unit) {
+    firestore.collection("Driver Case")
+        .document(caseId)
+        .get()
+        .addOnSuccessListener { doc ->
+            doc.toObject(DriverCase::class.java)?.let { onResult(it) }
+        }
+}
 fun emailContent(decision:String, userEmail:String, userName:String,remark:String, context: Context,onResult: (String) -> Unit){
     if (decision == "Approved") {
         onResult(
@@ -897,9 +908,12 @@ fun updateCaseStatus(
     caseId: String,
     status: String,
     remark: String,
+    type : String,
     context: Context
 ) {
-    firestore.collection("ID Case")
+    val collection = if(type == "ID") "ID Case" else "Driver Case"
+
+    firestore.collection(collection)
         .document(caseId)
         .update("status", status, "remark", remark)
         .addOnSuccessListener {
@@ -964,3 +978,808 @@ fun sendEmailVerificationUsingVolley(
     Volley.newRequestQueue(context).add(request)
 }
 
+// Main Screen to Search and Select User
+@Composable
+fun ReviewDriverScreen(navController: NavController) {
+    val context = LocalContext.current
+    val firestore = FirebaseFirestore.getInstance()
+
+    var driverCases by remember { mutableStateOf<List<DriverCase>>(emptyList()) }
+    var searchQuery by remember { mutableStateOf("") }
+    var showDialog by remember { mutableStateOf(false) }
+    var isAvaliableOpen by remember { mutableStateOf(false) }
+    var isCompleteOpen by remember { mutableStateOf(false) }
+    var completeDriverCases by remember { mutableStateOf<List<DriverCase>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        showDialog = true
+        searchPendingDriverCases(firestore,"",context) { cases ->
+            driverCases = cases
+            showDialog = false
+        }
+    }
+
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .padding(16.dp)
+        .padding(top = 50.dp)
+        .verticalScroll(rememberScrollState())
+    ){
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .clickable { navController.navigate("home") }
+        ) {
+            Icon(
+                imageVector = Icons.Default.ArrowBack,
+                contentDescription = "Back",
+                tint = Color.Black,
+                modifier = Modifier.size(28.dp)
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Text(
+                text = "Review Driver Cases",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
+            )
+        }
+        Spacer(modifier = Modifier.height(50.dp))
+
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            label = { Text("Search by Name, Plate No, or Driver ID") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Button(
+            onClick = {
+                showDialog = true
+                searchPendingDriverCases(firestore, searchQuery, context) {
+                    driverCases = it
+                    showDialog = false
+                }
+            },
+            modifier = Modifier
+                .padding(top = 16.dp)
+                .fillMaxWidth(),
+            colors = ButtonColors(containerColor = Color.Blue, contentColor = Color.White, disabledContentColor = Color.Gray, disabledContainerColor = Color.LightGray)
+        ) {
+            Text("Search")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        HorizontalDivider(thickness = 2.dp)
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Row (
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+                .clip(RoundedCornerShape(10.dp)) // Rounded edges like a pebble
+                .border(1.dp, Color.LightGray, RoundedCornerShape(10.dp)) // Floating shadow effect
+                .clickable(
+                    onClick = {
+                        isAvaliableOpen = !isAvaliableOpen
+                        if (isAvaliableOpen) searchPendingDriverCases(firestore,"",context) { cases ->
+                            driverCases = cases
+                        }
+                    }
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ){
+            Text(if (isAvaliableOpen) "Hide Pending Case ▲ " else "Show Pending Case ▼", modifier = Modifier.padding(start = 10.dp))
+        }
+        if(isAvaliableOpen){
+            if(driverCases.isEmpty()){
+                Text("No pending driver cases to review.")
+            }
+
+            Column {
+                driverCases.forEach { idCase ->
+                    DriverCaseCard(idCase) {
+                        navController.navigate("driverCaseDetail/${idCase.caseId}")
+                    }
+                }
+            }
+        }
+
+        Row (
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+                .clip(RoundedCornerShape(10.dp)) // Rounded edges like a pebble
+                .border(1.dp, Color.LightGray, RoundedCornerShape(10.dp)) // Floating shadow effect
+                .clickable(
+                    onClick = {
+                        isCompleteOpen = !isCompleteOpen
+                        if (isCompleteOpen) CompleteDriverCase(firestore,context) { cases ->
+                            completeDriverCases = cases
+                        }
+                    }
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ){
+            Text(if (isCompleteOpen) "Hide Completed Case ▲ " else "Show Completed Case ▼", modifier = Modifier.padding(start = 10.dp))
+        }
+        if(isCompleteOpen){
+            if(completeDriverCases.isEmpty()){
+                Text("No completed cases to review.")
+            }
+
+            Column {
+                completeDriverCases.forEach { idCase ->
+                    DriverCaseCard(idCase) {
+                        navController.navigate("driverCaseDetail/${idCase.caseId}")
+                    }
+                }
+            }
+        }
+    }
+    // Show Loading Dialog
+    LoadingDialog(text = "Loading...", showDialog = showDialog, onDismiss = { showDialog = false })
+}
+
+fun searchPendingDriverCases(firestore: FirebaseFirestore, query: String, context: Context, onResult: (List<DriverCase>) -> Unit) {
+    val searchField = when {
+        query.contains(" ") -> "driverName"         // Assume "name" if space is present
+        query.matches(Regex("[0-9]{12}")) -> "driverId" // Numeric values for "studentId"
+        query.matches(Regex("^[A-Za-z]{1,3}\\s?\\d{1,4} ?[A-Za-z]?$")) -> "CarRegistrationNumber" // Numeric values for "studentId"
+        query.equals("") -> "status"
+        else -> "name"        // Otherwise, search by "name"
+    }
+
+    firestore.collection("Driver Case")
+        .whereEqualTo("status", "")
+        .whereEqualTo(searchField, query.uppercase())
+        .get()
+        .addOnSuccessListener { snapshot ->
+            if (snapshot.isEmpty) {
+                Toast.makeText(context, "No Driver case found!", Toast.LENGTH_SHORT).show()
+                onResult(emptyList())
+                return@addOnSuccessListener
+            }
+
+            val cases = snapshot.documents.mapNotNull { doc ->
+                doc.toObject(DriverCase::class.java)
+            }
+            onResult(cases)
+        }
+        .addOnFailureListener { e ->
+            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            onResult(emptyList()) // Handle error case by returning null
+        }
+}
+// Case Card UI
+@Composable
+fun DriverCaseCard(case: DriverCase, onClick: () -> Unit) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardColors(containerColor = Color.White, contentColor = Color.Black, disabledContentColor = Color.Gray, disabledContainerColor = Color.LightGray),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+            .border(2.dp, Color.LightGray, RoundedCornerShape(16.dp))
+            .clickable { onClick() }
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text("Driver Name: ${case.driverName}", fontWeight = FontWeight.Bold)
+            Text("Driver ID: ${case.driverId}")
+            Text("Plate No: ${case.CarRegistrationNumber}")
+            if(case.status != ""){
+                Text("Status: ${case.status}",color = if(case.status == "Approved") Color(0xFF008000) else Color(0xFFCC0000))
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Button(
+                onClick = onClick,
+                colors = ButtonColors(containerColor = Color.Blue, contentColor = Color.White, disabledContentColor = Color.Gray, disabledContainerColor = Color.LightGray)
+            ) {
+                Text("Review")
+            }
+        }
+    }
+}
+
+fun CompleteDriverCase(firestore: FirebaseFirestore, context: Context, onResult: (List<DriverCase>) -> Unit) {
+    firestore.collection("Driver Case")
+        .whereIn("status", listOf("Approved", "Rejected")) // Fetch both approve and reject statuses
+        .get()
+        .addOnSuccessListener { snapshot ->
+            if (snapshot.isEmpty) {
+                Toast.makeText(context, "No completed driver case found!", Toast.LENGTH_SHORT).show()
+                onResult(emptyList())
+                return@addOnSuccessListener
+            }
+
+            val cases = snapshot.documents.mapNotNull { doc ->
+                doc.toObject(DriverCase::class.java)
+            }
+            onResult(cases)
+        }
+        .addOnFailureListener { e ->
+            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            onResult(emptyList()) // Handle error case by returning null
+        }
+}
+
+@Composable
+fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
+    val firestore = FirebaseFirestore.getInstance()
+    val context = LocalContext.current
+
+    var case by remember { mutableStateOf<DriverCase?>(null) }
+    var remark by remember { mutableStateOf("") }
+    var decision by remember { mutableStateOf("") }
+    var users by remember { mutableStateOf<User?>(null) }
+    var dupDriverID by remember { mutableStateOf<List<Driver>>(emptyList()) }
+    var dupVehicle by remember { mutableStateOf<List<Vehicle>>(emptyList()) }
+
+    var overwrite by remember { mutableStateOf("") }
+    var driverIDIndex by remember { mutableStateOf(0) }
+    var vehicleNoIndex by remember { mutableStateOf(0) }
+
+    var rotation by remember { mutableStateOf(0f) }
+    var rotatedBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var rotationFront by remember { mutableStateOf(0f) }
+    var rotatedFrontBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var rotationBack by remember { mutableStateOf(0f) }
+    var rotatedBackBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var showDialog by remember { mutableStateOf(false) }
+    var newFirebaseID by remember { mutableStateOf("") }
+    var showEmailDialog by remember { mutableStateOf(false) }
+    var emailContent by remember { mutableStateOf("") }
+
+    LaunchedEffect(caseId) {
+        showDialog = true
+        loadCaseByDriver(firestore, caseId) { loadedCase ->
+            case = loadedCase
+            val storageReference =
+                FirebaseStorage.getInstance().getReferenceFromUrl(case!!.IDPhoto)
+            storageReference.getBytes(1024 * 1024)
+                .addOnSuccessListener { bytes ->
+                    rotatedBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                }
+                .addOnFailureListener { e ->
+                    Toast.makeText(context, "Error fetching image: ${e.message}", Toast.LENGTH_SHORT)
+                        .show()
+                }
+            val carFrontReference =
+                FirebaseStorage.getInstance().getReferenceFromUrl(case!!.CarBackPhoto)
+            carFrontReference.getBytes(1024 * 1024)
+                .addOnSuccessListener { bytes ->
+                    rotatedFrontBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                }
+                .addOnFailureListener { e ->
+                    Toast.makeText(context, "Error fetching image: ${e.message}", Toast.LENGTH_SHORT)
+                        .show()
+                }
+            val carBackReference =
+                FirebaseStorage.getInstance().getReferenceFromUrl(case!!.CarBackPhoto)
+            carBackReference.getBytes(1024 * 1024)
+                .addOnSuccessListener { bytes ->
+                    rotatedBackBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                }
+                .addOnFailureListener { e ->
+                    Toast.makeText(context, "Error fetching image: ${e.message}", Toast.LENGTH_SHORT)
+                        .show()
+                }
+            showDialog = false
+        }
+    }
+
+    case?.let { idCase ->
+        LaunchedEffect(Unit) {
+            loadUserDetails(firestore, idCase.UserID, onResult = {
+                users = it
+            })
+            searchDriver(firestore, idCase.driverId, context, onResult = {
+                dupDriverID = it
+            })
+
+            searchVehicle(firestore, idCase.CarRegistrationNumber, context, onResult = {
+                dupVehicle = it
+            })
+        }
+
+
+        Column(modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .padding(top = 50.dp)
+            .verticalScroll(rememberScrollState())
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clickable { navController.navigate("home") }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.Black,
+                    modifier = Modifier.size(28.dp)
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Text(
+                    text = "Review Driver Case",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text("1. Driver Personal Info:", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            // User Details
+            Text("Name: ${idCase.driverName}")
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text("Email: ${idCase.driverId}")
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text("ID Photo")
+            Spacer(modifier = Modifier.height(8.dp))
+            rotatedBitmap?.let {
+                Image(
+                    bitmap = it.asImageBitmap(),
+                    contentDescription = "ID Image",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(250.dp)
+                        .padding(vertical = 16.dp)
+                )
+            }
+            Text("* Rotate for correct ID recognition")
+            // Rotate Button
+            Button(
+                onClick = {
+                    rotation += 90f
+                    if (rotation >= 360f) {
+                        rotation = 0f
+                    }
+                    // Create rotated bitmap
+                    rotatedBitmap = rotatedBitmap?.let { rotateBitmap(it, rotation) }
+                },
+                colors = ButtonColors(containerColor = Color.Blue, contentColor = Color.White, disabledContentColor = Color.Gray, disabledContainerColor = Color.LightGray),
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth()
+            ) {
+                Text("Rotate 90°")
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text("Selfie with Driver ID")
+            Spacer(modifier = Modifier.height(8.dp))
+            Image(
+                painter = rememberAsyncImagePainter(idCase.driverSelfie),
+                contentDescription = "Selfie Image",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(250.dp)
+                    .padding(vertical = 16.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text("2. Vehicle Details:", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text("Car Make: ${idCase.CarMake}")
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text("Car Model: ${idCase.CarModel}")
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text("Car Colour: ${idCase.CarColour}")
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text("Car Front Image:")
+            Spacer(modifier = Modifier.height(8.dp))
+
+            rotatedFrontBitmap?.let {
+                Image(
+                    bitmap = it.asImageBitmap(),
+                    contentDescription = "Car Front Image",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(250.dp)
+                        .padding(vertical = 16.dp)
+                )
+            }
+            Text("* Rotate for correct plate no recognition")
+            // Rotate Button
+            Button(
+                onClick = {
+                    rotation += 90f
+                    if (rotation >= 360f) {
+                        rotation = 0f
+                    }
+                    // Create rotated bitmap
+                    rotatedFrontBitmap = rotatedFrontBitmap?.let { rotateBitmap(it, rotation) }
+                },
+                colors = ButtonColors(containerColor = Color.Blue, contentColor = Color.White, disabledContentColor = Color.Gray, disabledContainerColor = Color.LightGray),
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth()
+            ) {
+                Text("Rotate 90°")
+            }
+
+            Text("Car Back Image:")
+            Spacer(modifier = Modifier.height(8.dp))
+
+            rotatedBackBitmap?.let {
+                Image(
+                    bitmap = it.asImageBitmap(),
+                    contentDescription = "Car Back Image",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(250.dp)
+                        .padding(vertical = 16.dp)
+                )
+            }
+            Text("* Rotate for correct plate no recognition")
+            // Rotate Button
+            Button(
+                onClick = {
+                    rotation += 90f
+                    if (rotation >= 360f) {
+                        rotation = 0f
+                    }
+                    // Create rotated bitmap
+                    rotatedBackBitmap = rotatedBackBitmap?.let { rotateBitmap(it, rotation) }
+                },
+                colors = ButtonColors(containerColor = Color.Blue, contentColor = Color.White, disabledContentColor = Color.Gray, disabledContainerColor = Color.LightGray),
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth()
+            ) {
+                Text("Rotate 90°")
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text("3. Request User Details:", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Name: ${users?.name}")
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Email: ${users?.email}")
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Phone: ${users?.phoneNumber}")
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Gender: ${if(users?.gender == "M")"Male" else "Female" }")
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Spacer(modifier = Modifier.height(16.dp))
+            if(idCase.status == ""){
+                Text("Conflict Driver Details :", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Spacer(modifier = Modifier.height(16.dp))
+                if(dupDriverID.isNotEmpty()){
+                    dupDriverID.forEachIndexed{ index,dupDriverID ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { driverIDIndex = index }
+                        ) {
+                            RadioButton(
+                                selected = driverIDIndex == index,
+                                onClick = { driverIDIndex = index },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = Color.Blue,
+                                    unselectedColor = Color.Gray
+                                )
+                            )
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Column {
+                                Text("${index + 1}. Conflict Driver Personal Info:", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // User Details
+                                Text("Name: ${dupDriverID.name}")
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text("Driving ID: ${dupDriverID.lesen}")
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text("Vehicle No: ${dupDriverID.vehiclePlate}")
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                        }
+                    }
+                }else{
+                    Text("No conflict driver found.")
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                if(dupVehicle.isNotEmpty()){
+                    dupVehicle.forEachIndexed { index, dupVehicle ->
+                        var owner by remember { mutableStateOf<User?>(null) }
+                        loadUserDetails(firestore, dupVehicle.UserID) {
+                            owner = it
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { vehicleNoIndex = index }
+                        ) {
+                            RadioButton(
+                                selected = vehicleNoIndex == index,
+                                onClick = { vehicleNoIndex = index },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = Color.Blue,
+                                    unselectedColor = Color.Gray
+                                )
+                            )
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Column {
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                Text(
+                                    "${index + 1}. Conflict Vehicle Info:",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 18.sp
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Vehicle Details
+                                Text("Car Make: ${dupVehicle.CarMake}")
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text("Car Model: ${dupVehicle.CarModel}")
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text("Car Colour: ${dupVehicle.CarColour}")
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text("Owner Name: ${owner?.name}")
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text("Owner Phone: ${owner?.phoneNumber}")
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text("Owner Email: ${owner?.email}")
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text("Car Front Image: ")
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Image(
+                                    painter = rememberAsyncImagePainter(dupVehicle.CarFrontPhoto),
+                                    contentDescription = "Car Front Image",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(250.dp)
+                                        .padding(vertical = 16.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text("Car Back Image: ")
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Image(
+                                    painter = rememberAsyncImagePainter(dupVehicle.CarBackPhoto),
+                                    contentDescription = "Car Back Image",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(250.dp)
+                                        .padding(vertical = 16.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                            }
+                        }
+                    }
+                }else{
+                    Text("No conflict vehicle found.")
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Remark for this case:", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                OutlinedTextField(
+                    value = remark,
+                    onValueChange = { remark = it },
+                    label = { Text("* Remark") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if(dupDriverID.isNotEmpty() && dupVehicle.isNotEmpty()){
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Row(
+                            modifier = Modifier.clickable { overwrite = "Driver" },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = overwrite == "Driver",
+                                onClick = { overwrite = "Driver" },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = Color.Blue,
+                                    unselectedColor = Color.Gray
+                                )
+                            )
+                            Text(text = "Overwrite Driver")
+                        }
+                        Spacer(modifier = Modifier.width(28.dp))
+                        Row(
+                            modifier = Modifier.clickable { overwrite = "Vehicle" },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = overwrite == "Vehicle",
+                                onClick = { overwrite = "Vehicle" },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = Color.Blue,
+                                    unselectedColor = Color.Gray
+                                )
+                            )
+                            Text(text = "Overwrite Vehicle")
+                        }
+                        Spacer(modifier = Modifier.width(28.dp))
+                        Row(
+                            modifier = Modifier.clickable { overwrite = "Combine" },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = overwrite == "Combine",
+                                onClick = { overwrite = "Combine" },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = Color.Blue,
+                                    unselectedColor = Color.Gray
+                                )
+                            )
+                            Text(text = "Overwrite Driver & Vehicle")
+                        }
+                    }
+
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Approve Button
+                Button(
+                    onClick = {
+                        decision = "Approved"
+                        if(remark.isNotEmpty()){
+
+                        }else{
+                            Toast.makeText(context, "Please enter a remark", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    colors = ButtonColors(containerColor = Color(0xFF008000), contentColor = Color.White, disabledContentColor = Color.Gray, disabledContainerColor = Color.LightGray)
+                ) {
+                    Text("Approve")
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Reject Button
+                Button(
+                    onClick = {
+                        decision = "Rejected"
+                        if(remark.isNotEmpty()){
+                            updateCaseStatus(firestore, idCase.caseId, decision, remark, "Driver Case",context)
+                            showEmailDialog = true
+                        }else{
+                            Toast.makeText(context, "Please enter a remark", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    colors = ButtonColors(containerColor = Color(0xFFCC0000), contentColor = Color.White, disabledContentColor = Color.Gray, disabledContainerColor = Color.LightGray)
+                ) {
+                    Text("Reject")
+                }
+            }
+
+            if(idCase.status != ""){
+                OutlinedTextField(
+                    value = idCase.remark,
+                    onValueChange = { remark = it },
+                    enabled = false,
+                    label = { Text("* Remark") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Case Status: ${idCase.status}",color = if(idCase.status == "Approved") Color(0xFF008000) else Color(0xFFCC0000),
+                    fontWeight = FontWeight.Bold, fontSize = 18.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ){
+                    Button(
+                        onClick = {
+                            showEmailDialog = false
+//                            emailContent(idCase.status, idCase.email, idCase.name, idCase.remark, context, onResult = {
+//                                emailContent = it
+//                            })
+//
+//                            sendEmail(
+//                                context = context,
+//                                recipient = idCase.email, // Replace with dynamic user email
+//                                subject = "Case Update Notification from SHARide Team",
+//                                content = emailContent
+//                            )
+                            navController.popBackStack()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+                    ) {
+                        Text("Resend Email")
+                    }
+                }
+                Spacer(modifier = Modifier.height(30.dp))
+
+            }
+
+            if (showEmailDialog) {
+                AlertDialog(
+                    onDismissRequest = {
+                        showEmailDialog = false
+                        navController.popBackStack()
+                    },
+                    title = { Text("Update Case Successfully !") },
+                    text = { Text("Would you like to email the user with the case update?") },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                showEmailDialog = false
+                                navController.popBackStack()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+                        ) {
+                            Text("No Thanks")
+                        }
+//                        Button(
+//                            onClick = {
+//                                showEmailDialog = false
+//                                emailContent(decision, idCase.email, idCase.name, remark, context, onResult = {
+//                                    emailContent = it
+//                                })
+//
+//                                sendEmail(
+//                                    context = context,
+//                                    recipient = idCase.email, // Replace with dynamic user email
+//                                    subject = "Case Update Notification from SHARide Team",
+//                                    content = emailContent
+//                                )
+//                                navController.popBackStack()
+//                            },
+//                            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+//                        ) {
+//                            Text("Send Email")
+//                        }
+                    },
+                    containerColor = Color.White,
+                    shape = RoundedCornerShape(16.dp)
+                )
+            }
+        }
+        // Show Loading Dialog
+        LoadingDialog(text = "Loading...", showDialog = showDialog, onDismiss = { showDialog = false })
+    }
+}

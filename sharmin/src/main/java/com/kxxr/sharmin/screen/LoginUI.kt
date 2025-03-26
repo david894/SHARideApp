@@ -161,6 +161,11 @@ fun AdminAppNavHost() {
             val caseId = backStackEntry.arguments?.getString("caseId") ?: ""
             CaseDetailScreen(navController, caseId)
         }
+        composable("reviewDriverScreen") { ReviewDriverScreen(navController) }
+        composable("driverCaseDetail/{caseId}") { backStackEntry ->
+            val caseId = backStackEntry.arguments?.getString("caseId") ?: ""
+            DriverCaseDetailScreen(navController, caseId)
+        }
     }
 }
 
