@@ -1,4 +1,4 @@
-package com.kxxr.sharmin.DataClass
+package com.kxxr.logiclibrary.ManualCase
 
 data class UserCase(
     val caseId: String = "",

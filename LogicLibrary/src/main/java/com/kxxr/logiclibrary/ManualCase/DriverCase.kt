@@ -1,4 +1,4 @@
-package com.kxxr.sharmin.DataClass
+package com.kxxr.logiclibrary.ManualCase
 
 data class DriverCase(
     val caseId: String = "",
