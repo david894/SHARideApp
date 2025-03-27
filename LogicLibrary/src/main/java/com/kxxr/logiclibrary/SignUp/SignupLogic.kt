@@ -342,6 +342,93 @@ fun loadVehicleData(userId: String, onResult: (VehicleData?) -> Unit) {
         }
 }
 
+fun checkDuplicatePlate(
+    firestore: FirebaseFirestore,
+    registrationNum: String,
+    onResult: (Boolean) -> Unit
+) {
+    firestore.collection("Vehicle")
+        .whereEqualTo("CarRegistrationNumber", registrationNum)
+        .whereEqualTo("status", "Active")
+        .get()
+        .addOnSuccessListener { querySnapshot ->
+            onResult(!querySnapshot.isEmpty) // Returns `true` if duplicate exists
+        }
+        .addOnFailureListener {
+            onResult(false)
+        }
+}
+
+fun uploadImageToFirebase(
+    storage: FirebaseStorage,
+    path: String,
+    imageUri: Uri,
+    onSuccess: (String) -> Unit,
+    onFailure: (Exception) -> Unit
+) {
+    val storageRef = storage.reference.child(path)
+
+    storageRef.putFile(imageUri)
+        .addOnSuccessListener {
+            storageRef.downloadUrl.addOnSuccessListener { uri ->
+                onSuccess(uri.toString()) // Return the download URL
+            }
+        }
+        .addOnFailureListener { e ->
+            onFailure(e)
+        }
+}
+
+fun saveVehicleToFirestore(
+    firestore: FirebaseFirestore,
+    caseId: String,
+    userId: String,
+    carMake: String,
+    carModel: String,
+    carColor: String,
+    registrationNum: String,
+    frontPhotoUrl: String,
+    backPhotoUrl: String,
+    onComplete: (Boolean) -> Unit
+) {
+    val vehicleData = hashMapOf(
+        "caseId" to caseId,
+        "CarMake" to carMake,
+        "CarModel" to carModel,
+        "CarColour" to carColor,
+        "CarRegistrationNumber" to registrationNum,
+        "CarFrontPhoto" to frontPhotoUrl,
+        "CarBackPhoto" to backPhotoUrl,
+        "status" to "Active",
+        "UserID" to userId
+    )
+
+    firestore.collection("Vehicle")
+        .document(caseId)
+        .set(vehicleData)
+        .addOnSuccessListener { onComplete(true) }
+        .addOnFailureListener { onComplete(false) }
+}
+
+fun updateDriverDetails(
+    firestore: FirebaseFirestore,
+    userId: String,
+    vehicleId: String,
+    vehiclePlate: String,
+    onComplete: (Boolean) -> Unit
+) {
+    firestore.collection("driver")
+        .document(userId)
+        .update(
+            mapOf(
+                "vehicleId" to vehicleId,
+                "vehiclePlate" to vehiclePlate
+            )
+        )
+        .addOnSuccessListener { onComplete(true) }
+        .addOnFailureListener { onComplete(false) }
+}
+
 fun handleVehicleSubmission(
     context: Context,
     navController: NavController,
@@ -371,80 +458,53 @@ fun handleVehicleSubmission(
         return
     }
 
-    // Check if the plate number already exists
-    firestore.collection("Vehicle")
-        .whereEqualTo("CarRegistrationNumber", registrationNum)
-        .whereEqualTo("status","Active")
-        .get()
-        .addOnSuccessListener { querySnapshot ->
-            if (!querySnapshot.isEmpty) {
-                Toast.makeText(context, "Duplicate Car Plate!", Toast.LENGTH_SHORT).show()
-                navController.navigate("duplicatecar")
-                onComplete()
-                return@addOnSuccessListener
-            }
+    // Check for duplicate plate number
+    checkDuplicatePlate(firestore, registrationNum) { isDuplicate ->
+        if (isDuplicate) {
+            Toast.makeText(context, "Duplicate Car Plate!", Toast.LENGTH_SHORT).show()
+            navController.navigate("duplicatecar")
+            onComplete()
+            return@checkDuplicatePlate
+        }
 
-            // Proceed with uploading images
-            val carFrontRef = firebaseStorage.reference.child("Vehicle Photo/$caseId/car_front.jpg")
-            val carBackRef = firebaseStorage.reference.child("Vehicle Photo/$caseId/car_back.jpg")
+        // Proceed with uploading images
+        uploadImageToFirebase(firebaseStorage, "Vehicle Photo/$caseId/car_front.jpg", carFrontUri!!,
+            onSuccess = { frontUrl ->
 
-            carFrontRef.putFile(carFrontUri).addOnSuccessListener {
-                carFrontRef.downloadUrl.addOnSuccessListener { frontUrl ->
+                uploadImageToFirebase(firebaseStorage, "Vehicle Photo/$caseId/car_back.jpg", carBackUri!!,
+                    onSuccess = { backUrl ->
 
-                    carBackRef.putFile(carBackUri).addOnSuccessListener {
-                        carBackRef.downloadUrl.addOnSuccessListener { backUrl ->
-
-                            // Save details to Firestore
-                            val vehicleData = hashMapOf(
-                                "caseId" to caseId,
-                                "CarMake" to carMake,
-                                "CarModel" to carModel,
-                                "CarColour" to carColor,
-                                "CarRegistrationNumber" to registrationNum,
-                                "CarFrontPhoto" to frontUrl.toString(),
-                                "CarBackPhoto" to backUrl.toString(),
-                                "status" to "Active",
-                                "UserID" to userId
-                            )
-
-                            firestore.collection("Vehicle")
-                                .document(caseId)
-                                .set(vehicleData)
-                                .addOnSuccessListener {
-                                    // Update driver details
-                                    firestore.collection("driver")
-                                        .document(userId)
-                                        .update(
-                                            mapOf(
-                                                "vehicleId" to caseId,
-                                                "vehiclePlate" to registrationNum
-                                            )
-                                        )
-                                        .addOnSuccessListener {
-                                            Toast.makeText(context, "Submitted Successfully", Toast.LENGTH_SHORT).show()
-                                            navController.navigate("driversuccess")
-                                            onComplete()
-                                        }
-                                        .addOnFailureListener { e ->
-                                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                                            onComplete()
-                                        }
-                                }
-                                .addOnFailureListener { e ->
-                                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                        // Save vehicle details to Firestore
+                        saveVehicleToFirestore(firestore, caseId, userId, carMake, carModel, carColor, registrationNum, frontUrl, backUrl) { vehicleSaved ->
+                            if (vehicleSaved) {
+                                // Update driver details
+                                updateDriverDetails(firestore, userId, caseId, registrationNum) { driverUpdated ->
+                                    if (driverUpdated) {
+                                        Toast.makeText(context, "Submitted Successfully", Toast.LENGTH_SHORT).show()
+                                        navController.navigate("driversuccess")
+                                    } else {
+                                        Toast.makeText(context, "Error updating driver details", Toast.LENGTH_SHORT).show()
+                                    }
                                     onComplete()
                                 }
+                            } else {
+                                Toast.makeText(context, "Error saving vehicle details", Toast.LENGTH_SHORT).show()
+                                onComplete()
+                            }
                         }
-                    }.addOnFailureListener { e ->
+                    },
+                    onFailure = { e ->
                         Toast.makeText(context, "Error uploading back photo: ${e.message}", Toast.LENGTH_SHORT).show()
                         onComplete()
                     }
-                }
-            }.addOnFailureListener { e ->
+                )
+            },
+            onFailure = { e ->
                 Toast.makeText(context, "Error uploading front photo: ${e.message}", Toast.LENGTH_SHORT).show()
                 onComplete()
             }
-        }
+        )
+    }
 }
 
 fun uploadDriverData(

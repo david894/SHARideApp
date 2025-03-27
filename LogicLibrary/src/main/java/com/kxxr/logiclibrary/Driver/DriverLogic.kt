@@ -12,7 +12,7 @@ fun searchDriver(
 ) {
     val searchField = when {
         query.contains(" ") -> "driverName"         // Assume "name" if space is present
-        query.matches(Regex("[0-9]{12}")) -> "drivingId" // Numeric values for "studentId"
+        query.matches(Regex("[0-9]{12,14}")) -> "drivingId" // Numeric values for "studentId"
         query.matches(Regex("^[A-Za-z]{1,3}\\s?\\d{1,4} ?[A-Za-z]?$")) -> "vehiclePlate" // Numeric values for "studentId"
         query.equals("") -> "status"
         else -> "status"        // Otherwise, search by "name"

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.provider.MediaStore
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
@@ -81,7 +82,14 @@ import com.kxxr.logiclibrary.Driver.Driver
 import com.kxxr.logiclibrary.Driver.Vehicle
 import com.kxxr.logiclibrary.Driver.searchDriver
 import com.kxxr.logiclibrary.Driver.searchVehicle
+import com.kxxr.logiclibrary.SignUp.handleVehicleSubmission
+import com.kxxr.logiclibrary.SignUp.saveDriverToFirestore
+import com.kxxr.logiclibrary.SignUp.saveVehicleToFirestore
+import com.kxxr.logiclibrary.SignUp.updateDriverDetails
+import com.kxxr.logiclibrary.SignUp.uploadToFirebaseStorage
 import com.kxxr.logiclibrary.User.loadUserDetails
+import java.io.ByteArrayOutputStream
+import java.util.UUID
 
 fun sendEmail(context: Context, recipient: String, subject: String, content: String) {
     val intent = Intent(Intent.ACTION_SEND).apply {
@@ -1228,9 +1236,18 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
     var rotatedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var rotatedFrontBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var rotatedBackBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var userProfile by remember { mutableStateOf<Bitmap?>(null) }
+    var selfie by remember { mutableStateOf<Bitmap?>(null) }
+
     var showDialog by remember { mutableStateOf(false) }
+    var samePerson by remember { mutableStateOf(false) }
+
     var showEmailDialog by remember { mutableStateOf(false) }
     var emailContent by remember { mutableStateOf("") }
+    val firebaseStorage = FirebaseStorage.getInstance()
+    var profilePicture by remember { mutableStateOf<Bitmap?>(null) }
+    // Generate a unique case ID
+    val newcase = UUID.randomUUID().toString()
 
     LaunchedEffect(caseId) {
         showDialog = true
@@ -1247,7 +1264,7 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
                         .show()
                 }
             val carFrontReference =
-                FirebaseStorage.getInstance().getReferenceFromUrl(case!!.CarBackPhoto)
+                FirebaseStorage.getInstance().getReferenceFromUrl(case!!.CarFrontPhoto)
             carFrontReference.getBytes(1024 * 1024)
                 .addOnSuccessListener { bytes ->
                     rotatedFrontBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
@@ -1261,6 +1278,16 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
             carBackReference.getBytes(1024 * 1024)
                 .addOnSuccessListener { bytes ->
                     rotatedBackBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                }
+                .addOnFailureListener { e ->
+                    Toast.makeText(context, "Error fetching image: ${e.message}", Toast.LENGTH_SHORT)
+                        .show()
+                }
+            val driverselfie =
+                FirebaseStorage.getInstance().getReferenceFromUrl(case!!.driverSelfie)
+            driverselfie.getBytes(1024 * 1024)
+                .addOnSuccessListener { bytes ->
+                    selfie = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                 }
                 .addOnFailureListener { e ->
                     Toast.makeText(context, "Error fetching image: ${e.message}", Toast.LENGTH_SHORT)
@@ -1282,6 +1309,18 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
             searchVehicle(firestore, idCase.CarRegistrationNumber, context, onResult = {
                 dupVehicle = it
             })
+            if(users?.profileImageUrl != ""){
+                val profilepic =
+                    FirebaseStorage.getInstance().getReferenceFromUrl(case!!.CarBackPhoto)
+                profilepic.getBytes(1024 * 1024)
+                    .addOnSuccessListener { bytes ->
+                        userProfile = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    }
+                    .addOnFailureListener { e ->
+                        Toast.makeText(context, "Error fetching image: ${e.message}", Toast.LENGTH_SHORT)
+                            .show()
+                    }
+            }
         }
 
 
@@ -1320,10 +1359,10 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
             Text("Name: ${idCase.driverName}")
             Spacer(modifier = Modifier.height(8.dp))
 
-            Text("Email: ${idCase.driverId}")
+            Text("Driving ID: ${idCase.driverId}")
             Spacer(modifier = Modifier.height(8.dp))
 
-            Text("ID Photo")
+            Text("ID Photo", fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.height(8.dp))
             rotatedBitmap?.let {
                 Image(
@@ -1355,7 +1394,7 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
             }
             Spacer(modifier = Modifier.height(8.dp))
 
-            Text("Selfie with Driver ID")
+            Text("Selfie with Driver ID",fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.height(8.dp))
             Image(
                 painter = rememberAsyncImagePainter(idCase.driverSelfie),
@@ -1371,6 +1410,9 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
             Text("2. Vehicle Details:", fontWeight = FontWeight.Bold, fontSize = 18.sp)
             Spacer(modifier = Modifier.height(8.dp))
 
+            Text("Plate No: ${idCase.CarRegistrationNumber}", fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(8.dp))
+
             Text("Car Make: ${idCase.CarMake}")
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -1380,7 +1422,7 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
             Text("Car Colour: ${idCase.CarColour}")
             Spacer(modifier = Modifier.height(8.dp))
 
-            Text("Car Front Image:")
+            Text("Car Front Image:",fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.height(8.dp))
 
             rotatedFrontBitmap?.let {
@@ -1412,7 +1454,7 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
                 Text("Rotate 90°")
             }
 
-            Text("Car Back Image:")
+            Text("Car Back Image:",fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.height(8.dp))
 
             rotatedBackBitmap?.let {
@@ -1478,7 +1520,7 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
                             )
 
                             Spacer(modifier = Modifier.width(8.dp))
-
+                            if(dupDriverID.userId == users!!.firebaseUserId) samePerson=true
                             Column {
                                 Text("${index + 1}. Conflict Driver Personal Info:", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                                 Spacer(modifier = Modifier.height(8.dp))
@@ -1487,7 +1529,7 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
                                 Text("Name: ${dupDriverID.name}")
                                 Spacer(modifier = Modifier.height(8.dp))
 
-                                Text("Driving ID: ${dupDriverID.lesen}")
+                                Text("Driving ID: ${dupDriverID.drivingId}")
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 Text("Vehicle No: ${dupDriverID.vehiclePlate}")
@@ -1603,36 +1645,24 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        Row(
-                            modifier = Modifier.clickable { overwrite = "Driver" },
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(
-                                selected = overwrite == "Driver",
-                                onClick = { overwrite = "Driver" },
-                                colors = RadioButtonDefaults.colors(
-                                    selectedColor = Color.Blue,
-                                    unselectedColor = Color.Gray
+                        if(samePerson){
+                            Row(
+                                modifier = Modifier.clickable { overwrite = "Vehicle" },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = overwrite == "Vehicle",
+                                    onClick = { overwrite = "Vehicle" },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = Color.Blue,
+                                        unselectedColor = Color.Gray
+                                    )
                                 )
-                            )
-                            Text(text = "Overwrite Driver")
+                                Text(text = "Overwrite Vehicle Only")
+                            }
+                            Spacer(modifier = Modifier.width(28.dp))
                         }
-                        Spacer(modifier = Modifier.width(28.dp))
-                        Row(
-                            modifier = Modifier.clickable { overwrite = "Vehicle" },
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = overwrite == "Vehicle",
-                                onClick = { overwrite = "Vehicle" },
-                                colors = RadioButtonDefaults.colors(
-                                    selectedColor = Color.Blue,
-                                    unselectedColor = Color.Gray
-                                )
-                            )
-                            Text(text = "Overwrite Vehicle")
-                        }
-                        Spacer(modifier = Modifier.width(28.dp))
+
                         Row(
                             modifier = Modifier.clickable { overwrite = "Combine" },
                             verticalAlignment = Alignment.CenterVertically
@@ -1648,31 +1678,147 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
                             Text(text = "Overwrite Driver & Vehicle")
                         }
                     }
-                }else if (dupVehicle.isNotEmpty()){
-                    overwrite = "Vehicle"
-                }else if (dupDriverID.isNotEmpty()){
-                    overwrite = "Driver"
                 }
+
                 Spacer(modifier = Modifier.height(16.dp))
+
 
                 // Approve Button
                 Button(
                     onClick = {
                         decision = "Approved"
                         if(remark.isNotEmpty()){
+                            showDialog = true
+
                             if(overwrite == "" && dupDriverID.isNotEmpty() && dupVehicle.isNotEmpty()){
                                 Toast.makeText(context, "Please select which item to overwrite", Toast.LENGTH_SHORT).show()
+                                showDialog = false
                             }
+
                             if(overwrite == "" && dupDriverID.isEmpty() && dupVehicle.isEmpty()){
+                                rotatedBitmap?.let {
+                                    detectFaceFromIdCard(it) { faceBitmap ->
+                                        if (faceBitmap != null) {
+                                            // Save the face image
+                                            profilePicture = faceBitmap
+                                        }else{
+                                            Toast.makeText(context, "No Face Found on ID!", Toast.LENGTH_SHORT).show()
+                                            showDialog = false
+                                        }
+                                    }
+                                }
+                                // Upload lesen and profile picture to Firebase Storage
+                                users?.let { user ->
+                                    uploadLicenseAndProfile(user.firebaseUserId, rotatedBitmap, userProfile, selfie, firebaseStorage) { lesenUrl, profileUrl, selfieUrl ->
+                                        if (lesenUrl != null && profileUrl != null && selfieUrl != null) {
+                                            saveDriverToFirestore(user.firebaseUserId, case!!.driverName, case!!.driverId, profileUrl, lesenUrl, selfieUrl, firestore) {
+                                                uploadVehicleImagesAndSave(context, caseId, case, user.firebaseUserId, rotatedFrontBitmap, rotatedBackBitmap, firestore, firebaseStorage,
+                                                    onComplete = {
+                                                        updateCaseStatus(firestore, idCase.caseId, decision, remark, "Driver Case",context)
+                                                        showDialog = false
+                                                        showEmailDialog = true
+                                                    }, onFailure = {
+                                                        showDialog = false
+                                                    }
+                                                )
+                                            }
+                                        } else {
+                                            Toast.makeText(context, "Error uploading driver images", Toast.LENGTH_SHORT).show()
+                                            showDialog = false
+                                        }
+                                    }
+                                }
+                            }
+                            if(overwrite == "Combine" || (dupVehicle.isNotEmpty() && overwrite == "" && dupDriverID.isEmpty()) || (dupDriverID.isNotEmpty() && overwrite == "" && dupVehicle.isEmpty())){
+                                rotatedBitmap?.let {
+                                    detectFaceFromIdCard(it) { faceBitmap ->
+                                        if (faceBitmap != null) {
+                                            // Save the face image
+                                            profilePicture = faceBitmap
+                                        }else{
+                                            Toast.makeText(context, "No Face Found on ID!", Toast.LENGTH_SHORT).show()
+                                            showDialog = true
+                                        }
+                                    }
+                                }
+                                // Upload lesen and profile picture to Firebase Storage
+                                users?.let { user ->
+                                    firestore.collection("driver")
+                                        .whereEqualTo("drivingId", case!!.driverId)
+                                        .get()
+                                        .addOnSuccessListener{ snapshot ->
+                                            if (!snapshot.isEmpty) {
+                                                // Delete all found duplicate driver documents
+                                                snapshot.documents.forEach { document ->
+                                                    document.reference.delete()
+                                                }
+                                            }
+
+                                            // Upload lesen and profile picture to Firebase Storage
+                                            uploadLicenseAndProfile(user.firebaseUserId, rotatedBitmap, userProfile, selfie, firebaseStorage) { lesenUrl, profileUrl, selfieUrl ->
+                                                if (lesenUrl != null && profileUrl != null && selfieUrl != null) {
+                                                    saveDriverToFirestore(user.firebaseUserId, case!!.driverName, case!!.driverId, profileUrl, lesenUrl, selfieUrl, firestore) {
+                                                        dupVehicle.forEach{ dupVehicle ->
+                                                            updateVehicle(context, firestore, firebaseStorage, users, case, dupVehicle, rotatedFrontBitmap, rotatedBackBitmap,
+                                                                onComplete = {
+                                                                    updateCaseStatus(firestore, idCase.caseId, decision, remark, "Driver Case",context)
+                                                                    showDialog = false
+                                                                    showEmailDialog = true
+                                                                }, onFailure = {
+                                                                    showDialog = false
+                                                                }
+                                                            )
+                                                        }
+                                                    }
+                                                } else {
+                                                    Toast.makeText(context, "Error uploading driver images", Toast.LENGTH_SHORT).show()
+                                                    showDialog = false
+                                                }
+                                            }
+                                        }.addOnFailureListener{
+                                            Toast.makeText(context, "Error deleting conflict driver", Toast.LENGTH_SHORT).show()
+                                            // Upload lesen and profile picture to Firebase Storage
+                                            uploadLicenseAndProfile(user.firebaseUserId, rotatedBitmap, userProfile, selfie, firebaseStorage) { lesenUrl, profileUrl, selfieUrl ->
+                                                if (lesenUrl != null && profileUrl != null && selfieUrl != null) {
+                                                    saveDriverToFirestore(user.firebaseUserId, case!!.driverName, case!!.driverId,
+                                                        profileUrl, lesenUrl, selfieUrl, firestore
+                                                    ) {
+                                                        dupVehicle.forEach { dupVehicle ->
+                                                            updateVehicle(context, firestore, firebaseStorage, users,
+                                                                case, dupVehicle, rotatedFrontBitmap, rotatedBackBitmap,
+                                                                onComplete = {
+                                                                    updateCaseStatus(firestore, idCase.caseId, decision, remark, "Driver Case",context)
+                                                                    showDialog = false
+                                                                    showEmailDialog = true
+                                                                },
+                                                                onFailure = {
+                                                                    showDialog = false
+                                                                }
+                                                            )
+                                                        }
+                                                    }
+                                                } else {
+                                                    Toast.makeText(context, "Error uploading driver images", Toast.LENGTH_SHORT).show()
+                                                    showDialog = false
+                                                }
+                                            }
+                                        }
+                                }
 
                             }
-                            if(overwrite == "Driver" && dupDriverID.isNotEmpty()){
-
+                            if(overwrite == "Vehicle" && dupVehicle.isNotEmpty()&& samePerson){
+                                dupVehicle.forEach { dupVehicle ->
+                                    updateVehicle(context, firestore, firebaseStorage, users, case, dupVehicle, rotatedFrontBitmap, rotatedBackBitmap,
+                                        onComplete = {
+                                            updateCaseStatus(firestore, idCase.caseId, decision, remark, "Driver Case",context)
+                                            showDialog = false
+                                            showEmailDialog = true
+                                        }, onFailure = {
+                                        showDialog = false
+                                        }
+                                    )
+                                }
                             }
-                            if(overwrite == "Vehicle" && dupVehicle.isNotEmpty()){
-
-                            }
-
                         }else{
                             Toast.makeText(context, "Please enter a remark", Toast.LENGTH_SHORT).show()
                         }
@@ -1766,25 +1912,26 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
                         ) {
                             Text("No Thanks")
                         }
-//                        Button(
-//                            onClick = {
-//                                showEmailDialog = false
-//                                emailContent(decision, idCase.email, idCase.name, remark, context, onResult = {
-//                                    emailContent = it
-//                                })
-//
-//                                sendEmail(
-//                                    context = context,
-//                                    recipient = idCase.email, // Replace with dynamic user email
-//                                    subject = "Case Update Notification from SHARide Team",
-//                                    content = emailContent
-//                                )
-//                                navController.popBackStack()
-//                            },
-//                            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
-//                        ) {
-//                            Text("Send Email")
-//                        }
+                        Button(
+                            onClick = {
+                                users?.let {
+                                    showEmailDialog = false
+                                    driverEmailContent(decision, it.name, remark, onResult = {
+                                        emailContent = it
+                                    })
+                                    sendEmail(
+                                        context = context,
+                                        recipient = it.email, // Replace with dynamic user email
+                                        subject = "Driver Case Update Notification from SHARide Team",
+                                        content = emailContent
+                                    )
+                                    navController.popBackStack()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+                        ) {
+                            Text("Send Email")
+                        }
                     },
                     containerColor = Color.White,
                     shape = RoundedCornerShape(16.dp)
@@ -1793,5 +1940,250 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
         }
         // Show Loading Dialog
         LoadingDialog(text = "Loading...", showDialog = showDialog, onDismiss = { showDialog = false })
+    }
+}
+
+fun uploadLicenseAndProfile(
+    userId: String,
+    rotatedBitmap: Bitmap?,
+    userProfile: Bitmap?,
+    selfie: Bitmap?,
+    firebaseStorage: FirebaseStorage,
+    onComplete: (String?, String?, String?) -> Unit
+) {
+    uploadToFirebaseStorage(userId, "Driving Lesen", "lesen.png", rotatedBitmap, firebaseStorage) { lesenUrl ->
+        val profilePicture = userProfile ?: rotatedBitmap
+
+        uploadToFirebaseStorage(userId, "Driving Lesen", "profile_picture.png", profilePicture, firebaseStorage) { profileUrl ->
+            uploadToFirebaseStorage(userId, "Driving Lesen", "selfie.png", selfie, firebaseStorage) { selfieUrl ->
+                onComplete(lesenUrl, profileUrl, selfieUrl)
+            }
+        }
+    }
+}
+
+fun uploadVehicleImagesAndSave(
+    context: Context,
+    caseId: String,
+    case: DriverCase?,
+    userId: String,
+    rotatedFrontBitmap: Bitmap?,
+    rotatedBackBitmap: Bitmap?,
+    firestore: FirebaseFirestore,
+    firebaseStorage: FirebaseStorage,
+    onComplete: () -> Unit,
+    onFailure: () -> Unit
+) {
+    val byteArrayOutputStream = ByteArrayOutputStream()
+    rotatedFrontBitmap?.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
+    val carFront = byteArrayOutputStream.toByteArray()
+
+    val byteArrayOutputStreamBack = ByteArrayOutputStream()
+    rotatedBackBitmap?.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStreamBack)
+    val carBack = byteArrayOutputStreamBack.toByteArray()
+
+    val carFrontRef = firebaseStorage.reference.child("Vehicle Photo/$caseId/car_front.jpg")
+    val carBackRef = firebaseStorage.reference.child("Vehicle Photo/$caseId/car_back.jpg")
+
+    carFrontRef.putBytes(carFront).addOnSuccessListener {
+        carFrontRef.downloadUrl.addOnSuccessListener { frontUrl ->
+            carBackRef.putBytes(carBack).addOnSuccessListener {
+                carBackRef.downloadUrl.addOnSuccessListener { backUrl ->
+
+                    // Save vehicle details to Firestore
+                    saveVehicleToFirestore(
+                        firestore, caseId, userId,
+                        case!!.CarMake, case.CarModel, case.CarColour,
+                        case.CarRegistrationNumber, frontUrl.toString(), backUrl.toString()
+                    ) { vehicleSaved ->
+                        if (vehicleSaved) {
+                            // Update driver details
+                            updateDriverDetails(firestore, userId, caseId, case.CarRegistrationNumber) { driverUpdated ->
+                                if (driverUpdated) {
+                                    Toast.makeText(context, "Submitted Successfully", Toast.LENGTH_SHORT).show()
+                                    onComplete()
+                                } else {
+                                    Toast.makeText(context, "Error updating driver details", Toast.LENGTH_SHORT).show()
+                                    onFailure()
+                                }
+                            }
+                        } else {
+                            Toast.makeText(context, "Error saving vehicle details", Toast.LENGTH_SHORT).show()
+                            onFailure()
+                        }
+                    }
+                }
+            }.addOnFailureListener { e ->
+                Toast.makeText(context, "Error uploading back photo: ${e.message}", Toast.LENGTH_SHORT).show()
+                onFailure()
+            }
+        }
+    }.addOnFailureListener { e ->
+        Toast.makeText(context, "Error uploading front photo: ${e.message}", Toast.LENGTH_SHORT).show()
+        onFailure()
+    }
+}
+
+fun updateVehicle(
+    context: Context,
+    firestore: FirebaseFirestore,
+    firebaseStorage: FirebaseStorage,
+    users: User?,
+    case: DriverCase?,
+    dupVehicle: Vehicle,
+    rotatedFrontBitmap: Bitmap?,
+    rotatedBackBitmap: Bitmap?,
+    onComplete: () -> Unit,
+    onFailure: () -> Unit
+) {
+    // Check for null case before proceeding
+    if (case == null || users == null) {
+        Toast.makeText(context, "Invalid vehicle data", Toast.LENGTH_SHORT).show()
+        onFailure()
+        return
+    }
+
+    // Ensure bitmaps are not null
+    if (rotatedFrontBitmap == null || rotatedBackBitmap == null) {
+        Toast.makeText(context, "Missing vehicle images", Toast.LENGTH_SHORT).show()
+        onFailure()
+        return
+    }
+
+    // Convert Bitmaps to ByteArray
+    val byteArrayOutputStream = ByteArrayOutputStream()
+    rotatedFrontBitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
+    val carFront = byteArrayOutputStream.toByteArray()
+
+    val byteArrayOutputStreamBack = ByteArrayOutputStream()
+    rotatedBackBitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStreamBack)
+    val carBack = byteArrayOutputStreamBack.toByteArray()
+
+    // Firebase Storage References
+    val carFrontRef = firebaseStorage.reference.child("Vehicle Photo/${dupVehicle.caseId}/car_front.jpg")
+    val carBackRef = firebaseStorage.reference.child("Vehicle Photo/${dupVehicle.caseId}/car_back.jpg")
+
+    // Upload front image
+    carFrontRef.putBytes(carFront).addOnSuccessListener {
+        carFrontRef.downloadUrl.addOnSuccessListener { frontUrl ->
+
+            // Upload back image
+            carBackRef.putBytes(carBack).addOnSuccessListener {
+                carBackRef.downloadUrl.addOnSuccessListener { backUrl ->
+
+                    // Update Firestore vehicle details
+                    firestore.collection("Vehicle")
+                        .document(dupVehicle.caseId)
+                        .update(
+                            mapOf(
+                                "caseId" to dupVehicle.caseId,
+                                "CarMake" to case.CarMake,
+                                "CarModel" to case.CarModel,
+                                "CarColour" to case.CarColour,
+                                "CarRegistrationNumber" to case.CarRegistrationNumber,
+                                "CarFrontPhoto" to frontUrl.toString(),
+                                "CarBackPhoto" to backUrl.toString(),
+                                "status" to "Active",
+                                "UserID" to users.firebaseUserId
+                            )
+                        )
+                        .addOnSuccessListener {
+                            // Find previous drivers and reset vehicle info
+                            firestore.collection("driver")
+                                .whereEqualTo("vehicleId", dupVehicle.caseId)
+                                .get()
+                                .addOnSuccessListener { snapshot ->
+                                    if (snapshot.isEmpty) {
+                                        // No previous driver found, just update the new driver directly
+                                        updateDriverDetails(
+                                            firestore, users.firebaseUserId, dupVehicle.caseId, case.CarRegistrationNumber
+                                        ) { driverUpdated ->
+                                            if (driverUpdated) {
+                                                Toast.makeText(context, "Submitted Successfully", Toast.LENGTH_SHORT).show()
+                                                onComplete()
+                                            } else {
+                                                Toast.makeText(context, "Error updating driver details", Toast.LENGTH_SHORT).show()
+                                                onFailure()
+                                            }
+                                        }
+                                    } else {
+                                        // Update all previous drivers
+                                        snapshot.documents.forEach { document ->
+                                            document.reference.update(
+                                                mapOf(
+                                                    "vehicleId" to "",
+                                                    "vehiclePlate" to ""
+                                                )
+                                            )
+                                        }
+
+                                        // Then update the new driver
+                                        updateDriverDetails(
+                                            firestore, users.firebaseUserId, dupVehicle.caseId, case.CarRegistrationNumber
+                                        ) { driverUpdated ->
+                                            if (driverUpdated) {
+                                                Toast.makeText(context, "Submitted Successfully", Toast.LENGTH_SHORT).show()
+                                                onComplete()
+                                            } else {
+                                                Toast.makeText(context, "Error updating driver details", Toast.LENGTH_SHORT).show()
+                                                onFailure()
+                                            }
+                                        }
+                                    }
+                                }
+                                .addOnFailureListener {
+                                    Toast.makeText(context, "Error finding driver", Toast.LENGTH_SHORT).show()
+                                    onFailure()
+                                }
+                        }
+                        .addOnFailureListener {
+                            Toast.makeText(context, "Error updating vehicle data", Toast.LENGTH_SHORT).show()
+                            onFailure()
+                        }
+                }
+            }.addOnFailureListener {
+                Toast.makeText(context, "Error uploading car back image", Toast.LENGTH_SHORT).show()
+                onFailure()
+            }
+        }
+    }.addOnFailureListener {
+        Toast.makeText(context, "Error uploading car front image", Toast.LENGTH_SHORT).show()
+        onFailure()
+    }
+}
+
+fun driverEmailContent(decision:String, userName:String, remark:String, onResult: (String) -> Unit){
+    if (decision == "Approved") {
+        onResult(
+            """
+            Dear ${userName},
+            
+            We are pleased to inform you that your driver case has been $decision.
+       
+            Thanks for joining SHARide Driver! Start Your Journey Today!
+    
+            If you have any questions, feel free to contact support.
+    
+            Best regards,
+            Your SHARide Team
+            """.trimIndent()
+        )
+    } else {
+        onResult(
+            """
+            Dear ${userName},
+            
+            Unfortunately, your driver case has been $decision.
+    
+            Reason for Rejection:
+            $remark
+            
+            If you believe this was an error, please contact our support team.
+    
+            Best regards,
+            Your SHARide Team
+        """.trimIndent()
+        )
+
     }
 }
