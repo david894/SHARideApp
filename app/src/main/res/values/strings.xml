@@ -11,5 +11,6 @@
         <item>What was the name of your favorite childhood character?</item>
     </string-array>
     <string name="max_pin_attempts">3</string>
+    <string name="cs_email">ngkx-wp21@student.tarc.edu.my</string>
 
 </resources>

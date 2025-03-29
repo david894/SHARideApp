@@ -41,6 +41,7 @@ import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.auth.PhoneMultiFactorGenerator
 import com.google.firebase.auth.PhoneMultiFactorInfo
 import com.google.firebase.firestore.FirebaseFirestore
+import com.kxxr.logiclibrary.Banned.isBanned
 import com.kxxr.logiclibrary.Login.ResolverHolder
 import com.kxxr.logiclibrary.Login.sendOtp
 import com.kxxr.logiclibrary.Login.verifyOtp
@@ -139,7 +140,7 @@ fun VerifyOtpScreen(navController: NavController, verificationId: String, fireba
     var otp by remember { mutableStateOf("") }
     val context = LocalContext.current
     val resolver = ResolverHolder.resolver
-
+    val firestore = FirebaseFirestore.getInstance()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -181,8 +182,15 @@ fun VerifyOtpScreen(navController: NavController, verificationId: String, fireba
 
                             resolver.resolveSignIn(assertion)
                                 .addOnSuccessListener {
-                                    Toast.makeText(context, "MFA Verified Successfully", Toast.LENGTH_SHORT).show()
-                                    navController.navigate("home")
+                                    isBanned(FirebaseFirestore.getInstance(),firebaseAuth.currentUser?.uid ?: "",
+                                        onResult = { remark,banned ->
+                                            if(banned){
+                                                navController.navigate("banned_user/${firebaseAuth.currentUser?.uid ?: ""}/$remark")
+                                            }else{
+                                                Toast.makeText(context, "MFA Verified Successfully", Toast.LENGTH_SHORT).show()
+                                                navController.navigate("home")                                            }
+                                        }
+                                    )
                                 }
                                 .addOnFailureListener { e ->
                                     Toast.makeText(context, "Invalid OTP: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()

@@ -235,7 +235,7 @@ fun AdminHome(firebaseAuth: FirebaseAuth, navController: NavController) {
             ProfileCard(title = "Generate New Reload PIN", img = "authentication", onClick = {navController.navigate("generate_pin")})
             Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
-            ProfileCard(title = "Adjust User eWallet Balance",img = "edit", onClick = {navController.navigate("search_user")})
+            ProfileCard(title = "Adjust User eWallet Balance",img = "edit", onClick = {navController.navigate("search_user/${"eWallet"}")})
             Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
         }
@@ -254,10 +254,10 @@ fun AdminHome(firebaseAuth: FirebaseAuth, navController: NavController) {
             ProfileCard(title = "Review Driver Verification Case",img = "car_front", onClick = {navController.navigate("reviewDriverScreen")})
             Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
-            ProfileCard(title = "View User Details",img = "search", onClick = {navController.navigate("search_user")})
+            ProfileCard(title = "View User Details",img = "search", onClick = {navController.navigate("search_user/${"User"}")})
             Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
-            ProfileCard(title = "Ban User",img = "ban", onClick = {navController.navigate("search_user")})
+            ProfileCard(title = "Ban User",img = "ban", onClick = {navController.navigate("search_user/${"Ban"}")})
             Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
         }
         Spacer(modifier = Modifier.height(50.dp)) // Pushes Log Out button to bottom

@@ -15,11 +15,11 @@ fun searchDriver(
         query.matches(Regex("[0-9]{12,14}")) -> "drivingId" // Numeric values for "studentId"
         query.matches(Regex("^[A-Za-z]{1,3}\\s?\\d{1,4} ?[A-Za-z]?$")) -> "vehiclePlate" // Numeric values for "studentId"
         query.equals("") -> "status"
-        else -> "status"        // Otherwise, search by "name"
+        else -> "userId"        // Otherwise, search by "name"
     }
 
     firestore.collection("driver")
-        .whereEqualTo(searchField, if(searchField == "status")query else query.uppercase()) // Match exact query
+        .whereEqualTo(searchField, if(searchField == "status" || searchField == "userId")query else query.uppercase()) // Match exact query
         .get()
         .addOnSuccessListener { snapshot ->
             if (snapshot.isEmpty) {

@@ -41,13 +41,13 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.firestore.FirebaseFirestore
+import com.kxxr.logiclibrary.Banned.loadAllBannedUsers
 import com.kxxr.logiclibrary.User.User
 import com.kxxr.logiclibrary.User.loadUserDetails
 import com.kxxr.logiclibrary.User.loadWalletBalance
 import com.kxxr.logiclibrary.User.searchUsers
 import com.kxxr.logiclibrary.eWallet.TopupPin
 import com.kxxr.logiclibrary.eWallet.Transaction
-import com.kxxr.logiclibrary.eWallet.deleteReloadPIN
 import com.kxxr.logiclibrary.eWallet.generateTopupPins
 import com.kxxr.logiclibrary.eWallet.loadAvailablePins
 import com.kxxr.logiclibrary.eWallet.loadSoldPins
@@ -340,13 +340,23 @@ fun TopupPinItem(pin: TopupPin, firestore: FirebaseFirestore, context: Context, 
 
 // Main Screen to Search and Select User
 @Composable
-fun SearchUserScreen(navController: NavController) {
+fun SearchUserScreen(navController: NavController, type: String) {
     val context = LocalContext.current
     val firestore = FirebaseFirestore.getInstance()
 
     var searchQuery by remember { mutableStateOf("") }
     var users by remember { mutableStateOf<List<User>>(emptyList()) }
     var showDialog by remember { mutableStateOf(false) }
+    var banUser by remember { mutableStateOf<List<User>>(emptyList()) }
+    var isBanOpen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        showDialog = true
+        loadAllBannedUsers(firestore,context, onComplete = {
+            banUser = it
+            showDialog = false
+        })
+    }
 
     Column(modifier = Modifier
         .fillMaxSize()
@@ -403,6 +413,8 @@ fun SearchUserScreen(navController: NavController) {
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+        HorizontalDivider(thickness = 2.dp)
+        Spacer(modifier = Modifier.height(24.dp))
 
         if(users.isNotEmpty()){
             Text("Search Results:")
@@ -411,8 +423,47 @@ fun SearchUserScreen(navController: NavController) {
         Column {
             users.forEach { user ->
                 UserCard(user) {
-                    navController.navigate("adjust_bal/${user.firebaseUserId}")
+                    if(type == "eWallet"){
+                        navController.navigate("adjust_bal/${user.firebaseUserId}")
+                    }else if (type == "Ban"){
+                        navController.navigate("ban_user/${user.firebaseUserId}")
+                    }else{
+                        navController.navigate("user_details/${user.firebaseUserId}")
+                    }
                 }
+            }
+        }
+
+        if(type == "Ban"){
+            Row (
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .clip(RoundedCornerShape(10.dp)) // Rounded edges like a pebble
+                    .border(1.dp, Color.LightGray, RoundedCornerShape(10.dp)) // Floating shadow effect
+                    .clickable(
+                        onClick = {
+                            isBanOpen = !isBanOpen
+                            if (isBanOpen) loadAllBannedUsers(firestore,context, onComplete = {
+                                banUser = it
+                            })
+                        }
+                    ),
+                verticalAlignment = Alignment.CenterVertically
+            ){
+                Text(if (isBanOpen) "Hide Banned User ▲ " else "Show All Banned User ▼", modifier = Modifier.padding(start = 10.dp))
+            }
+
+            if(isBanOpen&& banUser.isNotEmpty()){
+                Column {
+                    banUser.forEach { ban ->
+                        UserCard(ban) {
+                            navController.navigate("ban_user/${ban.firebaseUserId}")
+                        }
+                    }
+                }
+            }else if(isBanOpen&& banUser.isEmpty()){
+                Text("No Banned User!")
             }
         }
     }

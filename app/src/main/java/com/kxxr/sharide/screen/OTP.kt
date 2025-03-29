@@ -1,6 +1,7 @@
 package com.kxxr.sharide.screen
 
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -19,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -28,8 +31,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -41,9 +46,12 @@ import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.auth.PhoneMultiFactorGenerator
 import com.google.firebase.auth.PhoneMultiFactorInfo
 import com.google.firebase.firestore.FirebaseFirestore
+import com.kxxr.logiclibrary.Banned.isBanned
 import com.kxxr.logiclibrary.Login.ResolverHolder
 import com.kxxr.logiclibrary.Login.sendOtp
 import com.kxxr.logiclibrary.Login.verifyOtp
+import com.kxxr.logiclibrary.ManualCase.sendEmail
+import com.kxxr.sharide.R
 
 
 @Composable
@@ -211,7 +219,15 @@ fun VerifyOtpScreen(navController: NavController, verificationId: String, fireba
                             resolver.resolveSignIn(assertion)
                                 .addOnSuccessListener {
                                     Toast.makeText(context, "MFA Verified Successfully", Toast.LENGTH_SHORT).show()
-                                    navController.navigate("home")
+                                    isBanned(FirebaseFirestore.getInstance(),firebaseAuth.currentUser?.uid ?: "",
+                                        onResult = { remark,banned ->
+                                            if(banned){
+                                                navController.navigate("banned_user/${firebaseAuth.currentUser?.uid ?: ""}/$remark")
+                                            }else{
+                                                navController.navigate("home")
+                                            }
+                                        }
+                                    )
                                 }
                                 .addOnFailureListener { e ->
                                     Toast.makeText(context, "Invalid OTP: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
@@ -319,3 +335,81 @@ fun CheckMfaEnrollment(firebaseAuth: FirebaseAuth, navController: NavController)
     }
 }
 
+@Composable
+fun BannedUserScreen(navController: NavController, userId: String, remark: String) {
+    val context = LocalContext.current
+    val firebaseAuth = FirebaseAuth.getInstance()
+    val emailSubject = "Dispute of Banned User - User ID: $userId"
+    val emailBody = """
+        Dear SHARide Team,
+
+        I would like to dispute my account ban due to a policy violation.
+
+        **User ID:** $userId
+
+        **Reason for Violation:** 
+        $remark
+
+        If you believe this was an error, please review my case. 
+        I have also attached any supporting documents for your consideration.
+
+        Best regards,
+        [Your Name]
+    """.trimIndent()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Oops! You've been banned :(",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(26.dp))
+        Image(
+            painter = painterResource(id = R.drawable.ban), // Replace with your error image resource
+            contentDescription = "Error Icon",
+            modifier = Modifier.size(100.dp),
+            colorFilter = ColorFilter.tint(Color.Red) // Apply red tint
+
+        )
+        Spacer(modifier = Modifier.height(26.dp))
+        Text(
+            text = "Your account has been banned as your previous action may violate our policy. \n If you think this is a mistake, please contact us via email",
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = "Reason of the ban :\n" +
+                    "$remark`",
+            modifier = Modifier.fillMaxWidth().padding(start = 20.dp)
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(
+            onClick = {
+                firebaseAuth.signOut()
+                sendEmail(context,context.getString(R.string.cs_email),emailSubject,emailBody)
+            },
+            modifier = Modifier.padding(6.dp).fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue))
+        {
+            Text("Contact Us")
+        }
+        TextButton(
+            onClick = {
+                firebaseAuth.signOut()
+                navController.navigate("login")
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = "Try Again", color = Color.Blue)
+        }
+
+    }
+}

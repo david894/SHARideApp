@@ -198,6 +198,11 @@ fun AppNavHost(
 
                 VerifyOtpScreen(navController, verifyID,firebaseAuth,phone,route)
             }
+            composable("banned_user/{userId}/{remark}") { backStackEntry ->
+                val userId = backStackEntry.arguments?.getString("userId") ?: ""
+                val remark = backStackEntry.arguments?.getString("remark") ?: ""
+                BannedUserScreen(navController,userId,remark)
+            }
 
             // Home (Updated to pass FirebaseAuth & Firestore)
             composable("home") { HomePage(navController, firebaseAuth, firestore) }

@@ -45,6 +45,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -87,6 +88,7 @@ import com.kxxr.logiclibrary.Login.handleMultiFactorAuthentication
 import com.kxxr.logiclibrary.Login.resetPassword
 import com.kxxr.logiclibrary.Login.signInWithEmailPassword
 import com.kxxr.logiclibrary.Login.verifyOtp
+import com.kxxr.logiclibrary.ManualCase.sendEmail
 import com.kxxr.logiclibrary.Network.NetworkViewModel
 import com.kxxr.sharmin.R
 
@@ -145,10 +147,17 @@ fun AdminAppNavHost() {
 
             VerifyOtpScreen(navController, verifyID,firebaseAuth,phone,route)
         }
-
+        composable("banned_user/{userId}/{remark}") { backStackEntry ->
+            val userId = backStackEntry.arguments?.getString("userId") ?: ""
+            val remark = backStackEntry.arguments?.getString("remark") ?: ""
+            BannedUserScreen(navController,userId,remark)
+        }
         //ewallet settings
         composable("generate_pin") { GenerateTopupPinScreen(navController) }
-        composable("search_user") { SearchUserScreen(navController) }
+        composable("search_user/{type}") { backStackEntry ->
+            val type = backStackEntry.arguments?.getString("type") ?: ""
+            SearchUserScreen(navController,type)
+        }
         composable("adjust_bal/{userId}") { backStackEntry ->
             val userId = backStackEntry.arguments?.getString("userId").orEmpty()
 
@@ -166,9 +175,96 @@ fun AdminAppNavHost() {
             val caseId = backStackEntry.arguments?.getString("caseId") ?: ""
             DriverCaseDetailScreen(navController, caseId)
         }
+        composable("user_details/{userId}") { backStackEntry ->
+            val userId = backStackEntry.arguments?.getString("userId").orEmpty()
+
+            UserDetailScreen(navController, userId)
+        }
+        composable("ban_user/{userId}") { backStackEntry ->
+            val userId = backStackEntry.arguments?.getString("userId").orEmpty()
+
+            BanUserScreen(navController, userId)
+        }
     }
 }
+@Composable
+fun BannedUserScreen(navController: NavController, userId: String, remark: String) {
+    val context = LocalContext.current
+    val firebaseAuth = FirebaseAuth.getInstance()
+    val emailSubject = "Dispute of Banned User - User ID: $userId"
+    val emailBody = """
+        Dear SHARide Team,
 
+        I would like to dispute my account ban due to a policy violation.
+
+        **User ID:** $userId
+
+        **Reason for Violation:** 
+        $remark
+
+        If you believe this was an error, please review my case. 
+        I have also attached any supporting documents for your consideration.
+
+        Best regards,
+        [Your Name]
+    """.trimIndent()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Oops! You've been banned :(",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(26.dp))
+        Image(
+            painter = painterResource(id = R.drawable.ban), // Replace with your error image resource
+            contentDescription = "Error Icon",
+            modifier = Modifier.size(100.dp),
+            colorFilter = ColorFilter.tint(Color.Red) // Apply red tint
+
+        )
+        Spacer(modifier = Modifier.height(26.dp))
+        Text(
+            text = "Your account has been banned as your previous action may violate our policy. \n If you think this is a mistake, please contact us via email",
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = "Reason of the ban :\n" +
+                    "$remark`",
+            modifier = Modifier.fillMaxWidth().padding(start = 20.dp)
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(
+            onClick = {
+                firebaseAuth.signOut()
+                sendEmail(context,context.getString(R.string.cs_email),emailSubject,emailBody)
+            },
+            modifier = Modifier.padding(6.dp).fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue))
+        {
+            Text("Contact Us")
+        }
+        TextButton(
+            onClick = {
+                firebaseAuth.signOut()
+                navController.navigate("login")
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = "Try Again", color = Color.Blue)
+        }
+
+    }
+}
 @Composable
 fun NoInternetScreen(onRetry: () -> Unit) {
     Column(

@@ -21,6 +21,7 @@ import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.auth.PhoneMultiFactorGenerator
 import com.google.firebase.auth.PhoneMultiFactorInfo
 import com.google.firebase.firestore.FirebaseFirestore
+import com.kxxr.logiclibrary.Banned.isBanned
 import java.util.concurrent.TimeUnit
 
 fun handleGoogleSignIn(
@@ -67,12 +68,18 @@ fun handleGoogleSignIn(
                             val user = firebaseAuth.currentUser
                             if (user != null) {
                                 if (user.isEmailVerified) {
-                                    if (type == "admin") {
-                                        checkIfAdmin(user.uid, db, firebaseAuth, navController, context)
-                                    } else {
-                                        Toast.makeText(context, "Sign-In Successful", Toast.LENGTH_LONG).show()
-                                        navController.navigate("home")
-                                    }
+                                    isBanned(FirebaseFirestore.getInstance(),user.uid, onResult = { remark,banned ->
+                                        if(banned){
+                                            navController.navigate("banned_user/${user.uid}/$remark")
+                                        }else{
+                                            if (type == "admin") {
+                                                checkIfAdmin(user.uid, db, firebaseAuth, navController, context)
+                                            } else {
+                                                Toast.makeText(context, "Sign-In Successful", Toast.LENGTH_LONG).show()
+                                                navController.navigate("home")
+                                            }
+                                        }
+                                    })
                                 } else {
                                     firebaseAuth.signOut()
                                     Toast.makeText(
@@ -124,8 +131,14 @@ private fun checkIfAdmin(
         .get()
         .addOnSuccessListener { documents ->
             if (!documents.isEmpty) {
-                Toast.makeText(context, "Admin Sign-In Successful", Toast.LENGTH_LONG).show()
-                navController.navigate("home")
+                isBanned(FirebaseFirestore.getInstance(),userId, onResult = { remark,banned ->
+                    if(banned){
+                        navController.navigate("banned_user/${userId}/$remark")
+                    }else{
+                        Toast.makeText(context, "Admin Sign-In Successful", Toast.LENGTH_LONG).show()
+                        navController.navigate("home")
+                    }
+                })
             } else {
                 firebaseAuth.signOut()
                 Toast.makeText(context, "You're not an Admin!", Toast.LENGTH_LONG).show()
@@ -220,8 +233,14 @@ fun signInWithEmailPassword(
                                 .get()
                                 .addOnSuccessListener { documents ->
                                     if (!documents.isEmpty) {
-                                        Toast.makeText(context, "Sign-In Successful", Toast.LENGTH_LONG).show()
-                                        navController.navigate("home")
+                                        isBanned(FirebaseFirestore.getInstance(),user.uid, onResult = { remark,banned ->
+                                            if(banned){
+                                                navController.navigate("banned_user/${user.uid}/$remark")
+                                            }else{
+                                                Toast.makeText(context, "Sign-In Successful", Toast.LENGTH_LONG).show()
+                                                navController.navigate("home")
+                                            }
+                                        })
                                     }else{
                                         firebaseAuth.signOut()
                                         Toast.makeText(context, "You're not an Admin!", Toast.LENGTH_LONG).show()
@@ -231,7 +250,14 @@ fun signInWithEmailPassword(
                                     Toast.makeText(context, "Failed to check account existence", Toast.LENGTH_LONG).show()
                                 }
                         }else{
-                            navController.navigate("home") // Direct Login if MFA not required
+                            isBanned(FirebaseFirestore.getInstance(),user.uid, onResult = { remark,banned ->
+                                if(banned){
+                                    navController.navigate("banned_user/${user.uid}/$remark")
+                                }else{
+                                    Toast.makeText(context, "Sign-In Successful", Toast.LENGTH_LONG).show()
+                                    navController.navigate("home")
+                                }
+                            })
                         }
                     } else {
                         firebaseAuth.signOut()

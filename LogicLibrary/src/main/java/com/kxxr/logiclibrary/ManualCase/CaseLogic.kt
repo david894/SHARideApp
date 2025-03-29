@@ -1,6 +1,7 @@
 package com.kxxr.logiclibrary.ManualCase
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.widget.Toast
 import com.google.firebase.firestore.FirebaseFirestore
@@ -364,5 +365,51 @@ fun updateVehicle(
     }.addOnFailureListener {
         Toast.makeText(context, "Error uploading car front image", Toast.LENGTH_SHORT).show()
         onFailure()
+    }
+}
+
+fun searchPendingDriverCases(firestore: FirebaseFirestore, query: String, context: Context, onResult: (List<DriverCase>) -> Unit) {
+    val searchField = when {
+        query.contains(" ") -> "driverName"         // Assume "name" if space is present
+        query.matches(Regex("[0-9]{12}")) -> "driverId" // Numeric values for "studentId"
+        query.matches(Regex("^[A-Za-z]{1,3}\\s?\\d{1,4} ?[A-Za-z]?$")) -> "CarRegistrationNumber" // Numeric values for "studentId"
+        query.equals("") -> "status"
+        else -> "name"        // Otherwise, search by "name"
+    }
+
+    firestore.collection("Driver Case")
+        .whereEqualTo("status", "")
+        .whereEqualTo(searchField, query.uppercase())
+        .get()
+        .addOnSuccessListener { snapshot ->
+            if (snapshot.isEmpty) {
+                Toast.makeText(context, "No Driver case found!", Toast.LENGTH_SHORT).show()
+                onResult(emptyList())
+                return@addOnSuccessListener
+            }
+
+            val cases = snapshot.documents.mapNotNull { doc ->
+                doc.toObject(DriverCase::class.java)
+            }
+            onResult(cases)
+        }
+        .addOnFailureListener { e ->
+            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            onResult(emptyList()) // Handle error case by returning null
+        }
+}
+
+fun sendEmail(context: Context, recipient: String, subject: String, content: String) {
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "message/rfc822" // Ensure only email apps respond
+        putExtra(Intent.EXTRA_EMAIL, arrayOf(recipient)) // Recipient(s)
+        putExtra(Intent.EXTRA_SUBJECT, subject) // Email subject
+        putExtra(Intent.EXTRA_TEXT, content) // Email content
+    }
+
+    try {
+        context.startActivity(Intent.createChooser(intent, "Choose Email Client"))
+    } catch (e: Exception) {
+        Toast.makeText(context, "No email app found", Toast.LENGTH_SHORT).show()
     }
 }

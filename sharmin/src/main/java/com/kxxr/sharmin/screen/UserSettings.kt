@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -48,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,6 +68,9 @@ import com.kxxr.sharmin.R
 import org.json.JSONObject
 import com.android.volley.Request
 import com.android.volley.toolbox.JsonObjectRequest
+import com.kxxr.logiclibrary.Banned.banUser
+import com.kxxr.logiclibrary.Banned.isBanned
+import com.kxxr.logiclibrary.Banned.unbanUser
 import com.kxxr.logiclibrary.SignUp.saveUserData
 import com.kxxr.logiclibrary.SignUp.uploadProfilePicture
 import com.kxxr.logiclibrary.Driver.Driver
@@ -79,6 +84,8 @@ import com.kxxr.logiclibrary.ManualCase.SearchPendingCases
 import com.kxxr.logiclibrary.ManualCase.UserCase
 import com.kxxr.logiclibrary.ManualCase.loadCaseByDriver
 import com.kxxr.logiclibrary.ManualCase.loadCaseById
+import com.kxxr.logiclibrary.ManualCase.searchPendingDriverCases
+import com.kxxr.logiclibrary.ManualCase.sendEmail
 import com.kxxr.logiclibrary.ManualCase.updateCaseStatus
 import com.kxxr.logiclibrary.ManualCase.updateDupUser
 import com.kxxr.logiclibrary.ManualCase.updateVehicle
@@ -86,21 +93,12 @@ import com.kxxr.logiclibrary.ManualCase.uploadLicenseAndProfile
 import com.kxxr.logiclibrary.ManualCase.uploadVehicleImagesAndSave
 import com.kxxr.logiclibrary.SignUp.saveDriverToFirestore
 import com.kxxr.logiclibrary.User.loadUserDetails
+import com.kxxr.logiclibrary.User.loadWalletBalance
+import com.kxxr.logiclibrary.eWallet.Transaction
+import com.kxxr.logiclibrary.eWallet.loadTransactionHistory
+import com.kxxr.logiclibrary.eWallet.recordTransaction
+import com.kxxr.logiclibrary.eWallet.updateUserBalance
 
-fun sendEmail(context: Context, recipient: String, subject: String, content: String) {
-    val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "message/rfc822" // Ensure only email apps respond
-        putExtra(Intent.EXTRA_EMAIL, arrayOf(recipient)) // Recipient(s)
-        putExtra(Intent.EXTRA_SUBJECT, subject) // Email subject
-        putExtra(Intent.EXTRA_TEXT, content) // Email content
-    }
-
-    try {
-        context.startActivity(Intent.createChooser(intent, "Choose Email Client"))
-    } catch (e: Exception) {
-        Toast.makeText(context, "No email app found", Toast.LENGTH_SHORT).show()
-    }
-}
 
 
 // Main Screen to Search and Select User
@@ -189,7 +187,7 @@ fun ReviewUserScreen(navController: NavController) {
                 .clickable(
                     onClick = {
                         isAvaliableOpen = !isAvaliableOpen
-                        if (isAvaliableOpen) SearchPendingCases(firestore,"",context) { cases ->
+                        if (isAvaliableOpen) SearchPendingCases(firestore, "", context) { cases ->
                             idCases = cases
                         }
                     }
@@ -221,7 +219,7 @@ fun ReviewUserScreen(navController: NavController) {
                 .clickable(
                     onClick = {
                         isCompleteOpen = !isCompleteOpen
-                        if (isCompleteOpen) CompleteIDCase(firestore,context) { cases ->
+                        if (isCompleteOpen) CompleteIDCase(firestore, context) { cases ->
                             completeIDCases = cases
                         }
                     }
@@ -948,7 +946,11 @@ fun ReviewDriverScreen(navController: NavController) {
                 .clickable(
                     onClick = {
                         isAvaliableOpen = !isAvaliableOpen
-                        if (isAvaliableOpen) searchPendingDriverCases(firestore,"",context) { cases ->
+                        if (isAvaliableOpen) searchPendingDriverCases(
+                            firestore,
+                            "",
+                            context
+                        ) { cases ->
                             driverCases = cases
                         }
                     }
@@ -980,7 +982,7 @@ fun ReviewDriverScreen(navController: NavController) {
                 .clickable(
                     onClick = {
                         isCompleteOpen = !isCompleteOpen
-                        if (isCompleteOpen) CompleteDriverCase(firestore,context) { cases ->
+                        if (isCompleteOpen) CompleteDriverCase(firestore, context) { cases ->
                             completeDriverCases = cases
                         }
                     }
@@ -1007,36 +1009,7 @@ fun ReviewDriverScreen(navController: NavController) {
     LoadingDialog(text = "Loading...", showDialog = showDialog, onDismiss = { showDialog = false })
 }
 
-fun searchPendingDriverCases(firestore: FirebaseFirestore, query: String, context: Context, onResult: (List<DriverCase>) -> Unit) {
-    val searchField = when {
-        query.contains(" ") -> "driverName"         // Assume "name" if space is present
-        query.matches(Regex("[0-9]{12}")) -> "driverId" // Numeric values for "studentId"
-        query.matches(Regex("^[A-Za-z]{1,3}\\s?\\d{1,4} ?[A-Za-z]?$")) -> "CarRegistrationNumber" // Numeric values for "studentId"
-        query.equals("") -> "status"
-        else -> "name"        // Otherwise, search by "name"
-    }
 
-    firestore.collection("Driver Case")
-        .whereEqualTo("status", "")
-        .whereEqualTo(searchField, query.uppercase())
-        .get()
-        .addOnSuccessListener { snapshot ->
-            if (snapshot.isEmpty) {
-                Toast.makeText(context, "No Driver case found!", Toast.LENGTH_SHORT).show()
-                onResult(emptyList())
-                return@addOnSuccessListener
-            }
-
-            val cases = snapshot.documents.mapNotNull { doc ->
-                doc.toObject(DriverCase::class.java)
-            }
-            onResult(cases)
-        }
-        .addOnFailureListener { e ->
-            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-            onResult(emptyList()) // Handle error case by returning null
-        }
-}
 // Case Card UI
 @Composable
 fun DriverCaseCard(case: DriverCase, onClick: () -> Unit) {
@@ -1611,8 +1584,8 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
                                             uploadLicenseAndProfile(user.firebaseUserId, rotatedBitmap, userProfile, selfie, firebaseStorage) { lesenUrl, profileUrl, selfieUrl ->
                                                 if (lesenUrl != null && profileUrl != null && selfieUrl != null) {
                                                     saveDriverToFirestore(user.firebaseUserId, case!!.driverName, case!!.driverId, profileUrl, lesenUrl, selfieUrl, firestore) {
-                                                        dupVehicle.forEach{ dupVehicle ->
-                                                            updateVehicle(context, firestore, firebaseStorage, users, case, dupVehicle, rotatedFrontBitmap, rotatedBackBitmap,
+                                                        if(dupVehicle.isEmpty()){
+                                                            uploadVehicleImagesAndSave(context, caseId, case, user.firebaseUserId, rotatedFrontBitmap, rotatedBackBitmap, firestore, firebaseStorage,
                                                                 onComplete = {
                                                                     updateCaseStatus(firestore, idCase.caseId, decision, remark, "Driver Case",context)
                                                                     showDialog = false
@@ -1621,6 +1594,18 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
                                                                     showDialog = false
                                                                 }
                                                             )
+                                                        }else{
+                                                            dupVehicle.forEach{ dupVehicle ->
+                                                                updateVehicle(context, firestore, firebaseStorage, users, case, dupVehicle, rotatedFrontBitmap, rotatedBackBitmap,
+                                                                    onComplete = {
+                                                                        updateCaseStatus(firestore, idCase.caseId, decision, remark, "Driver Case",context)
+                                                                        showDialog = false
+                                                                        showEmailDialog = true
+                                                                    }, onFailure = {
+                                                                        showDialog = false
+                                                                    }
+                                                                )
+                                                            }
                                                         }
                                                     }
                                                 } else {
@@ -1832,5 +1817,374 @@ fun driverEmailContent(decision:String, userName:String, remark:String, onResult
         """.trimIndent()
         )
 
+    }
+}
+
+@Composable
+fun UserDetailScreen(navController: NavController, userId: String) {
+    val context = LocalContext.current
+    val firestore = FirebaseFirestore.getInstance()
+
+    var user by remember { mutableStateOf<User?>(null) }
+    var balance by remember { mutableStateOf(0.0) }
+    var isDriver by remember { mutableStateOf<List<Driver>>(emptyList()) }
+    var vehicle by remember { mutableStateOf<List<Vehicle>>(emptyList()) }
+    var showDialog by remember { mutableStateOf(false) }
+
+    // Fetch user data when screen is opened
+    LaunchedEffect(userId) {
+        showDialog = true
+        loadUserDetails(firestore, userId) { user = it }
+        loadWalletBalance(firestore, userId) { balance = it }
+        showDialog = false
+    }
+
+    loadWalletBalance(firestore, userId) { balance = it }
+
+    user?.let { userData ->
+
+        searchDriver(firestore, userData.firebaseUserId, context, onResult = {
+            isDriver = it
+        })
+
+
+        Column(modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
+        ) {
+            Spacer(modifier = Modifier.height(50.dp))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clickable { navController.navigate("home") }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.Black,
+                    modifier = Modifier.size(28.dp)
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Text(
+                    text = "User Details",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+            Row (
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .border(2.dp, Color.LightGray, RoundedCornerShape(10.dp)),
+                verticalAlignment = Alignment.CenterVertically
+            ){
+                Spacer(modifier = Modifier.width(15.dp))
+                Image(
+                    painter = rememberAsyncImagePainter(userData.profileImageUrl),
+                    contentDescription = "Profile Image",
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                )
+                Column(
+                    modifier = Modifier.padding(start = 16.dp)
+                ) {
+                    Text("${userData.name}", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("${userData.email}")
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text("ID: ${userData.studentId}")
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text("Phone: ${userData.phoneNumber}")
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text("Gender: ${if(userData.gender == "M")"Male" else "Female"}")
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ){
+                Column (
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ){
+                    Text("eWallet Balance", fontSize = 20.sp)
+                    Text("RM $balance", fontSize = 23.sp,fontWeight = FontWeight.Bold)
+                }
+                Column(
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Rating", fontSize = 20.sp)
+                    Text("/5.0", fontSize = 23.sp,fontWeight = FontWeight.Bold)
+                }
+
+            }
+
+            Spacer(modifier = Modifier.height(30.dp))
+            if(isDriver.isNotEmpty()) {
+                isDriver.forEach { driver ->
+                    searchVehicle(firestore, driver.vehiclePlate, context, onResult = {
+                        vehicle = it
+                    })
+                    Text("Driver Details :", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text("Name : ${driver.name}")
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text("Driving ID : ${driver.drivingId}")
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text("ID Photo : ")
+                        Image(
+                            painter = rememberAsyncImagePainter(driver.lesen),
+                            contentDescription = "Lesen Image",
+                            modifier = Modifier
+                                .size(200.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text("Selfie Photo : ")
+                        Image(
+                            painter = rememberAsyncImagePainter(driver.selfie),
+                            contentDescription = "Lesen Image",
+                            modifier = Modifier
+                                .size(100.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                    }
+                    if(vehicle.isNotEmpty()){
+                        vehicle.forEach { vehicle ->
+                            Text("Vehicle Details :", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp),
+                                verticalArrangement = Arrangement.Center,
+                            ){
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text("Car Make : ${vehicle.CarMake}")
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Text("Car Model : ${vehicle.CarModel}")
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Text("Car Colour : ${vehicle.CarColour}")
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Text("Car Front Photo :")
+                                Image(
+                                    painter = rememberAsyncImagePainter(vehicle.CarFrontPhoto),
+                                    contentDescription = "Car Front Image",
+                                    modifier = Modifier
+                                        .size(100.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Text("Car Back Photo : ${driver.drivingId}")
+                                Image(
+                                    painter = rememberAsyncImagePainter(vehicle.CarBackPhoto),
+                                    contentDescription = "Car Back Image",
+                                    modifier = Modifier
+                                        .size(100.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
+                        }
+                    }else{
+                        Text("No Vehicle Found")
+                    }
+                }
+            }else{
+                Text("No Driver Found")
+            }
+        }
+        // Show Loading Dialog
+        LoadingDialog(text = "Loading...", showDialog = showDialog, onDismiss = { showDialog = false })
+    }
+}
+
+
+@Composable
+fun BanUserScreen(navController: NavController, userId: String) {
+    val context = LocalContext.current
+    val firestore = FirebaseFirestore.getInstance()
+
+    var user by remember { mutableStateOf<User?>(null) }
+    var remark by remember { mutableStateOf("") }
+
+    var showDialog by remember { mutableStateOf(false) }
+    var isBanned by remember { mutableStateOf(false) }
+
+    // Fetch user data when screen is opened
+    LaunchedEffect(userId) {
+        showDialog = true
+        loadUserDetails(firestore, userId) { user = it }
+        showDialog = false
+    }
+
+
+    user?.let { userData ->
+        LaunchedEffect(userId) {
+            isBanned(firestore,userData.firebaseUserId, onResult = { remarks,banned ->
+                isBanned = banned
+                if (remarks != null) {
+                    remark = remarks
+                }
+            })
+        }
+
+        Column(modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
+        ) {
+            Spacer(modifier = Modifier.height(50.dp))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clickable { navController.navigate("home") }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.Black,
+                    modifier = Modifier.size(28.dp)
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Text(
+                    text = "Ban User",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+            Row (
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .border(2.dp, Color.LightGray, RoundedCornerShape(10.dp)),
+                verticalAlignment = Alignment.CenterVertically
+            ){
+                Spacer(modifier = Modifier.width(15.dp))
+                Image(
+                    painter = rememberAsyncImagePainter(userData.profileImageUrl),
+                    contentDescription = "Profile Image",
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                )
+                Column(
+                    modifier = Modifier.padding(start = 16.dp)
+                ) {
+                    Text("${userData.name}", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text("${userData.email}")
+                    Text("ID: ${userData.studentId}")
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp)
+            ) {
+                Text("Remark", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(6.dp))
+
+                OutlinedTextField(
+                    value = remark,
+                    onValueChange = { remark = it },
+                    label = { Text("Enter Description") },
+                    enabled = if(isBanned)false else true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp)
+                )
+
+                Spacer(modifier = Modifier.height(22.dp))
+                if(!isBanned){
+                    Button(
+                        onClick = {
+
+                            if(remark.isEmpty()){
+                                Toast.makeText(context, "Please enter a remark", Toast.LENGTH_SHORT).show()
+                            }else {
+                                showDialog = true
+                                banUser(firestore,userData.firebaseUserId,remark, onComplete = { isComplete ->
+                                    if(isComplete){
+                                        showDialog = false
+                                        Toast.makeText(context,"User Banned Successfully",Toast.LENGTH_SHORT).show()
+                                        navController.popBackStack()
+                                    }else{
+                                        showDialog = false
+                                        Toast.makeText(context,"Error Banned User",Toast.LENGTH_SHORT).show()
+                                    }
+                                })
+                            }
+                        },
+                        colors = ButtonColors(containerColor = Color(0xFFCC0000), contentColor = Color.White, disabledContentColor = Color.Gray, disabledContainerColor = Color.LightGray),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Ban This User")
+                    }
+                }else{
+                    Button(
+                        onClick = {
+                            showDialog = true
+                            unbanUser(firestore,userData.firebaseUserId, onComplete = {
+                                showDialog = false
+                                Toast.makeText(context,"User Unbanned Successfully",Toast.LENGTH_SHORT).show()
+                                navController.popBackStack()
+                            })
+
+                        },
+                        colors = ButtonColors(containerColor = Color(0xFF008000), contentColor = Color.White, disabledContentColor = Color.Gray, disabledContainerColor = Color.LightGray),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Unban This User")
+                    }
+                }
+
+
+            }
+        }
+        // Show Loading Dialog
+        LoadingDialog(text = "Loading...", showDialog = showDialog, onDismiss = { showDialog = false })
     }
 }
