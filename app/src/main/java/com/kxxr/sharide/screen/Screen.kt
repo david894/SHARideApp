@@ -215,10 +215,11 @@ fun AppNavHost(
             composable("notification") { NotificationScreen(navController, firebaseAuth, firestore,context) }
             composable("matching_screen") { MatchingScreen(navController,firestore) }
             composable("search_ride") { SearchRideScreen(navController) }
-            composable("request_ride/{driverId}/{rideId}") { backStackEntry ->
+            composable("request_ride/{driverId}/{rideId}/{searchId}") { backStackEntry ->
                 val driverId = backStackEntry.arguments?.getString("driverId") ?: ""
                 val rideId = backStackEntry.arguments?.getString("rideId") ?: ""
-                RideRequestScreen(firebaseAuth,navController,driverId, rideId)
+                val searchId = backStackEntry.arguments?.getString("searchId") ?: ""
+                RideRequestScreen(firebaseAuth,navController,driverId, rideId,searchId)
             }
             composable(
                 "ride_detail/{index}/{rideId}",

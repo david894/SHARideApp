@@ -420,8 +420,7 @@ fun SearchReminder(
 ) {
     val searchItems = remember { mutableStateListOf<Ride>() }
     val userId = firebaseAuth.currentUser?.uid ?: ""
-    val driverIdsStringMap = remember { mutableStateMapOf<String, String>() }
-    val rideIdsStringMap = remember { mutableStateMapOf<String, String>() }
+
     // Fetch searches for passengers
     LaunchedEffect(userId) {
         if (userId.isNotEmpty()) {
@@ -439,13 +438,6 @@ fun SearchReminder(
                         val timeLeftMillis = timestamp - currentTime
                         val status = if (timeLeftMillis > 0) formatTimeLeft(timeLeftMillis) else "Expired"
 
-                        // Fetch driverIdsString
-                        val driverIdsString = doc.getString("driverIdsString") ?: ""
-                        driverIdsStringMap[searchId] = driverIdsString
-
-                        // Fetch rideIdsString
-                        val rideIdsString = doc.getString("rideIdsString") ?: ""
-                        rideIdsStringMap[searchId] = rideIdsString
                         Ride(
                             id = doc.id,
                             status = status,
@@ -467,8 +459,6 @@ fun SearchReminder(
         items = searchItems,
         isDriver = false,
         navController = navController,
-        driverIdsStringMap = driverIdsStringMap,
-        rideIdsStringMap = rideIdsStringMap
         )
 }
 
@@ -479,8 +469,6 @@ fun ReminderContent(
     items: List<Ride>,
     isDriver: Boolean,
     navController: NavController,
-    driverIdsStringMap: Map<String, String> = emptyMap(),
-    rideIdsStringMap: Map<String, String> = emptyMap()
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         Spacer(modifier = Modifier.height(16.dp))
@@ -495,8 +483,7 @@ fun ReminderContent(
             ) {
                 items(items) { item ->
                     val index = items.indexOf(item)
-                    val driverIdsString = driverIdsStringMap[item.id] ?: ""
-                    val rideIdsString = rideIdsStringMap[item.id] ?: ""
+
                     RideItem(
                         title = if (isDriver) "Ride ${index + 1}" else "Search ${index + 1}",
                         status = item.status,
@@ -506,7 +493,8 @@ fun ReminderContent(
                             if (isDriver) {
                                 navController.navigate("ride_detail/${ index+1 }/${item.id}") // Pass index & ride ID
                             } else {
-                                navController.navigate("request_ride/$driverIdsString/$rideIdsString")
+                                navController.navigate("matching_screen")
+
                             }
                         }
                     )

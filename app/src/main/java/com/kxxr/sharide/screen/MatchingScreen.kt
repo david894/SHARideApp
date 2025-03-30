@@ -69,22 +69,53 @@ fun MatchingScreen(navController: NavController, firestore: FirebaseFirestore) {
             isLoading = false
         })
     }
-    // Disable Android back button on this screen
     BackHandler {
-        // Do nothing to prevent back navigation
+        showDialog = true
     }
+
+    if (showDialog) {
+        ConfirmExitDialog(
+            searchId = searchId,
+            firestore = firestore,
+            onDismiss = { showDialog = false },
+            onConfirm = {
+                cancelSearch(searchId, firestore) {
+                    navController.popBackStack() // Go back after canceling
+                }
+            }
+        )
+    }
+
 
 
     MatchingScreenContent(location, destination, isLoading, matchingRides, searchId, firestore, navController)
 }
-// Function to cancel ride in Firebase
-fun cancelRide(searchId: String?, firestore: FirebaseFirestore, onComplete: () -> Unit) {
-    searchId?.let { id ->
-        firestore.collection("searches").document(id)
-            .delete()
-            .addOnSuccessListener { onComplete() }
-            .addOnFailureListener { onComplete() } // Still navigate even if deletion fails
-    } ?: onComplete()
+
+@Composable
+fun ConfirmExitDialog(
+    searchId: String?,
+    firestore: FirebaseFirestore,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = { onDismiss() },
+        title = { Text("Confirm Exit") },
+        text = { Text("Do you want to cancel the search?") },
+        confirmButton = {
+            TextButton(onClick = {
+                onConfirm()
+                onDismiss()
+            }) {
+                Text("Yes, Cancel")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { onDismiss() }) {
+                Text("No, Continue Searching")
+            }
+        }
+    )
 }
 
 @Composable
@@ -118,7 +149,7 @@ fun MatchingScreenContent(
             Spacer(modifier = Modifier.weight(1f))
 
             if (matchingRides.isNullOrEmpty()) {
-                MatchingText() // Always show this if no rides are found
+                MatchingText(searchId,firestore,navController) // Always show this if no rides are found
             } else {
                 Text(
                     "Matching Rides Found:",
@@ -141,12 +172,13 @@ fun MatchingScreenContent(
                             .update(
                                 mapOf(
                                     "driverIdsString" to driverIdsString,
-                                    "rideIdsString" to rideIdsString // ✅ Store ride IDs
+                                    "rideIdsString" to rideIdsString, // ✅ Store ride IDs
+                                    "searchId" to searchId
                                 )
                             )
                             .addOnSuccessListener {
                                 // ✅ Navigate to the next screen with both values
-                                navController.navigate("request_ride/$driverIdsString/$rideIdsString")
+                                navController.navigate("request_ride/$driverIdsString/$rideIdsString/$searchId")
                             }
                             .addOnFailureListener { e ->
                                 Toast.makeText(
@@ -165,10 +197,6 @@ fun MatchingScreenContent(
         }
     }
 }
-
-
-
-
 
 
 fun fetchLatestSearchId(userId: String, onSuccess: (String?) -> Unit, onFailure: (String) -> Unit) {
@@ -225,20 +253,84 @@ fun LocationBox(location: String, icon: ImageVector) {
 }
 
 @Composable
-fun MatchingText() {
-    Text(
-        text = "Matching Your Ride Participants ...",
-        color = Color.White,
-        fontSize = 18.sp,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(bottom = 8.dp)
-    )
-    ClickableText(
-        text = AnnotatedString("Can't Match Ride Participant? CLICK ME"),
-        style = TextStyle(color = Color.White, fontSize = 14.sp),
-        onClick = { /* Handle click */ }
+fun AlternativeSolutionDialog(
+    searchId: String?,
+    firestore: FirebaseFirestore,
+    navController: NavController,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val options = listOf("Search Another Ride", "Chat with TAR UMT Bus", "Cancel Matching")
+
+    AlertDialog(
+        onDismissRequest = { onDismiss() },
+        title = { Text("Alternative Solutions") },
+        text = {
+            Column {
+                options.forEachIndexed { index, option ->
+                    TextButton(onClick = {
+                        when (index) {
+                            0 -> navController.navigate("search_screen") // Search another ride
+                            1 -> navController.navigate("chat_bot") // Chat with TAR UMT Bus bot
+                            2 -> {
+                                cancelSearch(searchId, firestore) {
+                                    Toast.makeText(context, "Matching Canceled", Toast.LENGTH_SHORT).show()
+                                    navController.popBackStack() // Go back
+                                }
+                            }
+                        }
+                        onDismiss() // Close dialog after selection
+                    }) {
+                        Text(option)
+                    }
+                }
+            }
+        },
+        confirmButton = {}
     )
 }
+
+@Composable
+fun MatchingText(searchId: String?, firestore: FirebaseFirestore, navController: NavController) {
+    var showDialog by remember { mutableStateOf(false) }
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = "Matching Your Ride Participants ...",
+            color = Color.White,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        ClickableText(
+            text = AnnotatedString("Can't Match Ride Participant? CLICK ME"),
+            style = TextStyle(color = Color.White, fontSize = 14.sp),
+            onClick = { showDialog = true }
+        )
+
+        if (showDialog) {
+            AlternativeSolutionDialog(
+                searchId = searchId,
+                firestore = firestore,
+                navController = navController,
+                onDismiss = { showDialog = false }
+            )
+        }
+    }
+}
+
+
+// Function to cancel the ride in Firebase
+fun cancelSearch(searchId: String?, firestore: FirebaseFirestore, onComplete: () -> Unit) {
+    searchId?.let { id ->
+        firestore.collection("searchs").document(id)
+            .delete()
+            .addOnSuccessListener { onComplete() }
+            .addOnFailureListener { onComplete() } // Still navigate even if deletion fails
+    } ?: onComplete()
+}
+
 
 @Composable
 fun MatchingIndicator() {

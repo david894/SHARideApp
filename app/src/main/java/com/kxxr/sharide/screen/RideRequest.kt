@@ -42,7 +42,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable
-fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, driverId: String, rideId: String) {
+fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, driverId: String, rideId: String, searchId:String) {
     val firestore = FirebaseFirestore.getInstance()
     var driverList by remember { mutableStateOf<List<DriverInfo>>(emptyList()) }
     var rideDriverPairs by remember { mutableStateOf<List<Pair<RideInfo, DriverInfo>>>(emptyList()) }
@@ -122,7 +122,7 @@ fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, 
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         itemsIndexed(rideDriverPairs) { index, (ride, driver) ->
-                            DriverCard(navController, firebaseAuth, firestore, index + 1, driver, ride.rideId)
+                            DriverCard(navController, firebaseAuth, firestore, index + 1, driver, ride.rideId,searchId)
                         }
                     }
                 }
@@ -140,7 +140,8 @@ fun DriverCard(
     firestore: FirebaseFirestore,
     driverNumber: Int,
     driver: DriverInfo,
-    rideId: String
+    rideId: String,
+    searchId: String,
 
 ) {
     var userName by remember { mutableStateOf("Unknown") }
@@ -220,6 +221,7 @@ fun DriverCard(
                             rideId = rideId,
                             driverId = driver.driverId,
                             passengerId = firebaseAuth.currentUser?.uid ?: "",
+                            searchId = searchId,
                             onSuccess = { navController.navigate("home") }
                         )
                     },
@@ -300,12 +302,14 @@ fun sendRequestToDriver(
     rideId: String,
     driverId: String,
     passengerId: String,
+    searchId: String,
     onSuccess: () -> Unit
 ) {
     val request = hashMapOf(
         "rideId" to rideId,
         "driverId" to driverId,
         "passengerId" to passengerId,
+        "searchId" to searchId,
         "status" to "pending",
         "timestamp" to System.currentTimeMillis()
     )
