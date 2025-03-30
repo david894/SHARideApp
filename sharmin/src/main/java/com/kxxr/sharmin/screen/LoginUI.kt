@@ -185,6 +185,22 @@ fun AdminAppNavHost() {
 
             BanUserScreen(navController, userId)
         }
+
+        //Admin Settings
+        composable("viewAllGroup") { LoadAdminGroupScreen(navController) }
+        composable("createAdminGroup") { CreateAdminGroupScreen(navController) }
+        composable("modify_group/{groupId}") { backStackEntry ->
+            val groupId = backStackEntry.arguments?.getString("groupId").orEmpty()
+
+            ModifyAdminGroupScreen(navController, groupId)
+        }
+        composable("admin_user/{userId}") { backStackEntry ->
+            val userId = backStackEntry.arguments?.getString("userId").orEmpty()
+
+            AddAdminScreen(navController, userId)
+        }
+
+
     }
 }
 @Composable

@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.firestore.FirebaseFirestore
+import com.kxxr.logiclibrary.Admin.searchAdmins
 import com.kxxr.logiclibrary.Banned.loadAllBannedUsers
 import com.kxxr.logiclibrary.User.User
 import com.kxxr.logiclibrary.User.loadUserDetails
@@ -349,6 +350,8 @@ fun SearchUserScreen(navController: NavController, type: String) {
     var showDialog by remember { mutableStateOf(false) }
     var banUser by remember { mutableStateOf<List<User>>(emptyList()) }
     var isBanOpen by remember { mutableStateOf(false) }
+    var adminUser by remember { mutableStateOf<List<User>>(emptyList()) }
+    var isAdminOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         showDialog = true
@@ -356,6 +359,10 @@ fun SearchUserScreen(navController: NavController, type: String) {
             banUser = it
             showDialog = false
         })
+        searchAdmins(firestore, "", context) {
+            adminUser = it
+            showDialog = false
+        }
     }
 
     Column(modifier = Modifier
@@ -427,7 +434,10 @@ fun SearchUserScreen(navController: NavController, type: String) {
                         navController.navigate("adjust_bal/${user.firebaseUserId}")
                     }else if (type == "Ban"){
                         navController.navigate("ban_user/${user.firebaseUserId}")
-                    }else{
+                    }else if (type == "Admin"){
+                        navController.navigate("admin_user/${user.firebaseUserId}")
+                    }
+                    else{
                         navController.navigate("user_details/${user.firebaseUserId}")
                     }
                 }
@@ -466,10 +476,46 @@ fun SearchUserScreen(navController: NavController, type: String) {
                 Text("No Banned User!")
             }
         }
+
+        if(type == "Admin"){
+            Row (
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .clip(RoundedCornerShape(10.dp)) // Rounded edges like a pebble
+                    .border(1.dp, Color.LightGray, RoundedCornerShape(10.dp)) // Floating shadow effect
+                    .clickable(
+                        onClick = {
+                            isAdminOpen = !isAdminOpen
+                            if (isAdminOpen) searchAdmins(firestore,"",context, onComplete = {
+                                adminUser = it
+                            })
+                        }
+                    ),
+                verticalAlignment = Alignment.CenterVertically
+            ){
+                Text(if (isAdminOpen) "Hide All Admin User ▲ " else "Show All Admin User ▼", modifier = Modifier.padding(start = 10.dp))
+            }
+
+            if(isAdminOpen && adminUser.isNotEmpty()){
+                Column {
+                    adminUser.forEach { admin ->
+                        UserCard(admin) {
+                            navController.navigate("admin_user/${admin.firebaseUserId}")
+                        }
+                    }
+                }
+            }else if(isAdminOpen && adminUser.isEmpty()){
+                Text("No Admin User!")
+            }
+        }
+
     }
     // Show Loading Dialog
     LoadingDialog(text = "Loading...", showDialog = showDialog, onDismiss = { showDialog = false })
 }
+
+
 
 // User Card Component
 @Composable
