@@ -53,7 +53,10 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.PhoneMultiFactorInfo
 import com.google.firebase.firestore.firestore
 import com.google.firebase.storage.FirebaseStorage
+import com.kxxr.logiclibrary.Admin.fetchAdminDetails
+import com.kxxr.logiclibrary.Admin.loadAdminGroupDetails
 import com.kxxr.logiclibrary.Login.resetPassword
+import com.kxxr.logiclibrary.User.loadUserDetails
 import com.kxxr.sharmin.R
 
 @Composable
@@ -68,12 +71,15 @@ fun AdminHome(firebaseAuth: FirebaseAuth, navController: NavController) {
     var gender by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
     var profileImageUrl by remember { mutableStateOf("") }
-    var profileBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
     var showDialog by remember { mutableStateOf(false) }
     var showEmailDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
     var updatedPhoneNumber by remember { mutableStateOf(phoneNumber) }
+
+    var isEWalletChecked by remember { mutableStateOf(false) }
+    var isUserSettingsChecked by remember { mutableStateOf(false) }
+    var isAdminSettingsChecked by remember { mutableStateOf(false) }
 
     //admin
     var adminGroupId by remember { mutableStateOf("") }
@@ -81,72 +87,39 @@ fun AdminHome(firebaseAuth: FirebaseAuth, navController: NavController) {
 
     // Fetch user data from Firestore
     LaunchedEffect(Unit) {
-        showDialog = true
         currentUser?.uid?.let { userId ->
-            firestore.collection("users")
-                .whereEqualTo("firebaseUserId", userId)
-                .get()
-                .addOnSuccessListener { querySnapshot ->
-                    val document = querySnapshot.documents.firstOrNull()
-                    document?.let {
-                        userName = it.getString("name").orEmpty()
-                        email = it.getString("email").orEmpty()
-                        studentId = it.getString("studentId").orEmpty()
-                        gender = it.getString("gender").orEmpty()
-                        phoneNumber = it.getString("phoneNumber").orEmpty()
-                        profileImageUrl = it.getString("profileImageUrl").orEmpty()
+            showDialog = true
+            loadUserDetails(firestore, userId){ data ->
+                if (data != null) {
+                    userName = data.name
+                    email = data.email
+                    studentId = data.studentId
+                    gender = data.gender
+                    phoneNumber = data.phoneNumber
+                    profileImageUrl = data.profileImageUrl
 
-                        if (profileImageUrl.isNotEmpty()) {
-                            val storageReference =
-                                FirebaseStorage.getInstance().getReferenceFromUrl(profileImageUrl)
-                            storageReference.getBytes(1024 * 1024)
-                                .addOnSuccessListener { bytes ->
-                                    showDialog = false
-                                    profileBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                }
-                                .addOnFailureListener { e ->
-                                    showDialog = false
-                                    Toast.makeText(context, "Error fetching image: ${e.message}", Toast.LENGTH_SHORT)
-                                        .show()
-                                }
-                        }
-                    }
                 }
-                .addOnFailureListener { e ->
+                showDialog = false
+            }
+            fetchAdminDetails(
+                firestore,
+                userId,
+                context,
+                onAdminFetched = { groupId, groupName ->
                     showDialog = false
-                    Toast.makeText(context, "Error fetching user data: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
-            firestore.collection("Admin")
-                .whereEqualTo("userId", userId)
-                .get()
-                .addOnSuccessListener { querySnapshot ->
-                    val document = querySnapshot.documents.firstOrNull()
-                    document?.let {
-                        adminGroupId = it.getString("groupId").orEmpty()
-                        if (adminGroupId.isNotEmpty()) {
-                            firestore.collection("AdminGroup")
-                                .whereEqualTo("groupId", adminGroupId)
-                                .get()
-                                .addOnSuccessListener { groupSnapshot ->
-                                    val group = groupSnapshot.documents.firstOrNull()
-                                    group?.let {
-                                        adminGroupName = it.getString("groupName").orEmpty()
-                                    }
-                                }
-                                .addOnFailureListener{ e ->
-                                    showDialog = false
-                                    Toast.makeText(context, "Error fetching user data: ${e.message}", Toast.LENGTH_SHORT).show()
-                                }
-                        }else{
-                            showDialog = false
-                            adminGroupName = "Not found"
-                        }
-                    }
-                }
-                .addOnFailureListener{ e ->
+                    adminGroupId = groupId
+                    adminGroupName = groupName
+                    loadAdminGroupDetails(firestore, adminGroupId, onResult = { group ->
+                        isEWalletChecked = group.isEWalletSettings
+                        isUserSettingsChecked = group.isUserSettings
+                        isAdminSettingsChecked = group.isAdminSettings
+                    })
+                },
+                onError = { errorMessage ->
                     showDialog = false
-                    Toast.makeText(context, "Error fetching user data: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
                 }
+            )
         }
     }
 
@@ -223,43 +196,66 @@ fun AdminHome(firebaseAuth: FirebaseAuth, navController: NavController) {
 
 
         }
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 10.dp)
-        ) {
-            Text(text = "eWallet Settings", color = Color.Gray, fontSize = 20.sp, modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp))
+        if(isEWalletChecked){
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 10.dp)
+            ) {
+                Text(text = "eWallet Settings", color = Color.Gray, fontSize = 20.sp, modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp))
 
-            ProfileCard(title = "Generate New Reload PIN", img = "authentication", onClick = {navController.navigate("generate_pin")})
-            Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
+                ProfileCard(title = "Generate New Reload PIN", img = "authentication", onClick = {navController.navigate("generate_pin")})
+                Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
-            ProfileCard(title = "Adjust User eWallet Balance",img = "edit", onClick = {navController.navigate("search_user/${"eWallet"}")})
-            Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
+                ProfileCard(title = "Adjust User eWallet Balance",img = "edit", onClick = {navController.navigate("search_user/${"eWallet"}")})
+                Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
+            }
         }
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 10.dp)
-        ) {
-            Text(text = "User Settings", color = Color.Gray, fontSize = 20.sp, modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp))
+        if(isUserSettingsChecked){
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 10.dp)
+            ) {
+                Text(text = "User Settings", color = Color.Gray, fontSize = 20.sp, modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp))
 
-            ProfileCard(title = "Review User Verification Case", img = "profile_ico", onClick = {navController.navigate("reviewUserScreen")})
-            Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
+                ProfileCard(title = "Review User Verification Case", img = "profile_ico", onClick = {navController.navigate("reviewUserScreen")})
+                Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
-            ProfileCard(title = "Review Driver Verification Case",img = "car_front", onClick = {navController.navigate("reviewDriverScreen")})
-            Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
+                ProfileCard(title = "Review Driver Verification Case",img = "car_front", onClick = {navController.navigate("reviewDriverScreen")})
+                Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
-            ProfileCard(title = "View User Details",img = "search", onClick = {navController.navigate("search_user/${"User"}")})
-            Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
+                ProfileCard(title = "View User Details",img = "search", onClick = {navController.navigate("search_user/${"User"}")})
+                Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
-            ProfileCard(title = "Ban User",img = "ban", onClick = {navController.navigate("search_user/${"Ban"}")})
-            Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
+                ProfileCard(title = "Ban User",img = "ban", onClick = {navController.navigate("search_user/${"Ban"}")})
+                Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
+            }
         }
+        if(isAdminSettingsChecked){
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 10.dp)
+            ) {
+                Text(text = "Admin Settings", color = Color.Gray, fontSize = 20.sp, modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp))
+
+                ProfileCard(title = "Add User to Admin", img = "profile_ico", onClick = {navController.navigate("search_user/${"Admin"}")})
+                Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
+
+                ProfileCard(title = "Edit Admin Group Control",img = "permission", onClick = {navController.navigate("viewAllGroup")})
+                Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
+
+            }
+        }
+
         Spacer(modifier = Modifier.height(50.dp)) // Pushes Log Out button to bottom
 
         // **Log Out Button**
