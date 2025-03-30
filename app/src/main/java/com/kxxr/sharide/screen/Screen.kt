@@ -1220,7 +1220,7 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
         ) {
             Text(text = "Sign Up", color = Color.White)
         }
-    }
+    }  
 
     // Show Loading Dialog
     LoadingDialog(text="Uploading..." , showDialog = showDialog, onDismiss = { showDialog = false })

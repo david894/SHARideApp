@@ -12,5 +12,6 @@
     </string-array>
     <string name="max_pin_attempts">3</string>
     <string name="cs_email">ngkx-wp21@student.tarc.edu.my</string>
+    <string name="maps_api_key">AIzaSyAYFHXZLaqAKMiPvxHKw45xRrlm95Vng7U</string>
 
 </resources>
