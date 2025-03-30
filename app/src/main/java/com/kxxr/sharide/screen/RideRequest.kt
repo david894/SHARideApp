@@ -319,3 +319,205 @@ fun sendRequestToDriver(
         .addOnSuccessListener { onSuccess() }
         .addOnFailureListener { /* Handle failure if needed */ }
 }
+
+fun fetchDriverForPendingRequest(
+    searchId: String,
+    firestore: FirebaseFirestore,
+    onSuccess: (DriverInfo, RideInfo) -> Unit,
+    onFailure: (String) -> Unit
+) {
+    // Step 1: Get rideId from requests where status is "pending"
+    firestore.collection("requests")
+        .whereEqualTo("searchId", searchId)
+        .whereEqualTo("status", "pending")
+        .limit(1)
+        .get()
+        .addOnSuccessListener { requestDocs ->
+            if (requestDocs.isEmpty) {
+                onFailure("No pending request found.")
+                return@addOnSuccessListener
+            }
+
+            val request = requestDocs.documents.first()
+            val rideId = request.getString("rideId") ?: return@addOnSuccessListener
+
+            // Step 2: Get driverId from rides collection
+            firestore.collection("rides").document(rideId)
+                .get()
+                .addOnSuccessListener { rideDoc ->
+                    val driverId = rideDoc.getString("driverId") ?: return@addOnSuccessListener
+
+                    // Step 3: Fetch driver details from users collection
+                    firestore.collection("users").document(driverId)
+                        .get()
+                        .addOnSuccessListener { userDoc ->
+                            val driver = DriverInfo(
+                                driverId = driverId,
+                                name = userDoc.getString("name") ?: "Unknown",
+                                imageUrl = userDoc.getString("profileImageUrl") ?: "",
+                                rating = userDoc.getDouble("rating") ?: 4.5,
+                                price = "RM 1"
+                            )
+
+                            val ride = RideInfo(
+                                rideId = rideDoc.id,
+                                pickupLocation = rideDoc.getString("location") ?: "Unknown",
+                                destination = rideDoc.getString("destination") ?: "Unknown",
+                                time = rideDoc.getString("time") ?: "Unknown"
+                            )
+
+                            onSuccess(driver, ride)
+                        }
+                        .addOnFailureListener { onFailure("Failed to fetch driver details.") }
+                }
+                .addOnFailureListener { onFailure("Failed to fetch ride details.") }
+        }
+        .addOnFailureListener { onFailure("Failed to fetch request details.") }
+}
+
+@Composable
+fun PendingRideRequestScreen(
+    firebaseAuth: FirebaseAuth,
+    navController: NavController,
+    searchId: String,
+    firestore: FirebaseFirestore
+) {
+    var driverInfo by remember { mutableStateOf<DriverInfo?>(null) }
+    var rideInfo by remember { mutableStateOf<RideInfo?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    // Fetch the pending driver request
+    LaunchedEffect(searchId) {
+        fetchDriverForPendingRequest(
+            searchId = searchId,
+            firestore = firestore,
+            onSuccess = { driver, ride ->
+                driverInfo = driver
+                rideInfo = ride
+                isLoading = false
+            },
+            onFailure = {
+                isLoading = false
+            }
+        )
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Wait Driver to Accept", fontSize = 20.sp, fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("Requested Driver", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+
+            when {
+                isLoading -> CircularProgressIndicator()
+                driverInfo == null || rideInfo == null -> Text("No pending request found.", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                else -> {
+                    PendingDriverCard(navController, firestore, driverInfo!!, rideInfo!!)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PendingDriverCard(
+    navController: NavController,
+    firestore: FirebaseFirestore,
+    driver: DriverInfo,
+    ride: RideInfo
+) {
+    var userName by remember { mutableStateOf("Unknown") }
+    var profileImageUrl by remember { mutableStateOf("") }
+    var rideDetails by remember { mutableStateOf<RideDetails?>(null) }
+
+    // Fetch both ride and driver details when the Composable is launched
+    LaunchedEffect(driver.driverId) {
+        fetchRideAndDriverDetails(firestore, driver.driverId, ride.rideId) { fetchedRide, name, imageUrl ->
+            rideDetails = fetchedRide
+            userName = name.ifEmpty { "Unknown" }
+            profileImageUrl = imageUrl
+        }
+    }
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            .fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0075FD))
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Profile Image or Default Icon
+                if (profileImageUrl.isNotEmpty()) {
+                    AsyncImage(
+                        model = profileImageUrl,
+                        contentDescription = "Driver Image",
+                        modifier = Modifier
+                            .size(60.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.Person,
+                        contentDescription = "Default Driver",
+                        tint = Color.White,
+                        modifier = Modifier.size(60.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(userName, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("⭐ 4.5 (2)", color = Color.White, fontSize = 14.sp) // Hardcoded rating
+                Text("RM 1", color = Color.Green, fontSize = 14.sp) // Hardcoded price
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 🚀 Show Ride Details from Firestore
+                rideDetails?.let {
+                    Text("📍 Location: ${it.location}", color = Color.White, fontSize = 14.sp)
+                    Text("🚏 Stop: ${it.stop}", color = Color.White, fontSize = 14.sp)
+                    Text("🕒 Time: ${it.time}", color = Color.White, fontSize = 14.sp)
+                    Text("🎯 Destination: ${it.destination}", color = Color.White, fontSize = 14.sp)
+                } ?: Text("Loading ride details...", color = Color.White, fontSize = 14.sp)
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // ❌ Remove Request Button → Only Show "Pending" Status
+                Text(
+                    text = "Pending",
+                    color = Color.Yellow,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}

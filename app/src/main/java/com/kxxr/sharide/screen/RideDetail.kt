@@ -4,6 +4,7 @@ package com.kxxr.sharide.screen
 
 import android.content.Context
 import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -58,7 +59,8 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
-import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.google.maps.android.compose.GoogleMap
@@ -77,6 +79,7 @@ import java.util.concurrent.atomic.AtomicInteger
 @Composable
 fun RideDetailScreen(navController: NavController, index: Int, rideId: String) {
     val db = Firebase.firestore
+    val context = LocalContext.current
 
     val rideState by produceState<RideDetail?>(initialValue = null, rideId) {
         db.collection("rides").document(rideId).get()
@@ -148,7 +151,7 @@ fun RideDetailScreen(navController: NavController, index: Int, rideId: String) {
                             val currentPassengers = ride.passengerIds?.filter { it != "null" } ?: emptyList()
                             val rideCapacity = ride.capacity ?: 0
 
-                                if (currentPassengers.size < rideCapacity) {
+                            if (currentPassengers.size < rideCapacity) {
                                 Text(
                                     text = "Pending Passenger",
                                     fontSize = 20.sp,
@@ -156,11 +159,12 @@ fun RideDetailScreen(navController: NavController, index: Int, rideId: String) {
                                     modifier = Modifier.padding(vertical = 8.dp)
                                 )
 
-                                PendingPassengerListSection(rideId = rideId, rideTime = ride.time, navController = navController)
+
+                            PendingPassengerListSection(rideId = rideId, rideTime = ride.time, navController = navController)
                             }
 
                             Spacer(modifier = Modifier.height(16.dp))
-                            CancelRideButton()
+                            CancelRideButton(firestore = db, navController= navController, rideId = rideId, context = context)
                         }
                     }
                 }
@@ -507,15 +511,49 @@ fun PendingPassengerListSection(rideId: String, rideTime: String, navController:
 
 // Cancel Ride Button
 @Composable
-fun CancelRideButton() {
+fun CancelRideButton(firestore: FirebaseFirestore, navController: NavController, rideId: String, context: Context) {
     Button(
-        onClick = { /* Handle cancel ride */ },
+        onClick = {
+            cancelRide(firestore, navController, rideId, context)
+        },
         modifier = Modifier.fillMaxWidth(),
         colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
     ) {
         Text("Cancel Ride", color = Color.White)
     }
 }
+
+// Function to update the "requests" status to "cancel"
+fun cancelRide(firestore: FirebaseFirestore, navController: NavController , rideId: String, context: Context) {
+    firestore.collection("requests")
+        .whereEqualTo("rideId", rideId)
+        .get()
+        .addOnSuccessListener { documents ->
+            val batch = firestore.batch()
+            for (document in documents) {
+                val docRef = firestore.collection("requests").document(document.id)
+                batch.update(docRef, "status", "cancel")
+            }
+            // Delete the ride from "rides" collection
+            val rideRef = firestore.collection("rides").document(rideId)
+            batch.delete(rideRef)
+
+            batch.commit()
+                .addOnSuccessListener {
+                    Toast.makeText(context, "Ride canceled successfully!", Toast.LENGTH_SHORT).show()
+                    navController.navigate("home") { // 👈 Navigate to Home Page
+                        popUpTo("home") { inclusive = true } // 👈 Clear back stack
+                    }
+                }
+                .addOnFailureListener {
+                    Toast.makeText(context, "Failed to cancel ride.", Toast.LENGTH_SHORT).show()
+                }
+        }
+        .addOnFailureListener {
+            Toast.makeText(context, "Error fetching ride requests.", Toast.LENGTH_SHORT).show()
+        }
+}
+
 
 
 @Composable

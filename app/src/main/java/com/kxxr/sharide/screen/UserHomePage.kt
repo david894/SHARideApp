@@ -408,7 +408,8 @@ fun RideReminder(
         emptyText = "No rides available",
         items = rideItems,
         isDriver = true,
-        navController = navController
+        navController = navController,
+        firestore = firestore,
     )
 }
 
@@ -420,7 +421,6 @@ fun SearchReminder(
 ) {
     val searchItems = remember { mutableStateListOf<Ride>() }
     val userId = firebaseAuth.currentUser?.uid ?: ""
-
     // Fetch searches for passengers
     LaunchedEffect(userId) {
         if (userId.isNotEmpty()) {
@@ -459,6 +459,7 @@ fun SearchReminder(
         items = searchItems,
         isDriver = false,
         navController = navController,
+        firestore = firestore,
         )
 }
 
@@ -469,6 +470,7 @@ fun ReminderContent(
     items: List<Ride>,
     isDriver: Boolean,
     navController: NavController,
+    firestore: FirebaseFirestore,
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         Spacer(modifier = Modifier.height(16.dp))
@@ -483,7 +485,6 @@ fun ReminderContent(
             ) {
                 items(items) { item ->
                     val index = items.indexOf(item)
-
                     RideItem(
                         title = if (isDriver) "Ride ${index + 1}" else "Search ${index + 1}",
                         status = item.status,
@@ -493,8 +494,12 @@ fun ReminderContent(
                             if (isDriver) {
                                 navController.navigate("ride_detail/${ index+1 }/${item.id}") // Pass index & ride ID
                             } else {
-                                navController.navigate("matching_screen")
-
+                                checkRequestStatus(
+                                    firestore = firestore,
+                                    searchId = item.id,
+                                    navController = navController,
+                                    index = index
+                                )
                             }
                         }
                     )
@@ -504,6 +509,37 @@ fun ReminderContent(
     }
 }
 
+fun checkRequestStatus(
+    firestore: FirebaseFirestore,
+    searchId: String,
+    navController: NavController,
+    index: Int,
+) {
+    firestore.collection("requests")
+        .whereEqualTo("searchId", searchId)
+        .get()
+        .addOnSuccessListener { documents ->
+            if (documents.isEmpty) {
+                // 🚀 No request found → Navigate to Matching Screen
+                navController.navigate("matching_screen")
+            } else {
+                val status = documents.documents.first().getString("status") ?: "unknown"
+                when (status) {
+                    "rejected", "cancel" -> navController.navigate("matching_screen") // ❌ Rejected or Cancelled → Go to Matching Screen
+                    "pending" -> {
+                        navController.navigate("pending_ride_requested/${searchId}")
+                    }
+                    "successful" -> {
+                        navController.navigate("successful_ride_requested/${index+1}/${searchId}")
+                    }
+                }
+            }
+        }
+        .addOnFailureListener {
+            // Handle Firestore failure (optional)
+            navController.navigate("matching_screen") // Default to Matching Screen if error occurs
+        }
+}
 
 fun convertToTimestamp(date: String, time: String): Long {
     val formatter = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())

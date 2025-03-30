@@ -233,6 +233,24 @@ fun AppNavHost(
 
                 RideDetailScreen(navController, index, rideId)
             }
+            composable(
+                "successful_ride_requested/{index}/{searchId}",
+                arguments = listOf(
+                    navArgument("index") { type = NavType.IntType },
+                    navArgument("searchId") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val index = backStackEntry.arguments?.getInt("index") ?: 0
+                val searchId = backStackEntry.arguments?.getString("searchId") ?: ""
+                SuccessfulRequestRideScreen(navController, index,searchId)
+            }
+
+            composable(
+                "pending_ride_requested/{searchId}"){ backStackEntry ->
+                    val searchId = backStackEntry.arguments?.getString("searchId") ?: ""
+                PendingRideRequestScreen(firebaseAuth,navController,searchId,firestore)
+            }
+
 
             // ✅ Chat Screen Route with Arguments
             composable(
