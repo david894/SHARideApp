@@ -2,6 +2,7 @@
 
 package com.kxxr.sharide.screen
 
+import android.content.Context
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
@@ -151,13 +152,26 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
                             RideParticipantsSection(rideId = ride.rideId, navController = navController)
 
                             Spacer(modifier = Modifier.height(16.dp))
-                            CancelSuccessfulRideButton(
-                                firestore = db,
-                                navController = navController,
-                                rideId = ride.rideId,
-                                currentUserId = currentUserId, // Pass current user ID
-                                context = context
-                            )
+                            val timeLeftMillis = convertToTimestamp(ride.date, ride.time) - System.currentTimeMillis()
+                            val oneHourMillis = 60 * 60 * 1000
+
+                            if (timeLeftMillis <= oneHourMillis) {
+                                BoardRideButton(
+                                    firestore = db,
+                                    navController = navController,
+                                    searchId = searchId,
+                                    context = context
+                                )
+                            } else {
+                                CancelSuccessfulRideButton(
+                                    firestore = db,
+                                    navController = navController,
+                                    rideId = ride.rideId,
+                                    currentUserId = currentUserId,
+                                    context = context
+                                )
+                            }
+
                         }
                     }
                 }
@@ -467,6 +481,51 @@ private fun cancelRide(
             Log.e("Firestore", "Error fetching ride", e)
         }
 }
+
+@Composable
+fun BoardRideButton(
+    firestore: FirebaseFirestore,
+    navController: NavController,
+    searchId: String,  // Change from searchId to rideId
+    context: Context
+) {
+    Button(
+        onClick = {
+            // Find the document where rideId matches
+            firestore.collection("requests")
+                .whereEqualTo("searchId", searchId)
+                .get()
+                .addOnSuccessListener { querySnapshot ->
+                    if (!querySnapshot.isEmpty) {
+                        val documentId = querySnapshot.documents[0].id // Get the correct document ID
+
+                        // Perform batched updates
+                        firestore.runBatch { batch ->
+                            val requestRef = firestore.collection("requests").document(documentId)
+                            batch.update(requestRef, "boardingStatus", "yes")
+                            batch.update(requestRef, "status", "startBoarding") // Update request status
+                        }.addOnSuccessListener {
+                            Toast.makeText(context, "You have boarded the ride!", Toast.LENGTH_SHORT).show()
+                            navController.navigate("home") // Navigate to home after confirming
+                        }.addOnFailureListener {
+                            Toast.makeText(context, "Failed to update boarding status", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        Toast.makeText(context, "No matching ride found!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                .addOnFailureListener { e ->
+                    Toast.makeText(context, "Error finding ride: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+        },
+        modifier = Modifier.fillMaxWidth(),
+        colors = ButtonDefaults.buttonColors(containerColor = Color.Green)
+    ) {
+        Text("Get On Ride")
+    }
+}
+
+
 
 data class SuccessfulUserInfo(
     val firebaseUserId: String = "",

@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3Api::class)
 
 package com.kxxr.sharide.screen
 
@@ -77,7 +77,7 @@ import java.net.URL
 import java.util.concurrent.atomic.AtomicInteger
 
 @Composable
-fun RideDetailScreen(navController: NavController, index: Int, rideId: String) {
+fun RideDetailScreen(navController: NavController, firestore: FirebaseFirestore,index: Int, rideId: String) {
     val db = Firebase.firestore
     val context = LocalContext.current
 
@@ -164,7 +164,15 @@ fun RideDetailScreen(navController: NavController, index: Int, rideId: String) {
                             }
 
                             Spacer(modifier = Modifier.height(16.dp))
-                            CancelRideButton(firestore = db, navController= navController, rideId = rideId, context = context)
+                            // ✅ Calculate time left until the ride starts
+                            val timeLeftMillis = convertToTimestamp(ride.date, ride.time) - System.currentTimeMillis()
+                            val oneHourMillis = 60 * 60 * 1000
+
+                           if (timeLeftMillis <= oneHourMillis) {
+                               ConfirmRideButton(context = context, firestore = firestore,rideId = rideId,pickupLatLng, stopLatLng,destinationLatLng)
+                           } else {
+                              CancelRideButton(firestore = db, navController = navController, rideId = rideId, context = context)
+                           }
                         }
                     }
                 }
@@ -507,6 +515,58 @@ fun PendingPassengerListSection(rideId: String, rideTime: String, navController:
         }
     }
 }
+
+@Composable
+fun ConfirmRideButton(
+    context: Context,
+    firestore: FirebaseFirestore,
+    rideId: String,
+    pickup: LatLng?,
+    stop: LatLng?,
+    destination: LatLng?
+) {
+    Button(
+        onClick = {
+            if (pickup != null && destination != null) {
+                // First, find the document where rideId matches
+                firestore.collection("requests")
+                    .whereEqualTo("rideId", rideId) // Find document with matching rideId field
+                    .get()
+                    .addOnSuccessListener { querySnapshot ->
+                        if (!querySnapshot.isEmpty) {
+                            val documentId = querySnapshot.documents[0].id // Get the document ID
+                            Log.d("FirestoreDebug", "Found document ID: $documentId")
+
+                            // Now update the correct document
+                            firestore.collection("requests").document(documentId)
+                                .update("status", "startBoarding")
+                                .addOnSuccessListener {
+                                    Log.d("FirestoreDebug", "Successfully updated status")
+                                    openGoogleMapsNavigation(context, pickup, stop, destination)
+                                }
+                                .addOnFailureListener { e ->
+                                    Log.e("FirestoreError", "Failed to update ride status: ${e.message}")
+                                    Toast.makeText(context, "Failed to update ride status", Toast.LENGTH_SHORT).show()
+                                }
+                        } else {
+                            Toast.makeText(context, "No matching ride found!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("FirestoreError", "Failed to find ride: ${e.message}")
+                        Toast.makeText(context, "Error finding ride: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+            } else {
+                Toast.makeText(context, "Invalid location data", Toast.LENGTH_SHORT).show()
+            }
+        },
+        modifier = Modifier.fillMaxWidth(),
+        colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+    ) {
+        Text("Confirm Ride & Start Navigation")
+    }
+}
+
 
 
 // Cancel Ride Button
@@ -860,5 +920,6 @@ data class RideDetail(
     val destination: String = "",
     val time: String = "",
     val passengerIds: List<String> = emptyList(),
-    val capacity: Int = 0
+    val capacity: Int = 0,
+    val date: String = "",
 )

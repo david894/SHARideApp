@@ -231,7 +231,7 @@ fun AppNavHost(
                 val index = backStackEntry.arguments?.getInt("index") ?: 0
                 val rideId = backStackEntry.arguments?.getString("rideId") ?: ""
 
-                RideDetailScreen(navController, index, rideId)
+                RideDetailScreen(navController, firestore,index, rideId)
             }
             composable(
                 "successful_ride_requested/{index}/{searchId}",

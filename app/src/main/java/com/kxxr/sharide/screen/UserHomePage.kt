@@ -384,12 +384,59 @@ fun RideReminder(
                     val itemList = documents.mapNotNull { doc ->
                         val date = doc.getString("date") ?: return@mapNotNull null
                         val time = doc.getString("time") ?: return@mapNotNull null
+                        val rideId = doc.id
                         val timestamp = convertToTimestamp(date, time)
                         val timeLeftMillis = timestamp - currentTime
-                        val status = if (timeLeftMillis > 0) formatTimeLeft(timeLeftMillis) else "Completed"
 
+                        // Default status is "Completed" if time has passed
+                        var status = if (timeLeftMillis > 0) formatTimeLeft(timeLeftMillis) else "Expired"
+
+                        // Fetch status from "requests" collection
+                        firestore.collection("requests").document(rideId).get()
+                            .addOnSuccessListener { requestDoc ->
+                                val requestStatus = requestDoc.getString("status")
+
+                                if (requestStatus != null) {
+                                    status = when {
+                                        timeLeftMillis > 0 -> formatTimeLeft(timeLeftMillis)
+                                        requestStatus == "pending" -> "Expired"
+                                        requestStatus == "successful" -> "OnGoing"
+                                        requestStatus == "complete" -> "Completed"
+                                        else -> "Expired"
+                                    }
+                                }
+
+                                // Update rideItems list with correct status
+                                rideItems.removeIf { it.id == rideId }
+                                rideItems.add(
+                                    Ride(
+                                        id = rideId,
+                                        status = status,
+                                        timeLeftMillis = timeLeftMillis,
+                                        date = date,
+                                        time = time
+                                    )
+                                )
+                                rideItems.sortByDescending { it.timeLeftMillis }
+                            }
+                            .addOnFailureListener {
+                                // If the request document is not found, keep it as "Expired"
+                                rideItems.removeIf { it.id == rideId }
+                                rideItems.add(
+                                    Ride(
+                                        id = rideId,
+                                        status = "Expired",
+                                        timeLeftMillis = timeLeftMillis,
+                                        date = date,
+                                        time = time
+                                    )
+                                )
+                                rideItems.sortByDescending { it.timeLeftMillis }
+                            }
+
+                        // Return a temporary Ride object (status will be updated asynchronously)
                         Ride(
-                            id = doc.id,
+                            id = rideId,
                             status = status,
                             timeLeftMillis = timeLeftMillis,
                             date = date,
@@ -413,6 +460,7 @@ fun RideReminder(
     )
 }
 
+
 @Composable
 fun SearchReminder(
     firebaseAuth: FirebaseAuth,
@@ -421,6 +469,7 @@ fun SearchReminder(
 ) {
     val searchItems = remember { mutableStateListOf<Ride>() }
     val userId = firebaseAuth.currentUser?.uid ?: ""
+
     // Fetch searches for passengers
     LaunchedEffect(userId) {
         if (userId.isNotEmpty()) {
@@ -436,10 +485,39 @@ fun SearchReminder(
                         val searchId = doc.id
                         val timestamp = convertToTimestamp(date, time)
                         val timeLeftMillis = timestamp - currentTime
-                        val status = if (timeLeftMillis > 0) formatTimeLeft(timeLeftMillis) else "Expired"
+                        var status = "Unknown"
 
+                        // Fetch status from "requests" collection
+                        firestore.collection("requests").document(searchId).get()
+                            .addOnSuccessListener { requestDoc ->
+                                val requestStatus = requestDoc.getString("status") ?: "unknown"
+
+                                status = when {
+                                    timeLeftMillis > 0 -> formatTimeLeft(timeLeftMillis)
+                                    requestStatus == "pending" -> "Expired"
+                                    requestStatus == "successful" -> "Prepare"
+                                    requestStatus == "startBoarding" -> "OnGoing"
+                                    requestStatus == "complete" -> "Completed"
+                                    else -> "unknown"
+                                }
+
+                                // Update the searchItems list with the correct status
+                                searchItems.removeIf { it.id == searchId }
+                                searchItems.add(
+                                    Ride(
+                                        id = searchId,
+                                        status = status,
+                                        timeLeftMillis = timeLeftMillis,
+                                        date = date,
+                                        time = time
+                                    )
+                                )
+                                searchItems.sortByDescending { it.timeLeftMillis }
+                            }
+
+                        // Return a temporary Ride object (status will be updated asynchronously)
                         Ride(
-                            id = doc.id,
+                            id = searchId,
                             status = status,
                             timeLeftMillis = timeLeftMillis,
                             date = date,
@@ -460,8 +538,9 @@ fun SearchReminder(
         isDriver = false,
         navController = navController,
         firestore = firestore,
-        )
+    )
 }
+
 
 @Composable
 fun ReminderContent(
@@ -555,7 +634,7 @@ fun formatTimeLeft(timeLeftMillis: Long): String {
     return when {
         timeLeftMillis > 3600000 -> "${timeLeftMillis / 3600000} hr ${timeLeftMillis % 3600000 / 60000} min left"
         timeLeftMillis > 60000 -> "${timeLeftMillis / 60000} min left"
-        else -> "Completed"
+        else -> "unknown"
     }
 }
 
