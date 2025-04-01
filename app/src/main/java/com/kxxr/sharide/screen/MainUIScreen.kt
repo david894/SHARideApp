@@ -368,10 +368,11 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
             ) {
                 Text(text = "Log Out", color = Color.White, fontSize = 16.sp)
             }
+            Spacer(modifier = Modifier.height(20.dp))
+            Text(text = "© SHARide 2025 \n Ziegler Tan & David Ng\nTARUMT Project ONLY", color = Color.LightGray, fontSize = 16.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
 
             Spacer(modifier = Modifier.height(150.dp))
 
-            Text(text = "© SHARide 2025 \n Ziegler Tan & David Ng\nTARUMT Project ONLY", color = Color.LightGray, fontSize = 16.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
         }
     }
 

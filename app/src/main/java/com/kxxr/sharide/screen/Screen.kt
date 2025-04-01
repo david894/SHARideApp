@@ -511,7 +511,8 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
         Spacer(modifier = Modifier.height(40.dp))
 
         // Google Sign-In Logic
-        val token = "424509601720-l27h6t59dlr9dk2t8sto3tg6lu9a7tsv.apps.googleusercontent.com"
+        val token = context.getString(R.string.google_api)
+
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken(token)
             .requestEmail()
@@ -523,7 +524,10 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
             contract = ActivityResultContracts.StartActivityForResult()
         ) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
-                handleGoogleSignIn(result.data, firebaseAuth, navController, context,type)
+                showDialog = true
+                handleGoogleSignIn(result.data, firebaseAuth, navController, context,type){
+                    showDialog = false
+                }
             }
         }
 
@@ -1027,6 +1031,7 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
             },
             label = { Text("Name", color = Color.Black) },
             modifier = Modifier.fillMaxWidth(),
+            enabled = false,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color.Blue, // Blue border when focused
                 unfocusedBorderColor = Color.Gray,
@@ -1040,6 +1045,7 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
                 userid = it.uppercase()
             },
             label = { Text("Student ID") },
+            enabled = false,
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color.Blue, // Blue border when focused
