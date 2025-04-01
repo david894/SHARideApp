@@ -9,4 +9,6 @@
         <item>User Settings</item>
         <item>Admin Settings</item>
     </string-array>
+    <string name="google_api">424509601720-l27h6t59dlr9dk2t8sto3tg6lu9a7tsv.apps.googleusercontent.com</string>
+
 </resources>

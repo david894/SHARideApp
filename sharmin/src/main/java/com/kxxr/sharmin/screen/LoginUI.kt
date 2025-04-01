@@ -414,7 +414,7 @@ fun AdminLoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
                     Spacer(modifier = Modifier.height(20.dp))
 
                     // Google Sign-In Logic
-                    val token = "424509601720-l27h6t59dlr9dk2t8sto3tg6lu9a7tsv.apps.googleusercontent.com"
+                    val token = context.getString(R.string.google_api)
                     val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                         .requestIdToken(token)
                         .requestEmail()
@@ -425,10 +425,12 @@ fun AdminLoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
                         contract = ActivityResultContracts.StartActivityForResult()
                     ) { result ->
                         if (result.resultCode == Activity.RESULT_OK) {
-                            handleGoogleSignIn(result.data, firebaseAuth, navController, context, type)
+                            showDialog = true
+                            handleGoogleSignIn(result.data, firebaseAuth, navController, context, type){
+                                showDialog = false
+                            }
                         }
                     }
-
 
                     // Google Sign-In Button
                     Button(

@@ -29,7 +29,8 @@ fun handleGoogleSignIn(
     firebaseAuth: FirebaseAuth,
     navController: NavController,
     context: Context,
-    type: String
+    type: String,
+    onComplete: () -> Unit
 ) {
     val task = GoogleSignIn.getSignedInAccountFromIntent(data)
     try {
@@ -42,6 +43,7 @@ fun handleGoogleSignIn(
             Toast.makeText(context, "Only TARC emails are allowed", Toast.LENGTH_SHORT).show()
             firebaseAuth.signOut()
             navController.navigate("login")
+            onComplete()
             return
         }
 
@@ -58,6 +60,7 @@ fun handleGoogleSignIn(
                         context, "Account does not exist. Please register first.",
                         Toast.LENGTH_LONG
                     ).show()
+                    onComplete()
                     return@addOnSuccessListener
                 }
 
@@ -70,13 +73,16 @@ fun handleGoogleSignIn(
                                 if (user.isEmailVerified) {
                                     isBanned(FirebaseFirestore.getInstance(),user.uid, onResult = { remark,banned ->
                                         if(banned){
+                                            onComplete()
                                             navController.navigate("banned_user/${user.uid}/$remark")
                                         }else{
                                             if (type == "admin") {
                                                 checkIfAdmin(user.uid, db, firebaseAuth, navController, context)
+                                                onComplete()
                                             } else {
                                                 Toast.makeText(context, "Sign-In Successful", Toast.LENGTH_LONG).show()
                                                 navController.navigate("home")
+                                                onComplete()
                                             }
                                         }
                                     })
@@ -86,10 +92,20 @@ fun handleGoogleSignIn(
                                         context, "Please verify your email before signing in.",
                                         Toast.LENGTH_LONG
                                     ).show()
+                                    onComplete()
                                 }
                             }
                         } else {
-                            handleSignInError(task.exception, firebaseAuth, navController, context, type)
+                            val exception = task.exception
+                            if (exception is FirebaseAuthMultiFactorException) {
+                                // MFA required – trigger the resolver
+                                Toast.makeText(context, "MFA Required. Please Verify.", Toast.LENGTH_LONG).show()
+                                handleMultiFactorAuthentication(exception.resolver, firebaseAuth, navController, context, type)
+                                onComplete()
+                            } else {
+                                Toast.makeText(context, "Login Failed: ${exception?.localizedMessage}", Toast.LENGTH_LONG).show()
+                                onComplete()
+                            }
                         }
                     }
             }.addOnFailureListener {
@@ -97,24 +113,6 @@ fun handleGoogleSignIn(
             }
     } catch (e: ApiException) {
         Toast.makeText(context, "Google Sign-In failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
-    }
-}
-
-// Helper Function: Handle Sign-In Errors (including MFA check)
-private fun handleSignInError(
-    exception: Exception?,
-    firebaseAuth: FirebaseAuth,
-    navController: NavController,
-    context: Context,
-    type: String
-) {
-    if (exception is FirebaseAuthMultiFactorException) {
-        // MFA required – trigger the resolver
-        Toast.makeText(context, "MFA Required. Please Verify.", Toast.LENGTH_LONG).show()
-        val resolver = exception.resolver
-        handleMultiFactorAuthentication(resolver, firebaseAuth, navController, context, type)
-    } else {
-        Toast.makeText(context, "Login Failed: ${exception?.localizedMessage}", Toast.LENGTH_LONG).show()
     }
 }
 
