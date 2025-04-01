@@ -40,6 +40,7 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.launch
 
 @Composable
 fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, driverId: String, rideId: String, searchId:String) {
@@ -426,7 +427,7 @@ fun PendingRideRequestScreen(
                 isLoading -> CircularProgressIndicator()
                 driverInfo == null || rideInfo == null -> Text("No pending request found.", fontSize = 16.sp, fontWeight = FontWeight.Medium)
                 else -> {
-                    PendingDriverCard(navController, firestore, driverInfo!!, rideInfo!!)
+                    PendingDriverCard( firestore, driverInfo!!, rideInfo!!,searchId,navController)
                 }
             }
         }
@@ -435,16 +436,19 @@ fun PendingRideRequestScreen(
 
 @Composable
 fun PendingDriverCard(
-    navController: NavController,
     firestore: FirebaseFirestore,
     driver: DriverInfo,
-    ride: RideInfo
+    ride: RideInfo,
+    searchId: String, // Pass searchId to delete request
+    navController: NavController // Pass NavController for navigation
 ) {
     var userName by remember { mutableStateOf("Unknown") }
     var profileImageUrl by remember { mutableStateOf("") }
     var rideDetails by remember { mutableStateOf<RideDetails?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
 
-    // Fetch both ride and driver details when the Composable is launched
+    // Fetch ride and driver details
     LaunchedEffect(driver.driverId) {
         fetchRideAndDriverDetails(firestore, driver.driverId, ride.rideId) { fetchedRide, name, imageUrl ->
             rideDetails = fetchedRide
@@ -510,7 +514,35 @@ fun PendingDriverCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // ❌ Remove Request Button → Only Show "Pending" Status
+                // ❌ Cancel Request Button
+                Button(
+                    onClick = {
+                        coroutineScope.launch {
+                            firestore.collection("requests")
+                                .whereEqualTo("searchId", searchId)
+                                .get()
+                                .addOnSuccessListener { querySnapshot ->
+                                    for (document in querySnapshot.documents) {
+                                        firestore.collection("requests").document(document.id).delete()
+                                            .addOnSuccessListener {
+                                                Toast.makeText(context, "Request canceled", Toast.LENGTH_SHORT).show()
+                                                navController.popBackStack() // Navigate back after successful deletion
+                                            }
+                                            .addOnFailureListener {
+                                                Toast.makeText(context, "Failed to cancel request", Toast.LENGTH_SHORT).show()
+                                            }
+                                    }
+                                }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("Cancel Request", color = Color.White)
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 🚦 Pending Status Indicator
                 Text(
                     text = "Pending",
                     color = Color.Yellow,
@@ -521,3 +553,4 @@ fun PendingDriverCard(
         }
     }
 }
+

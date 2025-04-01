@@ -381,37 +381,32 @@ fun RideReminder(
                     if (error != null || documents == null) return@addSnapshotListener
 
                     val currentTime = System.currentTimeMillis()
-                    val itemList = documents.mapNotNull { doc ->
-                        val date = doc.getString("date") ?: return@mapNotNull null
-                        val time = doc.getString("time") ?: return@mapNotNull null
+                    val itemList = mutableListOf<Ride>()
+
+                    documents.forEach { doc ->
+                        val date = doc.getString("date") ?: return@forEach
+                        val time = doc.getString("time") ?: return@forEach
                         val rideId = doc.id
                         val timestamp = convertToTimestamp(date, time)
                         val timeLeftMillis = timestamp - currentTime
 
-                        // Default status is "Completed" if time has passed
-                        var status = if (timeLeftMillis > 0) formatTimeLeft(timeLeftMillis) else "Expired"
+                        // Default status (assumes "Prepare" until requestStatus is retrieved)
+                        var status = formatTimeLeft(timeLeftMillis, null)
 
-                        // Fetch status from "requests" collection
-                        firestore.collection("requests").document(rideId).get()
-                            .addOnSuccessListener { requestDoc ->
-                                val requestStatus = requestDoc.getString("status")
+                        firestore.collection("requests")
+                            .whereEqualTo("rideId", rideId)
+                            .get()
+                            .addOnSuccessListener { querySnapshot ->
+                                val requestStatus = querySnapshot.documents
+                                    .firstOrNull()?.getString("status") // Take first request status if exists
+                                val updatedStatus = formatTimeLeft(timeLeftMillis, requestStatus)
 
-                                if (requestStatus != null) {
-                                    status = when {
-                                        timeLeftMillis > 0 -> formatTimeLeft(timeLeftMillis)
-                                        requestStatus == "pending" -> "Expired"
-                                        requestStatus == "successful" -> "OnGoing"
-                                        requestStatus == "complete" -> "Completed"
-                                        else -> "Expired"
-                                    }
-                                }
-
-                                // Update rideItems list with correct status
+                                // Update rideItems inside listener
                                 rideItems.removeIf { it.id == rideId }
                                 rideItems.add(
                                     Ride(
                                         id = rideId,
-                                        status = status,
+                                        status = updatedStatus,
                                         timeLeftMillis = timeLeftMillis,
                                         date = date,
                                         time = time
@@ -420,12 +415,12 @@ fun RideReminder(
                                 rideItems.sortByDescending { it.timeLeftMillis }
                             }
                             .addOnFailureListener {
-                                // If the request document is not found, keep it as "Expired"
+                                // If no request document is found, default to "Prepare"
                                 rideItems.removeIf { it.id == rideId }
                                 rideItems.add(
                                     Ride(
                                         id = rideId,
-                                        status = "Expired",
+                                        status = "Prepare",
                                         timeLeftMillis = timeLeftMillis,
                                         date = date,
                                         time = time
@@ -434,16 +429,19 @@ fun RideReminder(
                                 rideItems.sortByDescending { it.timeLeftMillis }
                             }
 
-                        // Return a temporary Ride object (status will be updated asynchronously)
-                        Ride(
-                            id = rideId,
-                            status = status,
-                            timeLeftMillis = timeLeftMillis,
-                            date = date,
-                            time = time
+                        // Add temporary Ride object (status will update asynchronously)
+                        itemList.add(
+                            Ride(
+                                id = rideId,
+                                status = status,
+                                timeLeftMillis = timeLeftMillis,
+                                date = date,
+                                time = time
+                            )
                         )
-                    }.sortedByDescending { it.timeLeftMillis }
+                    }
 
+                    // Clear and update rideItems
                     rideItems.clear()
                     rideItems.addAll(itemList)
                 }
@@ -459,7 +457,6 @@ fun RideReminder(
         firestore = firestore,
     )
 }
-
 
 @Composable
 fun SearchReminder(
@@ -479,34 +476,47 @@ fun SearchReminder(
                     if (error != null || documents == null) return@addSnapshotListener
 
                     val currentTime = System.currentTimeMillis()
-                    val itemList = documents.mapNotNull { doc ->
-                        val date = doc.getString("date") ?: return@mapNotNull null
-                        val time = doc.getString("time") ?: return@mapNotNull null
+                    val itemList = mutableListOf<Ride>()
+
+                    documents.forEach { doc ->
+                        val date = doc.getString("date") ?: return@forEach
+                        val time = doc.getString("time") ?: return@forEach
                         val searchId = doc.id
                         val timestamp = convertToTimestamp(date, time)
                         val timeLeftMillis = timestamp - currentTime
-                        var status = "Unknown"
 
-                        // Fetch status from "requests" collection
-                        firestore.collection("requests").document(searchId).get()
-                            .addOnSuccessListener { requestDoc ->
-                                val requestStatus = requestDoc.getString("status") ?: "unknown"
+                        // Default status (assumes "Prepare" until requestStatus is retrieved)
+                        var status = formatTimeLeft(timeLeftMillis, null)
 
-                                status = when {
-                                    timeLeftMillis > 0 -> formatTimeLeft(timeLeftMillis)
-                                    requestStatus == "pending" -> "Expired"
-                                    requestStatus == "successful" -> "Prepare"
-                                    requestStatus == "startBoarding" -> "OnGoing"
-                                    requestStatus == "complete" -> "Completed"
-                                    else -> "unknown"
-                                }
+                        // Fetch status from "requests" collection using searchId
+                        firestore.collection("requests")
+                            .whereEqualTo("searchId", searchId) // Ensure this field exists in "requests"
+                            .get()
+                            .addOnSuccessListener { querySnapshot ->
+                                val requestStatus = querySnapshot.documents
+                                    .firstOrNull()?.getString("status") // Take first matching request status
+                                val updatedStatus = formatTimeLeft(timeLeftMillis, requestStatus)
 
-                                // Update the searchItems list with the correct status
+                                // Update searchItems list with correct status
                                 searchItems.removeIf { it.id == searchId }
                                 searchItems.add(
                                     Ride(
                                         id = searchId,
-                                        status = status,
+                                        status = updatedStatus,
+                                        timeLeftMillis = timeLeftMillis,
+                                        date = date,
+                                        time = time
+                                    )
+                                )
+                                searchItems.sortByDescending { it.timeLeftMillis }
+                            }
+                            .addOnFailureListener {
+                                // If no request is found, default to "Prepare"
+                                searchItems.removeIf { it.id == searchId }
+                                searchItems.add(
+                                    Ride(
+                                        id = searchId,
+                                        status = "Prepare",
                                         timeLeftMillis = timeLeftMillis,
                                         date = date,
                                         time = time
@@ -515,16 +525,19 @@ fun SearchReminder(
                                 searchItems.sortByDescending { it.timeLeftMillis }
                             }
 
-                        // Return a temporary Ride object (status will be updated asynchronously)
-                        Ride(
-                            id = searchId,
-                            status = status,
-                            timeLeftMillis = timeLeftMillis,
-                            date = date,
-                            time = time
+                        // Add temporary Ride object (status will update asynchronously)
+                        itemList.add(
+                            Ride(
+                                id = searchId,
+                                status = status,
+                                timeLeftMillis = timeLeftMillis,
+                                date = date,
+                                time = time
+                            )
                         )
-                    }.sortedByDescending { it.timeLeftMillis }
+                    }
 
+                    // Clear and update searchItems
                     searchItems.clear()
                     searchItems.addAll(itemList)
                 }
@@ -540,6 +553,7 @@ fun SearchReminder(
         firestore = firestore,
     )
 }
+
 
 
 @Composable
@@ -630,21 +644,41 @@ fun convertToTimestamp(date: String, time: String): Long {
     }
 }
 
-fun formatTimeLeft(timeLeftMillis: Long): String {
+fun formatTimeLeft(timeLeftMillis: Long, requestStatus: String?): String {
     return when {
         timeLeftMillis > 3600000 -> "${timeLeftMillis / 3600000} hr ${timeLeftMillis % 3600000 / 60000} min left"
         timeLeftMillis > 60000 -> "${timeLeftMillis / 60000} min left"
-        else -> "unknown"
+        timeLeftMillis > 0 -> when (requestStatus) {
+            "pending" -> "Expired"
+            "successful" -> "Prepare"
+            "startBoarding" -> "OnGoing"
+            "complete" -> "Completed"
+            else -> "Prepare"
+        }
+        else -> when (requestStatus) {
+            "pending" -> "Expired"
+            "successful" -> "Prepare"
+            "startBoarding" -> "OnGoing"
+            "complete" -> "Completed"
+            else -> "Expired"
+        }
     }
 }
 
+
+
 fun getStatusColor(status: String): Color {
     return when {
-        status.contains("hr") || status.contains("min") -> Color(0xFF0075FD) // Upcoming rides
+        status.contains("hr") || status.contains("min") -> Color(0xFF0075FD) // Blue for upcoming rides
         status == "Completed" -> Color(0xFF008000) // Green for completed
-        else -> Color(0xFFFF4444) // Red for cancelled (if applicable)
+        status == "Expired" -> Color(0xFFFF4444) // Red for expired
+        status == "Prepare" -> Color(0xFFFFA500) // Orange for preparing
+        status == "OnGoing" -> Color(0xFF800080) // Purple for ongoing
+        status == "Cancelled" -> Color(0xFFB22222) // Dark red for cancelled rides
+        else -> Color(0xFF808080) // Gray for unknown statuses
     }
 }
+
 
 @Composable
 fun RideItem(title: String, status: String, statusColor: Color, isDriver: Boolean, onClick: () -> Unit) {
