@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.Settings
+import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -585,7 +586,18 @@ fun ReminderContent(
                         isDriver = isDriver,
                         onClick = {
                             if (isDriver) {
-                                navController.navigate("ride_detail/${ index+1 }/${item.id}") // Pass index & ride ID
+                                firestore.collection("rides").document(item.id).get()
+                                    .addOnSuccessListener { rideDoc ->
+                                        val rideStatus = rideDoc.getString("status") ?: ""
+                                        if (rideStatus != "complete") {
+                                            navController.navigate("ride_detail/${index + 1}/${item.id}")
+                                        } else {
+                                            Log.d("Navigation", "Ride is already complete. No action taken.")
+                                        }
+                                    }
+                                    .addOnFailureListener {
+                                        Log.e("Navigation", "Failed to fetch ride details")
+                                    }
                             } else {
                                 checkRequestStatus(
                                     firestore = firestore,
@@ -622,8 +634,11 @@ fun checkRequestStatus(
                     "pending" -> {
                         navController.navigate("pending_ride_requested/${searchId}")
                     }
-                    "successful" -> {
+                    "successful", "startBoarding" -> {
                         navController.navigate("successful_ride_requested/${index+1}/${searchId}")
+                    }
+                    "complete" ->{
+
                     }
                 }
             }
@@ -647,20 +662,23 @@ fun convertToTimestamp(date: String, time: String): Long {
 fun formatTimeLeft(timeLeftMillis: Long, requestStatus: String?): String {
     return when {
         timeLeftMillis > 3600000 -> "${timeLeftMillis / 3600000} hr ${timeLeftMillis % 3600000 / 60000} min left"
-        timeLeftMillis > 60000 -> "${timeLeftMillis / 60000} min left"
+        // Between 1 min and 1 hour → Show status (OnGoing, Completed, etc.)
+        timeLeftMillis > 60000 -> when (requestStatus) {
+            "startBoarding" -> "OnGoing"
+            "complete" -> "Completed"
+            else -> "${timeLeftMillis / 60000} min left"
+        }
         timeLeftMillis > 0 -> when (requestStatus) {
             "pending" -> "Expired"
             "successful" -> "Prepare"
             "startBoarding" -> "OnGoing"
             "complete" -> "Completed"
-            else -> "Prepare"
+            else -> "Unknown"
         }
         else -> when (requestStatus) {
             "pending" -> "Expired"
-            "successful" -> "Prepare"
-            "startBoarding" -> "OnGoing"
             "complete" -> "Completed"
-            else -> "Expired"
+            else -> "Unknown"
         }
     }
 }

@@ -83,7 +83,19 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
                 Log.e("Firestore", "Error fetching request", exception)
             }
     }
-
+    var isStartBoarding by remember { mutableStateOf(false) }
+    // Check if any request has "startBoarding" status
+    LaunchedEffect(searchId) {
+        db.collection("requests")
+            .whereEqualTo("searchId", searchId)
+            .whereEqualTo("status", "startBoarding")
+            .get()
+            .addOnSuccessListener { querySnapshot ->
+                if (!querySnapshot.isEmpty) {
+                    isStartBoarding = true
+                }
+            }
+    }
     Scaffold(
         topBar = { SuccessfulSearchTopBar(navController, index) } // Change to search index
     ) { paddingValues ->
@@ -155,7 +167,15 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
                             val timeLeftMillis = convertToTimestamp(ride.date, ride.time) - System.currentTimeMillis()
                             val oneHourMillis = 60 * 60 * 1000
 
-                            if (timeLeftMillis <= oneHourMillis) {
+                            // 🚀 If "Start Boarding", show Complete Button
+                            if (isStartBoarding) {
+                                CompleteButton(
+                                    firestore = db,
+                                    navController = navController,
+                                    searchId = searchId,
+                                    context = context
+                                )
+                            } else if (timeLeftMillis <= oneHourMillis) {
                                 BoardRideButton(
                                     firestore = db,
                                     navController = navController,
@@ -171,7 +191,6 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
                                     context = context
                                 )
                             }
-
                         }
                     }
                 }
@@ -522,6 +541,34 @@ fun BoardRideButton(
         colors = ButtonDefaults.buttonColors(containerColor = Color.Green)
     ) {
         Text("Get On Ride")
+    }
+}
+
+@Composable
+fun CompleteButton(firestore: FirebaseFirestore, navController: NavController, searchId: String, context: Context) {
+    Button(
+        onClick = {
+            firestore.collection("requests")
+                .whereEqualTo("searchId", searchId)
+                .get()
+                .addOnSuccessListener { querySnapshot ->
+                    for (document in querySnapshot.documents) {
+                        firestore.collection("requests").document(document.id)
+                            .update("status", "complete")
+                            .addOnSuccessListener {
+                                Toast.makeText(context, "Ride completed!", Toast.LENGTH_SHORT).show()
+                                navController.popBackStack() // Navigate back to home
+                            }
+                            .addOnFailureListener {
+                                Toast.makeText(context, "Failed to update status", Toast.LENGTH_SHORT).show()
+                            }
+                    }
+                }
+        },
+        colors = ButtonDefaults.buttonColors(containerColor = Color.Green),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text("Complete Ride", color = Color.White)
     }
 }
 
