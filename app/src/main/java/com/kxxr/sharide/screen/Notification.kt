@@ -70,7 +70,7 @@ fun NotificationScreen(
     context: Context // Pass context to access Room Database
 ) {
     val userId = firebaseAuth.currentUser?.uid ?: ""
-    val notifications = remember { mutableStateListOf<NotificationData>() }
+    val notifications = remember { mutableStateListOf<NotificationEntity>() }
     val notificationDao = remember { NotificationDatabase.getDatabase(context).notificationDao() }
 
     LaunchedEffect(userId) {
@@ -80,7 +80,7 @@ fun NotificationScreen(
             }
             notifications.clear()
             notifications.addAll(localNotifications.map {
-                NotificationData(it.image, it.title, it.description, it.time,it.postTime)
+                NotificationEntity(it.id,it.image, it.title, it.description, it.time,it.postTime)
             })
 
             observeRideNotifications(userId, firestore, notifications, notificationDao)
@@ -93,13 +93,14 @@ fun NotificationScreen(
     }
 }
 
+
 /**
  * Observes ride notifications in Firestore and updates the list.
  */
 private fun observeRideNotifications(
     userId: String,
     firestore: FirebaseFirestore,
-    notifications: MutableList<NotificationData>,
+    notifications: MutableList<NotificationEntity>,
     notificationDao: NotificationDao
 ) {
     firestore.collection("rides")
@@ -156,7 +157,7 @@ private fun observeRideNotifications(
 /**
  * Checks if a notification should be created for a ride and returns it if needed.
  */
-private fun createNotificationIfNeeded(doc: DocumentSnapshot, currentTime: Long, timeIntervals: List<Int>): NotificationData? {
+private fun createNotificationIfNeeded(doc: DocumentSnapshot, currentTime: Long, timeIntervals: List<Int>): NotificationEntity? {
     val rideId = doc.id
     val date = doc.getString("date") ?: return null
     val time = doc.getString("time") ?: return null
@@ -170,14 +171,14 @@ private fun createNotificationIfNeeded(doc: DocumentSnapshot, currentTime: Long,
     val minutesLeft = ((timeLeftMillis % (1000 * 60 * 60)) / (1000 * 60)).toInt()
     val postTime = getCurrentTime()
     return when {
-        hoursLeft in timeIntervals && minutesLeft == 0 -> NotificationData(
+        hoursLeft in timeIntervals && minutesLeft == 0 -> NotificationEntity(
             image = R.drawable.car_front,
             title = "Upcoming Ride Reminder",
             description = "Your ride from $location to $destination is in $hoursLeft hour${if (hoursLeft > 1) "s" else ""}!",
             time = "$hoursLeft hours left",
             postTime = postTime
         )
-        hoursLeft < 0 -> NotificationData( // Mark ride as expired
+        hoursLeft < 0 -> NotificationEntity( // Mark ride as expired
             image = R.drawable.car_front,
             title = "Ride Expired",
             description = "Your ride from $location to $destination has already passed.",
@@ -191,7 +192,7 @@ private fun createNotificationIfNeeded(doc: DocumentSnapshot, currentTime: Long,
 private fun observeSearchNotifications(
     userId: String,
     firestore: FirebaseFirestore,
-    notifications: MutableList<NotificationData>,
+    notifications: MutableList<NotificationEntity>,
     notificationDao: NotificationDao
 ) {
     firestore.collection("searchs")
@@ -246,7 +247,7 @@ private fun createSearchNotificationIfNeeded(
     doc: DocumentSnapshot,
     currentTime: Long,
     timeIntervals: List<Int>
-): NotificationData? {
+): NotificationEntity? {
     val searchId = doc.id
     val date = doc.getString("date") ?: return null
     val time = doc.getString("time") ?: return null
@@ -261,14 +262,14 @@ private fun createSearchNotificationIfNeeded(
 // Save the notification creation time as a fixed timestamp
     val postTime = getCurrentTime() // Fixed timestamp when created
     return when {
-        hoursLeft in timeIntervals && minutesLeft == 0 -> NotificationData(
+        hoursLeft in timeIntervals && minutesLeft == 0 -> NotificationEntity(
             image = R.drawable.profile_ico, // Change image for search notification
             title = "Search Ride Reminder",
             description = "Your searched ride from $location to $destination is in $hoursLeft hour${if (hoursLeft > 1) "s" else ""}!",
             time = "$hoursLeft hours left",
             postTime = postTime
         )
-        hoursLeft < 0 -> NotificationData( // Mark search as expired
+        hoursLeft < 0 -> NotificationEntity( // Mark search as expired
             image = R.drawable.profile_ico,
             title = "Searched Ride Expired",
             description = "Your searched ride from $location to $destination has already passed.",
@@ -338,7 +339,7 @@ fun clearAllNotifications(notificationDao: NotificationDao) {
  * Displays the list of notifications.
  */
 @Composable
-fun NotificationList(notifications: List<NotificationData>, paddingValues: PaddingValues) {
+fun NotificationList(notifications: List<NotificationEntity>, paddingValues: PaddingValues) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -407,10 +408,3 @@ fun getCurrentTime(): String {
 }
 
 
-data class NotificationData(
-    val image: Int,
-    val title: String,
-    val description: String,
-    val time: String,
-    val postTime: String
-)
