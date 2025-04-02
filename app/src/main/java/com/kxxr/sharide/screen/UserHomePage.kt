@@ -9,6 +9,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.Settings
 import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -566,6 +567,8 @@ fun ReminderContent(
     navController: NavController,
     firestore: FirebaseFirestore,
 ) {
+    val context = LocalContext.current
+
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         Spacer(modifier = Modifier.height(16.dp))
         Text(text = title, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
@@ -586,13 +589,17 @@ fun ReminderContent(
                         isDriver = isDriver,
                         onClick = {
                             if (isDriver) {
-                                firestore.collection("rides").document(item.id).get()
-                                    .addOnSuccessListener { rideDoc ->
-                                        val rideStatus = rideDoc.getString("status") ?: ""
-                                        if (rideStatus != "complete") {
+                                firestore.collection("requests")
+                                    .whereEqualTo("rideId",item.id)
+                                    .get()
+                                    .addOnSuccessListener { documents->
+                                        val rideStatus = if (documents.isEmpty) "Unknown"
+                                        else documents.documents.first().getString("status") ?: "Unknown"
+
+                                        if (rideStatus !in listOf("complete", "pending", "Unknown")) {
                                             navController.navigate("ride_detail/${index + 1}/${item.id}")
                                         } else {
-                                            Log.d("Navigation", "Ride is already complete. No action taken.")
+                                            Toast.makeText(context, "Ride is already past. No action taken.", Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                     .addOnFailureListener {
