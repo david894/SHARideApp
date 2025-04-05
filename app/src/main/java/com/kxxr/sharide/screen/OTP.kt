@@ -356,7 +356,7 @@ fun BannedUserScreen(navController: NavController, userId: String, remark: Strin
         }
     }
 
-    val emailSubject = "Dispute of Banned User - User ID: $userId"
+    val emailSubject = "Dispute of Banned User - User : $username"
     val emailBody = """
         Dear SHARide Team,
 

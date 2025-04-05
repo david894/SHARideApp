@@ -108,3 +108,39 @@ fun ratingAPI(
             onFailure(it)
         })
 }
+
+fun loadRatingHistory(
+    firestore: FirebaseFirestore,
+    userId: String,
+    onResult: (List<Ratings>) -> Unit
+) {
+    firestore.collection("RatingsTransaction")
+        .whereEqualTo("userId", userId)
+        .get()
+        .addOnSuccessListener { snapshot ->
+            if (!snapshot.isEmpty) {
+                val data = snapshot.map { documents ->
+                    val transactionData = documents.data
+                    Ratings(
+                        date = transactionData["date"].toString(),
+                        description = transactionData["description"].toString(),
+                        Score = transactionData["Score"].toString().toDouble(),
+                        from = transactionData["from"].toString(),
+                        to = transactionData["to"].toString(),
+                        userId = transactionData["userId"].toString(),
+                    )
+                }
+                val transactions = data.sortedByDescending {
+                    SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).parse(it.date)
+                }
+
+                onResult(transactions)
+            }else{
+                onResult(emptyList()) // No transactions found
+                return@addOnSuccessListener
+            }
+        }
+        .addOnFailureListener { e ->
+            onResult(emptyList())
+        }
+}

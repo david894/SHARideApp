@@ -47,6 +47,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -90,6 +91,7 @@ import com.kxxr.logiclibrary.Login.signInWithEmailPassword
 import com.kxxr.logiclibrary.Login.verifyOtp
 import com.kxxr.logiclibrary.ManualCase.sendEmail
 import com.kxxr.logiclibrary.Network.NetworkViewModel
+import com.kxxr.logiclibrary.User.loadUserDetails
 import com.kxxr.sharmin.R
 
 @OptIn(ExperimentalAnimationApi::class)
@@ -207,22 +209,35 @@ fun AdminAppNavHost() {
 fun BannedUserScreen(navController: NavController, userId: String, remark: String) {
     val context = LocalContext.current
     val firebaseAuth = FirebaseAuth.getInstance()
-    val emailSubject = "Dispute of Banned User - User ID: $userId"
+    var username by remember { mutableStateOf("") }
+    var userEmail by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        loadUserDetails(FirebaseFirestore.getInstance(), userId) { user ->
+            if (user != null) {
+                username = user.name
+                userEmail = user.email
+            }
+        }
+    }
+
+    val emailSubject = "Dispute of Banned User - User : $username"
     val emailBody = """
         Dear SHARide Team,
 
         I would like to dispute my account ban due to a policy violation.
 
-        **User ID:** $userId
+        **User Name :** $username
+        **User Email :** $userEmail
 
         **Reason for Violation:** 
         $remark
 
-        If you believe this was an error, please review my case. 
+        I believe this was an error, please review my case. 
         I have also attached any supporting documents for your consideration.
 
         Best regards,
-        [Your Name]
+        $username
     """.trimIndent()
 
     Column(
