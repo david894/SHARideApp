@@ -58,12 +58,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.PhoneMultiFactorInfo
 import com.google.firebase.firestore.firestore
 import com.google.firebase.storage.FirebaseStorage
 import com.kxxr.logiclibrary.Login.resetPassword
+import com.kxxr.logiclibrary.Ratings.loadRatingScore
+import com.kxxr.logiclibrary.User.loadUserDetails
 import com.kxxr.sharide.R
 
 @Composable
@@ -208,7 +211,8 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
     var gender by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
     var profileImageUrl by remember { mutableStateOf("") }
-    var profileBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var rating by remember { mutableStateOf(0.0) }
+    var totalRating by remember { mutableStateOf(0) }
 
     var showDialog by remember { mutableStateOf(false) }
     var showEmailDialog by remember { mutableStateOf(false) }
@@ -222,39 +226,21 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
     LaunchedEffect(Unit) {
         showDialog = true
         currentUser?.uid?.let { userId ->
-            firestore.collection("users")
-                .whereEqualTo("firebaseUserId", userId)
-                .get()
-                .addOnSuccessListener { querySnapshot ->
-                    val document = querySnapshot.documents.firstOrNull()
-                    document?.let {
-                        userName = it.getString("name").orEmpty()
-                        email = it.getString("email").orEmpty()
-                        studentId = it.getString("studentId").orEmpty()
-                        gender = it.getString("gender").orEmpty()
-                        phoneNumber = it.getString("phoneNumber").orEmpty()
-                        profileImageUrl = it.getString("profileImageUrl").orEmpty()
-
-                        if (profileImageUrl.isNotEmpty()) {
-                            val storageReference =
-                                FirebaseStorage.getInstance().getReferenceFromUrl(profileImageUrl)
-                            storageReference.getBytes(1024 * 1024)
-                                .addOnSuccessListener { bytes ->
-                                    showDialog = false
-                                    profileBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                }
-                                .addOnFailureListener { e ->
-                                    showDialog = false
-                                    Toast.makeText(context, "Error fetching image: ${e.message}", Toast.LENGTH_SHORT)
-                                        .show()
-                                }
-                        }
-                    }
+            loadUserDetails(firestore,userId){
+                if (it != null) {
+                    userName = it.name
+                    studentId = it.studentId
+                    email = it.email
+                    gender = it.gender
+                    phoneNumber = it.phoneNumber
+                    profileImageUrl = it.profileImageUrl
                 }
-                .addOnFailureListener { e ->
-                    showDialog = false
-                    Toast.makeText(context, "Error fetching user data: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
+            }
+            loadRatingScore(firestore, userId) { Rating,TotalRating ->
+                rating = Rating
+                totalRating = TotalRating
+            }
+            showDialog = false
         }
     }
 
@@ -277,24 +263,13 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
             Text(text = "My Profile", fontSize = 26.sp,color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp))
 
             Spacer(modifier = Modifier.height(16.dp))
-
-            profileBitmap?.let {
-                Image(
-                    bitmap = it.asImageBitmap(),
-                    contentDescription = "Profile Picture",
-                    modifier = Modifier
-                        .size(120.dp)
-                        .clip(CircleShape)
-                )
-            } ?: Image(
-                painter = painterResource(id = R.drawable.profile_ico),
-                contentDescription = "Profile Picture",
+            Image(
+                painter = rememberAsyncImagePainter(profileImageUrl),
+                contentDescription = "Profile Image",
                 modifier = Modifier
                     .size(120.dp)
-                    .clip(CircleShape),
-                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White)
+                    .clip(CircleShape)
             )
-
         }
 
         Column(
@@ -308,6 +283,7 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
 
             Text(text = "$userName", fontSize = 20.sp, color = Color.White ,fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 10.dp))
             Text(text = "ID: $studentId", color = Color.White,fontSize = 18.sp, fontWeight = FontWeight.Medium)
+            Text("Ratings : $rating/5.0 ($totalRating)", color = Color.White,fontSize = 18.sp, fontWeight = FontWeight.Medium)
         }
 
         Column(

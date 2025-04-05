@@ -65,11 +65,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
-import com.kxxr.logiclibrary.User.loadWalletBalance
 import com.kxxr.logiclibrary.eWallet.PinAttemptManager
 import com.kxxr.logiclibrary.eWallet.Transaction
 import com.kxxr.logiclibrary.eWallet.hashAnswer
-import com.kxxr.logiclibrary.eWallet.hashPin
+import com.kxxr.logiclibrary.eWallet.loadTransactionHistory
+import com.kxxr.logiclibrary.eWallet.loadWalletBalance
 import com.kxxr.logiclibrary.eWallet.storeEWalletData
 import com.kxxr.logiclibrary.eWallet.updateUserPin
 import com.kxxr.logiclibrary.eWallet.validateAnswers
@@ -562,32 +562,12 @@ fun EWalletDashboardScreen(navController: NavController) {
 
         // Fetch balance
         loadWalletBalance(firestore, userId!!, onResult = { bal -> balance = bal })
-
-        if (userId != null) {
-            firestore.collection("Transaction")
-                .whereEqualTo("userId", userId) // Filter by userId field inside the document
-                .get()
-                .addOnSuccessListener { document ->
-                    if (!document.isEmpty) {
-                        val data = document.map { documents ->
-                            val transactionData = documents.data
-                            Transaction(
-                                date = transactionData["date"].toString(),
-                                description = transactionData["description"].toString(),
-                                amount = transactionData["amount"].toString().toDouble()
-                            )
-                        }
-                        // Sort transactions by date in descending order
-                        transactions = data.sortedByDescending {
-                            SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).parse(it.date)
-                        }
-                    } else {
-                        // No transactions found for this user
-                        transactions = emptyList()
-                    }
-                    isLoading = false
-                }
+        // load ewallet Transaction
+        loadTransactionHistory(firestore,userId){
+            transactions = it
+            isLoading = false
         }
+
     }
 
     Scaffold(
@@ -764,15 +744,10 @@ fun TopUpScreen(navController: NavController) {
 
         // Fetch balance
         if (userId != null) {
-            firestore.collection("eWallet").document(userId).get()
-                .addOnSuccessListener { document ->
-                    if (document.exists()) {
-                        balance = document.getDouble("balance") ?: 0.0
-                        isLoading = false
-                    }else{
-                        isLoading = false
-                    }
-                }
+            loadWalletBalance(firestore, userId){
+                balance = it
+                isLoading = false
+            }
         }
     }
     Scaffold(

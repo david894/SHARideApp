@@ -5,7 +5,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -46,10 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,11 +61,6 @@ import com.kxxr.logiclibrary.Admin.searchAdminGroup
 import com.kxxr.logiclibrary.Admin.updateAdminGroup
 import com.kxxr.logiclibrary.User.User
 import com.kxxr.logiclibrary.User.loadUserDetails
-import com.kxxr.logiclibrary.User.loadWalletBalance
-import com.kxxr.logiclibrary.eWallet.Transaction
-import com.kxxr.logiclibrary.eWallet.loadTransactionHistory
-import com.kxxr.logiclibrary.eWallet.recordTransaction
-import com.kxxr.logiclibrary.eWallet.updateUserBalance
 
 @Composable
 fun LoadAdminGroupScreen(navController: NavController) {

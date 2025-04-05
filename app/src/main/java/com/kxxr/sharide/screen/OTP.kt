@@ -51,6 +51,7 @@ import com.kxxr.logiclibrary.Login.ResolverHolder
 import com.kxxr.logiclibrary.Login.sendOtp
 import com.kxxr.logiclibrary.Login.verifyOtp
 import com.kxxr.logiclibrary.ManualCase.sendEmail
+import com.kxxr.logiclibrary.User.loadUserDetails
 import com.kxxr.sharide.R
 
 
@@ -189,7 +190,9 @@ fun VerifyOtpScreen(navController: NavController, verificationId: String, fireba
         Text("Enter the One Time Passcode sent to \n $phoneNumber via SMS", fontSize = 15.sp, textAlign = TextAlign.Center)
         Spacer(modifier = Modifier.height(26.dp))
         Column(
-            modifier = Modifier.fillMaxWidth().padding(25.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(25.dp),
         ) {
             Text("Enter OTP", textAlign = TextAlign.Start, modifier = Modifier.fillMaxWidth(), fontWeight = FontWeight.SemiBold)
             //Spacer(modifier = Modifier.height(16.dp))
@@ -309,7 +312,9 @@ fun CheckMfaEnrollment(firebaseAuth: FirebaseAuth, navController: NavController)
         fontWeight = FontWeight.Bold,
         fontSize = 20.sp,
         color = Color.Red,
-        modifier = Modifier.fillMaxSize().padding(top = topPadding)
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = topPadding)
     )
 
     if (showDialog) {
@@ -339,22 +344,36 @@ fun CheckMfaEnrollment(firebaseAuth: FirebaseAuth, navController: NavController)
 fun BannedUserScreen(navController: NavController, userId: String, remark: String) {
     val context = LocalContext.current
     val firebaseAuth = FirebaseAuth.getInstance()
+    var username by remember { mutableStateOf("") }
+    var userEmail by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        loadUserDetails(FirebaseFirestore.getInstance(), userId) { user ->
+            if (user != null) {
+                username = user.name
+                userEmail = user.email
+            }
+        }
+    }
+
     val emailSubject = "Dispute of Banned User - User ID: $userId"
     val emailBody = """
         Dear SHARide Team,
 
         I would like to dispute my account ban due to a policy violation.
 
-        **User ID:** $userId
+        **User Name :** $username
+        **User Email :** $userEmail
+
 
         **Reason for Violation:** 
         $remark
 
-        If you believe this was an error, please review my case. 
+        I believe this was an error, please review my case. 
         I have also attached any supporting documents for your consideration.
 
         Best regards,
-        [Your Name]
+        $username
     """.trimIndent()
 
     Column(
@@ -388,7 +407,9 @@ fun BannedUserScreen(navController: NavController, userId: String, remark: Strin
         Text(
             text = "Reason of the ban :\n" +
                     "$remark`",
-            modifier = Modifier.fillMaxWidth().padding(start = 20.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp)
         )
         Spacer(modifier = Modifier.height(24.dp))
         Button(
@@ -396,7 +417,9 @@ fun BannedUserScreen(navController: NavController, userId: String, remark: Strin
                 firebaseAuth.signOut()
                 sendEmail(context,context.getString(R.string.cs_email),emailSubject,emailBody)
             },
-            modifier = Modifier.padding(6.dp).fillMaxWidth(),
+            modifier = Modifier
+                .padding(6.dp)
+                .fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = Color.Blue))
         {
             Text("Contact Us")
