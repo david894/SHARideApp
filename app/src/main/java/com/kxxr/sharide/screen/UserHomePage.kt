@@ -596,7 +596,7 @@ fun ReminderContent(
                                         val rideStatus = if (documents.isEmpty) "Unknown"
                                         else documents.documents.first().getString("status") ?: "Unknown"
 
-                                        if (rideStatus !in listOf("complete", "pending", "Unknown")) {
+                                        if (rideStatus !in listOf("complete", "Unknown")) {
                                             navController.navigate("ride_detail/${index + 1}/${item.id}")
                                         } else {
                                             Toast.makeText(context, "Ride is already past. No action taken.", Toast.LENGTH_SHORT).show()

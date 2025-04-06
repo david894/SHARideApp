@@ -1,10 +1,9 @@
 package com.kxxr.sharide.screen
 
-import android.annotation.SuppressLint
+
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -54,7 +53,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -67,7 +65,6 @@ import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.PhoneMultiFactorInfo
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.firestore
 import com.google.firebase.storage.FirebaseStorage
@@ -76,9 +73,6 @@ import com.kxxr.logiclibrary.Ratings.Ratings
 import com.kxxr.logiclibrary.Ratings.loadRatingHistory
 import com.kxxr.logiclibrary.Ratings.loadRatingScore
 import com.kxxr.logiclibrary.User.loadUserDetails
-import com.kxxr.logiclibrary.eWallet.Transaction
-import com.kxxr.logiclibrary.eWallet.loadTransactionHistory
-import com.kxxr.logiclibrary.eWallet.loadWalletBalance
 import com.kxxr.sharide.R
 
 @Composable
