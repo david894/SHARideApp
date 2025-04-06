@@ -2,6 +2,7 @@
 
 package com.kxxr.sharide.screen
 
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -40,6 +41,8 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
 import com.kxxr.logiclibrary.Ratings.loadRatingScore
 import com.kxxr.logiclibrary.eWallet.loadWalletBalance
 import kotlinx.coroutines.launch
@@ -154,6 +157,9 @@ fun DriverCard(
     var totalRating by remember { mutableStateOf(0) }
     var balance by remember { mutableStateOf(0.0) }
     val context = LocalContext.current
+    var vehicleColour by remember { mutableStateOf("") }
+    var vehicleModel by remember { mutableStateOf("") }
+    var vehicleRegistrationNumber by remember { mutableStateOf("") }
 
     // Fetch both ride and driver details when the Composable is launched
     LaunchedEffect(driver.driverId) {
@@ -166,6 +172,22 @@ fun DriverCard(
             rating = Rating
             totalRating = TotalRating
         }
+        // Fetch vehicle info
+        firestore.collection("Vehicle")
+            .whereEqualTo("UserId", driver.driverId)
+            .limit(1)
+            .get()
+            .addOnSuccessListener { vehicleDocs ->
+                val vehicleDoc = vehicleDocs.documents.firstOrNull()
+                vehicleDoc?.let {
+                    vehicleColour = it.getString("CarColour") ?: ""
+                    vehicleModel = it.getString("CarModel") ?: ""
+                    vehicleRegistrationNumber = it.getString("CarRegistrationNumber") ?: ""
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error fetching vehicle info", e)
+            }
     }
 
     Card(
@@ -215,7 +237,10 @@ fun DriverCard(
                 Text("RM 1", color = Color.Green, fontSize = 14.sp) // Hardcoded price
 
                 Spacer(modifier = Modifier.height(8.dp))
-
+                Text("Model: $vehicleModel", color = Color.White)
+                Text("Colour: $vehicleColour", color = Color.White)
+                Text("Plate Number: $vehicleRegistrationNumber", color = Color.White)
+                Spacer(modifier = Modifier.height(8.dp))
                 // 🚀 Show Ride Details from Firestore
                 rideDetails?.let {
                     Text("📍 Location: ${it.location}", color = Color.White, fontSize = 14.sp)
@@ -461,11 +486,17 @@ fun PendingDriverCard(
     searchId: String, // Pass searchId to delete request
     navController: NavController // Pass NavController for navigation
 ) {
+
     var userName by remember { mutableStateOf("Unknown") }
     var profileImageUrl by remember { mutableStateOf("") }
     var rideDetails by remember { mutableStateOf<RideDetails?>(null) }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    var vehicleColour by remember { mutableStateOf("") }
+    var vehicleModel by remember { mutableStateOf("") }
+    var vehicleRegistrationNumber by remember { mutableStateOf("") }
+    var rating by remember { mutableStateOf(0.0) }
+    var totalRating by remember { mutableStateOf(0) }
 
     // Fetch ride and driver details
     LaunchedEffect(driver.driverId) {
@@ -473,6 +504,26 @@ fun PendingDriverCard(
             rideDetails = fetchedRide
             userName = name.ifEmpty { "Unknown" }
             profileImageUrl = imageUrl
+        }
+        // 🚗 Fetch vehicle data
+        firestore.collection("Vehicle")
+            .whereEqualTo("UserId", driver.driverId)
+            .limit(1)
+            .get()
+            .addOnSuccessListener { vehicleDocs ->
+                val vehicleDoc = vehicleDocs.documents.firstOrNull()
+                vehicleDoc?.let {
+                    vehicleModel = it.getString("CarModel") ?: ""
+                    vehicleColour = it.getString("CarColour") ?: ""
+                    vehicleRegistrationNumber = it.getString("CarRegistrationNumber") ?: ""
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error fetching vehicle info", e)
+            }
+        loadRatingScore(firestore, driver.driverId) { Rating,TotalRating ->
+            rating = Rating
+            totalRating = TotalRating
         }
     }
 
@@ -518,8 +569,14 @@ fun PendingDriverCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(userName, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("⭐ 4.5 (2)", color = Color.White, fontSize = 14.sp) // Hardcoded rating
-                Text("RM 1", color = Color.Green, fontSize = 14.sp) // Hardcoded price
+                Text("⭐ $rating/5.0 ($totalRating)", color = Color.White, fontSize = 14.sp)
+                Text("RM 1", color = Color.Green, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("🚘 Vehicle Info:", color = Color.White, fontWeight = FontWeight.Bold)
+
+                Text("Model: $vehicleModel", color = Color.White)
+                Text("Colour: $vehicleColour", color = Color.White)
+                Text("Plate Number: $vehicleRegistrationNumber", color = Color.White)
 
                 Spacer(modifier = Modifier.height(8.dp))
 

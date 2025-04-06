@@ -46,6 +46,7 @@ import com.google.maps.android.compose.*
 import com.kxxr.sharide.R
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 
 // Main home screen(driver and passenger
@@ -589,22 +590,44 @@ fun ReminderContent(
                         isDriver = isDriver,
                         onClick = {
                             if (isDriver) {
-                                firestore.collection("requests")
-                                    .whereEqualTo("rideId",item.id)
-                                    .get()
-                                    .addOnSuccessListener { documents->
-                                        val rideStatus = if (documents.isEmpty) "Unknown"
-                                        else documents.documents.first().getString("status") ?: "Unknown"
+                                if (isDriver) {
+                                    firestore.collection("requests")
+                                        .whereEqualTo("rideId", item.id)
+                                        .get()
+                                        .addOnSuccessListener { documents ->
+                                            val rideStatus = if (documents.isEmpty) "Unknown"
+                                            else documents.documents.first().getString("status") ?: "Unknown"
 
-                                        if (rideStatus !in listOf("complete", "Unknown")) {
-                                            navController.navigate("ride_detail/${index + 1}/${item.id}")
-                                        } else {
-                                            Toast.makeText(context, "Ride is already past. No action taken.", Toast.LENGTH_SHORT).show()
+                                            // Retrieve ride time
+                                            val rideTimeMillis = item.time // assuming item.time is in milliseconds
+
+                                            val formatter = SimpleDateFormat("HH:mm", Locale.getDefault())
+
+
+                                            val rideTimeToday = Calendar.getInstance().apply {
+                                                val timeParts = item.time.split(":")
+                                                set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
+                                                set(Calendar.MINUTE, timeParts[1].toInt())
+                                                set(Calendar.SECOND, 0)
+                                                set(Calendar.MILLISECOND, 0)
+                                            }.timeInMillis
+
+                                            val currentTimeMillis = System.currentTimeMillis()
+                                            val timeLeftMinutes = (rideTimeToday - currentTimeMillis) / (60 * 1000)
+
+                                            if (rideStatus !in listOf("complete", "pending", "Unknown")) {
+                                                navController.navigate("ride_detail/${index + 1}/${item.id}")
+                                            } else if ((rideStatus == "pending" || rideStatus == "Unknown") && timeLeftMinutes > 0) {
+                                                navController.navigate("ride_detail/${index + 1}/${item.id}")
+                                            } else {
+                                                Toast.makeText(context, "Ride is already past. No action taken.", Toast.LENGTH_SHORT).show()
+                                            }
                                         }
-                                    }
-                                    .addOnFailureListener {
-                                        Log.e("Navigation", "Failed to fetch ride details")
-                                    }
+                                        .addOnFailureListener {
+                                            Log.e("Navigation", "Failed to fetch ride details")
+                                        }
+                                }
+
                             } else {
                                 checkRequestStatus(
                                     firestore = firestore,

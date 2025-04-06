@@ -344,7 +344,10 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
                     ProfileCard(title = "Edit Vehicle Info",img = "car_front", onClick = { navController.navigate("addnewcar") })
                     Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
                 }
-
+                else{
+                    ProfileCard(title = "Favourite Driver",img = "favorite", onClick = { navController.navigate("favourite_driver") })
+                    Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
+                }
             }
 
             Spacer(modifier = Modifier.height(50.dp)) // Pushes Log Out button to bottom

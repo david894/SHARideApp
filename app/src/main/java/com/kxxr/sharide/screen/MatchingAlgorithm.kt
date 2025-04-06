@@ -77,6 +77,7 @@ fun getMatchingDrivers(
         val rideTimeMinutes = timeToMinutes(rideTime)
         val rideCapacity = ride.getLong("capacity")?.toInt() ?: 0
         val driverId = ride.getString("driverId") ?: return@forEach
+        val passengerIds = ride.get("passengerIds") as? List<String> ?: emptyList()
 
         val driverGender = usersSnapshot.documents.find {
             it.getString("firebaseUserId") == driverId
@@ -96,7 +97,7 @@ fun getMatchingDrivers(
                     isLocationValid(searchLocation, rideLocation, rideStop) &&
                     isDestinationValid(searchDestination, rideStop, rideDestination) &&
                     isGenderValid(driverGender, genderPreference) &&
-                    isCapacityValid(rideCapacity, passengerCapacity)
+                    isCapacityValid(rideCapacity, passengerIds , passengerCapacity)
 
             if (isMatch) {
                 matchingRides.add(ride)
@@ -136,9 +137,11 @@ fun isGenderValid(driverGender: String, genderPreference: String): Boolean {
     }
 }
 
-fun isCapacityValid(rideCapacity: Int, passengerCapacity: Int): Boolean {
-    return rideCapacity >= passengerCapacity
+fun isCapacityValid(rideCapacity: Int, passengerIds: List<String>?, passengerCapacity: Int): Boolean {
+    val currentPassengerCount = passengerIds?.filter { it != "null" }?.size ?: 0
+    return (rideCapacity - currentPassengerCount) >= passengerCapacity
 }
+
 
 fun timeToMinutes(time: String): Int {
     val parts = time.split(":").map { it.toInt() }

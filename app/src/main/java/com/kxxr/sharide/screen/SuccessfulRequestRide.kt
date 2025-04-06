@@ -51,7 +51,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -227,6 +229,10 @@ fun DriverSection(driverId: String, navController: NavController) {
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var rating by remember { mutableStateOf(0.0) }
     var totalRating by remember { mutableStateOf(0) }
+    var vehicleColour by remember { mutableStateOf("") }
+    var vehicleModel by remember { mutableStateOf("") }
+    var vehicleRegistrationNumber by remember { mutableStateOf("") }
+
     // Fetch driver info from Firestore
     LaunchedEffect(driverId) {
         db.collection("users")
@@ -248,6 +254,22 @@ fun DriverSection(driverId: String, navController: NavController) {
             rating = Rating
             totalRating = TotalRating
         }
+        // Fetch vehicle info
+        db.collection("Vehicle")
+            .whereEqualTo("UserId", driverId)
+            .limit(1)
+            .get()
+            .addOnSuccessListener { vehicleDocs ->
+                val vehicleDoc = vehicleDocs.documents.firstOrNull()
+                vehicleDoc?.let {
+                    vehicleColour = it.getString("CarColour") ?: ""
+                    vehicleModel = it.getString("CarModel") ?: ""
+                    vehicleRegistrationNumber = it.getString("CarRegistrationNumber") ?: ""
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error fetching vehicle info", e)
+            }
 
     }
 
@@ -299,14 +321,20 @@ fun DriverSection(driverId: String, navController: NavController) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(userName, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     Text("⭐ $rating/5.0 ($totalRating)", color = Color.White, fontSize = 14.sp)
+                    Text("Model: $vehicleModel", color = Color.White)
+                    Text("Colour: $vehicleColour", color = Color.White)
+                    Text("Plate Number: $vehicleRegistrationNumber", color = Color.White)
 
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
-                        onClick = { /* TODO: View Driver Profile */ },
+                        onClick = {
+                            startChatWithDriver(driverId, navController)
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
                     ) {
-                        Text("View")
+                        Text("Chat")
                     }
+
                 }
             }
         }
@@ -412,12 +440,6 @@ fun RideParticipantsSection(rideId: String, navController: NavController) {
                             Text("⭐ ${user.rating}", color = Color.White, fontSize = 14.sp)
 
                             Spacer(modifier = Modifier.height(8.dp))
-                            Button(
-                                onClick = { /* TODO: View Passenger Profile */ },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
-                            ) {
-                                Text("View")
-                            }
                         }
                     }
                 }
@@ -582,12 +604,48 @@ fun CompleteButton(firestore: FirebaseFirestore, navController: NavController, r
     }
 }
 
+fun startChatWithDriver(
+    driverId: String,
+    navController: NavController
+) {
+    val db = FirebaseFirestore.getInstance()
+    val chatsRef = db.collection("chats")
+    val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
+
+
+    chatsRef
+        .whereEqualTo("driverId", driverId)
+        .whereEqualTo("passengerId", currentUserId)
+        .get()
+        .addOnSuccessListener { documents ->
+            if (!documents.isEmpty) {
+                // Chat already exists
+                val chatId = documents.documents[0].id
+                navController.navigate("chat_screen/$chatId")
+            } else {
+                // Create new chat
+                val newChat = hashMapOf(
+                    "driverId" to driverId,
+                    "passengerId" to currentUserId,
+                    "lastMessage" to "",
+                    "lastMessageTimestamp" to null,
+                    "createdAt" to FieldValue.serverTimestamp()
+                )
+
+                chatsRef.add(newChat)
+                    .addOnSuccessListener { docRef ->
+                        navController.navigate("chat_screen/${docRef.id}")
+                    }
+            }
+        }
+}
+
 
 
 data class SuccessfulUserInfo(
     val firebaseUserId: String = "",
     val name: String = "Unknown",
     val imageUrl: String = "",
-    val rating: Double = 4.5
-)
+    val rating: Double = 4.5,
+    )
 

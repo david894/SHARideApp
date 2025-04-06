@@ -284,7 +284,10 @@ fun AppNavHost(
                 RatingsScreen(navController,firebaseAuth,receiverID,rideId)
             }
 
-            // eWallet
+            //favourite
+            composable("favourite_driver"){FavouriteDriverScreen(navController)}
+
+                    // eWallet
             composable("ewallet") { EWalletIntro(navController) }
             composable("security_question") { SetSecurityQuestionsScreen(navController) }
             composable("ewalletDashboard") { EWalletDashboardScreen(navController) }
