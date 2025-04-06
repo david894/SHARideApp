@@ -22,7 +22,8 @@ fun loadRatingScore(
                 totalRatings = document.getDouble("TotalRatings") ?: 0.0
                 totalRatingsAsInt = totalRatings.toInt()
             }
-            onResult(score/totalRatingsAsInt,totalRatingsAsInt)
+            val average = if (totalRatingsAsInt > 0) score / totalRatingsAsInt else 0.0
+            onResult(average, totalRatingsAsInt)
         }
 }
 

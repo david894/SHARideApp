@@ -268,9 +268,6 @@ fun AppNavHost(
                 )
             }
 
-
-
-
             // eWallet
             composable("ewallet") { EWalletIntro(navController) }
             composable("security_question") { SetSecurityQuestionsScreen(navController) }
@@ -285,6 +282,14 @@ fun AppNavHost(
             composable("resetPIN") { ResetPinScreen(navController) }
             composable("updatePIN") { UpdatePinScreen(navController) }
             composable("reset_question") { ResetSecurityQuestions(navController) }
+
+            //rating
+            composable(
+                "rate_ride/{receiverID}/{rideId}"){ backStackEntry ->
+                val receiverID = backStackEntry.arguments?.getString("receiverID") ?: ""
+                val rideId = backStackEntry.arguments?.getString("rideId") ?: ""
+                RatingsScreen(navController,firebaseAuth,receiverID,rideId)
+            }
 
         }
     }
@@ -619,17 +624,20 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
             modifier = Modifier
                 .align(Alignment.End)
                 .clickable {
-                    if(email.isNotEmpty()&&email.endsWith("tarc.edu.my")){
-                        resetPassword(email,context,
+                    if (email.isNotEmpty() && email.endsWith("tarc.edu.my")) {
+                        resetPassword(email, context,
                             onSuccess = {
                                 showDialog = false
-                                showEmailDialog = true},
+                                showEmailDialog = true
+                            },
                             onFailure = {
                                 showDialog = false
                             }
                         )
-                    }else{
-                        Toast.makeText(context,"Please enter your email first",Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast
+                            .makeText(context, "Please enter your email first", Toast.LENGTH_SHORT)
+                            .show()
                     }
                 }
         )
