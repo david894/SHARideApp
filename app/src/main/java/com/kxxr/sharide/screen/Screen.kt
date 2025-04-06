@@ -275,9 +275,13 @@ fun AppNavHost(
                     ChatScreen(chatId = chatId, currentUserId = uid, navController = navController)
                 }
             }
-
-
-
+            //rating
+            composable(
+                "rate_ride/{receiverID}/{rideId}"){ backStackEntry ->
+                val receiverID = backStackEntry.arguments?.getString("receiverID") ?: ""
+                val rideId = backStackEntry.arguments?.getString("rideId") ?: ""
+                RatingsScreen(navController,firebaseAuth,receiverID,rideId)
+            }
 
             // eWallet
             composable("ewallet") { EWalletIntro(navController) }
