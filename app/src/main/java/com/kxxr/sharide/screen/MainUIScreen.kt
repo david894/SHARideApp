@@ -1,5 +1,6 @@
 package com.kxxr.sharide.screen
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -25,11 +26,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardColors
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -58,12 +64,21 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.PhoneMultiFactorInfo
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.firestore
 import com.google.firebase.storage.FirebaseStorage
 import com.kxxr.logiclibrary.Login.resetPassword
+import com.kxxr.logiclibrary.Ratings.Ratings
+import com.kxxr.logiclibrary.Ratings.loadRatingHistory
+import com.kxxr.logiclibrary.Ratings.loadRatingScore
+import com.kxxr.logiclibrary.User.loadUserDetails
+import com.kxxr.logiclibrary.eWallet.Transaction
+import com.kxxr.logiclibrary.eWallet.loadTransactionHistory
+import com.kxxr.logiclibrary.eWallet.loadWalletBalance
 import com.kxxr.sharide.R
 
 @Composable
@@ -208,7 +223,8 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
     var gender by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
     var profileImageUrl by remember { mutableStateOf("") }
-    var profileBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var rating by remember { mutableStateOf(0.0) }
+    var totalRating by remember { mutableStateOf(0) }
 
     var showDialog by remember { mutableStateOf(false) }
     var showEmailDialog by remember { mutableStateOf(false) }
@@ -222,39 +238,21 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
     LaunchedEffect(Unit) {
         showDialog = true
         currentUser?.uid?.let { userId ->
-            firestore.collection("users")
-                .whereEqualTo("firebaseUserId", userId)
-                .get()
-                .addOnSuccessListener { querySnapshot ->
-                    val document = querySnapshot.documents.firstOrNull()
-                    document?.let {
-                        userName = it.getString("name").orEmpty()
-                        email = it.getString("email").orEmpty()
-                        studentId = it.getString("studentId").orEmpty()
-                        gender = it.getString("gender").orEmpty()
-                        phoneNumber = it.getString("phoneNumber").orEmpty()
-                        profileImageUrl = it.getString("profileImageUrl").orEmpty()
-
-                        if (profileImageUrl.isNotEmpty()) {
-                            val storageReference =
-                                FirebaseStorage.getInstance().getReferenceFromUrl(profileImageUrl)
-                            storageReference.getBytes(1024 * 1024)
-                                .addOnSuccessListener { bytes ->
-                                    showDialog = false
-                                    profileBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                }
-                                .addOnFailureListener { e ->
-                                    showDialog = false
-                                    Toast.makeText(context, "Error fetching image: ${e.message}", Toast.LENGTH_SHORT)
-                                        .show()
-                                }
-                        }
-                    }
+            loadUserDetails(firestore,userId){
+                if (it != null) {
+                    userName = it.name
+                    studentId = it.studentId
+                    email = it.email
+                    gender = it.gender
+                    phoneNumber = it.phoneNumber
+                    profileImageUrl = it.profileImageUrl
                 }
-                .addOnFailureListener { e ->
-                    showDialog = false
-                    Toast.makeText(context, "Error fetching user data: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
+            }
+            loadRatingScore(firestore, userId) { Rating,TotalRating ->
+                rating = Rating
+                totalRating = TotalRating
+            }
+            showDialog = false
         }
     }
 
@@ -277,24 +275,13 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
             Text(text = "My Profile", fontSize = 26.sp,color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp))
 
             Spacer(modifier = Modifier.height(16.dp))
-
-            profileBitmap?.let {
-                Image(
-                    bitmap = it.asImageBitmap(),
-                    contentDescription = "Profile Picture",
-                    modifier = Modifier
-                        .size(120.dp)
-                        .clip(CircleShape)
-                )
-            } ?: Image(
-                painter = painterResource(id = R.drawable.profile_ico),
-                contentDescription = "Profile Picture",
+            Image(
+                painter = rememberAsyncImagePainter(profileImageUrl),
+                contentDescription = "Profile Image",
                 modifier = Modifier
                     .size(120.dp)
-                    .clip(CircleShape),
-                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White)
+                    .clip(CircleShape)
             )
-
         }
 
         Column(
@@ -306,8 +293,18 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
         ) {
             Spacer(modifier = Modifier.height(126.dp))
 
-            Text(text = "$userName", fontSize = 20.sp, color = Color.White ,fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 10.dp))
+            Text(text = userName, fontSize = 20.sp, color = Color.White ,fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 10.dp))
             Text(text = "ID: $studentId", color = Color.White,fontSize = 18.sp, fontWeight = FontWeight.Medium)
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ){
+                Image(
+                    painter = painterResource(id = R.drawable.ratings_ico),
+                    contentDescription = "Ratings Icon",
+                    modifier = Modifier.size(20.dp)
+                )
+                Text("$rating/5.0 ($totalRating)", color = Color.White,fontSize = 18.sp, fontWeight = FontWeight.Medium)
+            }
         }
 
         Column(
@@ -346,9 +343,14 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
                 ProfileCard(title = "Edit Personal Info",img = "edit", onClick = { showEditDialog = true })
                 Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
 
+                ProfileCard(title = "View Rating Dashboard",img = "ratings_dashboard", onClick = { navController.navigate("ratingsDashboard") })
+                Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
+
                 if(isDriver){
                     ProfileCard(title = "Edit Vehicle Info",img = "car_front", onClick = { navController.navigate("addnewcar") })
+                    Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
                 }
+
             }
 
             Spacer(modifier = Modifier.height(50.dp)) // Pushes Log Out button to bottom
@@ -672,4 +674,169 @@ fun EditPersonalInfoDialog(
     )
 }
 
+@Composable
+fun RatingDashboardScreen(navController: NavController) {
+    val userId = FirebaseAuth.getInstance().currentUser?.uid
+    val context = LocalContext.current
+    val firestore = FirebaseFirestore.getInstance()
 
+    // State to hold score and transactions
+    var rating by remember { mutableStateOf(0.0) }
+    var totalRating by remember { mutableStateOf(0) }
+
+    var transactions by remember { mutableStateOf<List<Ratings>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(false) }
+
+    // Fetch data from Firestore
+    LaunchedEffect(Unit) {
+        isLoading = true
+
+        // Fetch rating
+        if (userId != null) {
+            loadRatingScore(firestore, userId) { Rating, TotalRating ->
+                rating = Rating
+                totalRating = TotalRating
+            }
+            loadRatingHistory(firestore,userId){
+                transactions = it
+            }
+            isLoading = false
+        }
+
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(280.dp)
+            .background(Color.Blue)
+            .padding(16.dp)
+    ) {
+        Spacer(modifier = Modifier.height(54.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .clickable { navController.navigate("profile") }
+        ) {
+            Icon(
+                imageVector = Icons.Default.ArrowBack,
+                contentDescription = "Back",
+                tint = Color.White,
+                modifier = Modifier.size(28.dp)
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Text(
+                text = "Ratings Dashboard",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        }
+        Spacer(modifier = Modifier.height(50.dp))
+        Text(
+            "Overall Ratings \n",
+            color = Color.White,
+            fontSize = 23.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ){
+            Image(
+                painter = painterResource(id = R.drawable.ratings_ico),
+                contentDescription = "Ratings Icon",
+                modifier = Modifier.size(20.dp)
+            )
+            Text("$rating/5.0 ($totalRating)",
+                color = Color.White,
+                fontSize = 23.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 280.dp)
+            .verticalScroll(rememberScrollState()), // Enable scrolling
+    ) {
+        // Transaction History Section
+        Text("Rating History", fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.padding(15.dp))
+
+        if (transactions.isEmpty()) {
+            Text("No Rating History", color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier
+                .fillMaxWidth()
+                .padding(15.dp))
+        } else {
+
+            transactions.forEach { transaction ->
+                var profileUrl by remember { mutableStateOf("") }
+                loadUserDetails(firestore,transaction.from){
+                    if (it != null) {
+                        profileUrl = it.profileImageUrl
+                    }
+                }
+                RatingsItem(transaction, profileUrl)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(130.dp))
+
+    }
+    // Show Loading Dialog
+    LoadingDialog(text = "Loading...", showDialog = isLoading, onDismiss = { isLoading = false })
+
+}
+
+@Composable
+fun RatingsItem(transaction: Ratings, profileUrl: String) {
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardColors(containerColor = Color.White, contentColor = Color.Black, disabledContentColor = Color.Gray, disabledContainerColor = Color.LightGray),
+        //elevation = 4,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+            .border(2.dp, Color.LightGray, RoundedCornerShape(16.dp))
+    ) {
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Image(
+                painter = rememberAsyncImagePainter(profileUrl),
+                contentDescription = "Profile Image",
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(RoundedCornerShape(8.dp))
+            )
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            val score = transaction.Score
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ){
+                    Image(
+                        painter = painterResource(id = R.drawable.ratings_ico),
+                        contentDescription = "Ratings Icon",
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(text = score.toString(), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
+                Text(text = transaction.description, fontSize = 15.sp)
+                Text(text = transaction.date, fontSize = 12.sp, color = Color.Gray)
+
+            }
+        }
+    }
+}

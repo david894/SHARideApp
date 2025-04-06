@@ -45,7 +45,6 @@ import com.kxxr.logiclibrary.Admin.searchAdmins
 import com.kxxr.logiclibrary.Banned.loadAllBannedUsers
 import com.kxxr.logiclibrary.User.User
 import com.kxxr.logiclibrary.User.loadUserDetails
-import com.kxxr.logiclibrary.User.loadWalletBalance
 import com.kxxr.logiclibrary.User.searchUsers
 import com.kxxr.logiclibrary.eWallet.TopupPin
 import com.kxxr.logiclibrary.eWallet.Transaction
@@ -53,6 +52,7 @@ import com.kxxr.logiclibrary.eWallet.generateTopupPins
 import com.kxxr.logiclibrary.eWallet.loadAvailablePins
 import com.kxxr.logiclibrary.eWallet.loadSoldPins
 import com.kxxr.logiclibrary.eWallet.loadTransactionHistory
+import com.kxxr.logiclibrary.eWallet.loadWalletBalance
 import com.kxxr.logiclibrary.eWallet.markAsSold
 import com.kxxr.logiclibrary.eWallet.recordTransaction
 import com.kxxr.logiclibrary.eWallet.updateUserBalance
@@ -717,7 +717,7 @@ fun AdjustBalanceScreen(navController: NavController, userId: String) {
                             showDialog = true
                             updateUserBalance(userId, amount.toDoubleOrNull() ?: 0.0, if(operator == "+") "add" else "minus"
                                 ,onSuccess = { balance ->
-                                    recordTransaction(userId, amount.toDoubleOrNull() ?: 0.0,remark,if(operator == "+") "add" else "minus")
+                                    recordTransaction(userId, amount.toDoubleOrNull() ?: 0.0,remark,if(operator == "+") "add" else "minus","Admin",userId)
                                     showDialog = false
                                     Toast.makeText(context, "Success update user balance!", Toast.LENGTH_SHORT).show()
                                 }

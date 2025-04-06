@@ -1,7 +1,6 @@
 package com.kxxr.sharmin.screen
 
 import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.widget.Toast
@@ -20,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -49,7 +47,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -91,15 +88,11 @@ import com.kxxr.logiclibrary.ManualCase.updateDupUser
 import com.kxxr.logiclibrary.ManualCase.updateVehicle
 import com.kxxr.logiclibrary.ManualCase.uploadLicenseAndProfile
 import com.kxxr.logiclibrary.ManualCase.uploadVehicleImagesAndSave
+import com.kxxr.logiclibrary.Ratings.loadRatingScore
+import com.kxxr.logiclibrary.Ratings.ratingAPI
 import com.kxxr.logiclibrary.SignUp.saveDriverToFirestore
 import com.kxxr.logiclibrary.User.loadUserDetails
-import com.kxxr.logiclibrary.User.loadWalletBalance
-import com.kxxr.logiclibrary.eWallet.Transaction
-import com.kxxr.logiclibrary.eWallet.loadTransactionHistory
-import com.kxxr.logiclibrary.eWallet.recordTransaction
-import com.kxxr.logiclibrary.eWallet.updateUserBalance
-
-
+import com.kxxr.logiclibrary.eWallet.loadWalletBalance
 
 // Main Screen to Search and Select User
 @Composable
@@ -1827,6 +1820,9 @@ fun UserDetailScreen(navController: NavController, userId: String) {
 
     var user by remember { mutableStateOf<User?>(null) }
     var balance by remember { mutableStateOf(0.0) }
+    var rating by remember { mutableStateOf(0.0) }
+    var totalRating by remember { mutableStateOf(0) }
+
     var isDriver by remember { mutableStateOf<List<Driver>>(emptyList()) }
     var vehicle by remember { mutableStateOf<List<Vehicle>>(emptyList()) }
     var showDialog by remember { mutableStateOf(false) }
@@ -1836,11 +1832,18 @@ fun UserDetailScreen(navController: NavController, userId: String) {
         showDialog = true
         loadUserDetails(firestore, userId) { user = it }
         loadWalletBalance(firestore, userId) { balance = it }
+        loadRatingScore(firestore, userId) { Rating,TotalRating ->
+            rating = Rating
+            totalRating = TotalRating
+        }
         showDialog = false
     }
 
     loadWalletBalance(firestore, userId) { balance = it }
-
+    loadRatingScore(firestore, userId) { Rating,TotalRating ->
+        rating = Rating
+        totalRating = TotalRating
+    }
     user?.let { userData ->
 
         searchDriver(firestore, userData.firebaseUserId, context, onResult = {
@@ -1931,7 +1934,7 @@ fun UserDetailScreen(navController: NavController, userId: String) {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text("Rating", fontSize = 20.sp)
-                    Text("/5.0", fontSize = 23.sp,fontWeight = FontWeight.Bold)
+                    Text("$rating/5.0 ($totalRating)", fontSize = 23.sp,fontWeight = FontWeight.Bold)
                 }
 
             }

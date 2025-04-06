@@ -176,7 +176,9 @@ fun loadTransactionHistory(
                     Transaction(
                         date = transactionData["date"].toString(),
                         description = transactionData["description"].toString(),
-                        amount = transactionData["amount"].toString().toDouble()
+                        amount = transactionData["amount"].toString().toDouble(),
+                        from = transactionData["from"].toString(),
+                        to = transactionData["to"].toString()
                     )
                 }
                 val transactions = data.sortedByDescending {
@@ -202,6 +204,7 @@ fun validateTopUpPin(
     onFailure: (String) -> Unit
 ) {
     val firestore = FirebaseFirestore.getInstance()
+    var hasRecordedTransaction = false
 
     firestore.collection("Topup")
         .whereEqualTo("TopupPIN", pin)
@@ -216,7 +219,10 @@ fun validateTopUpPin(
                     ,onSuccess = { balance ->
                         deleteReloadPIN(pin
                             ,onSuccess = { message->
-                                recordTransaction(userId, amount,"Top Up","add")
+                                if (!hasRecordedTransaction) {
+                                    hasRecordedTransaction = true
+                                    recordTransaction(userId, amount, "Top Up", "add", userId, userId)
+                                }
                                 onSuccess(balance, amount.toString())
                             }
                             ,onFailure={ error ->
@@ -235,6 +241,37 @@ fun validateTopUpPin(
         .addOnFailureListener {
             onFailure("Error Validating PIN")
         }
+}
+
+fun paymentAPI(
+    userId: String,
+    receiver: String,
+    amount : Double,
+    onSuccess: (String,String) -> Unit,
+    onFailure: (String) -> Unit
+) {
+    val firestore = FirebaseFirestore.getInstance()
+    var hasRecordedUserTransaction = false
+    var hasRecordedReceiverTransaction = false
+
+    updateUserBalance(userId,amount,"minus",
+        onSuccess={
+            if(!hasRecordedUserTransaction){
+                hasRecordedUserTransaction = true
+                recordTransaction(userId,amount,"Payment","minus",userId,receiver)
+                updateUserBalance(receiver,amount,"add",onSuccess = {
+                    if(!hasRecordedReceiverTransaction){
+                        hasRecordedReceiverTransaction = true
+                        recordTransaction(receiver,amount,"Payment","add",userId,receiver)
+                        onSuccess("Payment Successful",amount.toString())
+                    }
+                }, onFailure ={
+                    onFailure(it)
+                })
+            }
+        },onFailure={
+            onFailure(it)
+        })
 }
 
 fun updateUserBalance(userId: String, amount: Double,operator: String,onSuccess: (String) -> Unit,onFailure: (String) -> Unit) {
@@ -278,7 +315,7 @@ fun deleteReloadPIN(pin: String,onSuccess: (String) -> Unit,onFailure: (String) 
         }
 }
 
-fun recordTransaction(userId: String, amount: Double, description: String, operator: String) {
+fun recordTransaction(userId: String, amount: Double, description: String, operator: String,from :String,to:String) {
     val firestore = FirebaseFirestore.getInstance()
 // Set Malaysia Time Zone (MYT)
     val timeZone = TimeZone.getTimeZone("Asia/Kuala_Lumpur")
@@ -300,7 +337,9 @@ fun recordTransaction(userId: String, amount: Double, description: String, opera
         "userId" to userId,
         "date" to formattedDate, // Store Timestamp
         "amount" to formattedAmount,
-        "description" to description
+        "description" to description,
+        "from" to from,
+        "to" to to,
     )
 
     // Add transaction to Firestore
@@ -436,5 +475,21 @@ fun updateUserPin(userId: String, newPin: String, onSuccess: () -> Unit, onFailu
         }
         .addOnFailureListener { exception ->
             onFailure(exception)
+        }
+}
+
+fun loadWalletBalance(
+    firestore: FirebaseFirestore,
+    userId: String,
+    onResult: (Double) -> Unit
+) {
+    var balance = 0.0
+
+    firestore.collection("eWallet").document(userId).get()
+        .addOnSuccessListener { document ->
+            if (document.exists()) {
+                balance = document.getDouble("balance") ?: 0.0
+            }
+            onResult(balance)
         }
 }

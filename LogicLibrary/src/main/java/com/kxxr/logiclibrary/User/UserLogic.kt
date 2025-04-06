@@ -77,18 +77,3 @@ fun loadUserDetails(
         }
 }
 
-fun loadWalletBalance(
-    firestore: FirebaseFirestore,
-    userId: String,
-    onResult: (Double) -> Unit
-) {
-    var balance = 0.0
-
-    firestore.collection("eWallet").document(userId).get()
-        .addOnSuccessListener { document ->
-            if (document.exists()) {
-                balance = document.getDouble("balance") ?: 0.0
-            }
-            onResult(balance)
-        }
-}

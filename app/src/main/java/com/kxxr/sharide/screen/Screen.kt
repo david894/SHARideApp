@@ -198,6 +198,8 @@ fun AppNavHost(
 
                 VerifyOtpScreen(navController, verifyID,firebaseAuth,phone,route)
             }
+            composable("ratingsDashboard") { RatingDashboardScreen(navController) }
+
             composable("banned_user/{userId}/{remark}") { backStackEntry ->
                 val userId = backStackEntry.arguments?.getString("userId") ?: ""
                 val remark = backStackEntry.arguments?.getString("remark") ?: ""
