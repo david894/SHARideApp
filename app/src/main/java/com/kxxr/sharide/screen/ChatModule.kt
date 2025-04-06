@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 
 package com.kxxr.sharide.screen
 
@@ -12,8 +12,10 @@ import android.net.Uri
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -242,6 +244,12 @@ fun ChatScreen(
     val db = FirebaseFirestore.getInstance()
     val messages = remember { mutableStateListOf<Message>() }
     var newMessage by remember { mutableStateOf("") }
+    val messageRef = db.collection("chats")
+        .document(chatId)
+        .collection("messages")
+        .document() // Generate a new document with a unique ID
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var messageToDelete by remember { mutableStateOf<Message?>(null) }
     val listState = rememberLazyListState()
 
     var receiverName by remember { mutableStateOf("Chat") }
@@ -252,7 +260,7 @@ fun ChatScreen(
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         if (success && imageUri.value != null) {
             // Upload to Firebase or send as chat message
-            uploadImageToFirebase(imageUri.value!!, chatId, currentUserId)
+            uploadImageToFirebase(imageUri.value!!, chatId, currentUserId,messageRef.id)
         }
     }
     // Step 1: Get the chat document and determine receiver ID
@@ -306,6 +314,7 @@ fun ChatScreen(
             }
     }
 
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -329,14 +338,64 @@ fun ChatScreen(
                 .padding(8.dp)
         ) {
             items(messages) { msg ->
-                ChatBubble(
-                    msg = msg,
-                    isCurrentUser = msg.senderId == currentUserId,
-                    senderImageUrl = currentUserImageUrl,
-                    receiverImageUrl = receiverImageUrl
-                )
+                val isCurrentUser = msg.senderId == currentUserId
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .combinedClickable(
+                            onClick = {},
+                            onLongClick = {
+                                if (isCurrentUser) {
+                                    messageToDelete = msg
+                                    showDeleteDialog = true
+                                }
+                            }
+                        )
+                ) {
+                    ChatBubble(
+                        msg = msg,
+                        isCurrentUser = isCurrentUser,
+                        senderImageUrl = currentUserImageUrl,
+                        receiverImageUrl = receiverImageUrl,
+                        onDeleteMessage = { selectedMsg ->
+                            if (isCurrentUser) {
+                                messageToDelete = selectedMsg
+                                showDeleteDialog = true
+                            }
+                        }
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(4.dp))
             }
+        }
+        if (showDeleteDialog && messageToDelete != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    showDeleteDialog = false
+                    messageToDelete = null
+                },
+                title = { Text("Delete Message") },
+                text = { Text("Are you sure you want to delete this message?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        deleteMessage(chatId, messageToDelete!!)
+                        showDeleteDialog = false
+                        messageToDelete = null
+                    }) {
+                        Text("Delete", color = Color.Red)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showDeleteDialog = false
+                        messageToDelete = null
+                    }) {
+                        Text("Cancel")
+                    }
+                }
+            )
         }
         var requestCameraPermission by remember { mutableStateOf(false) }
         var showPermissionDenied by remember { mutableStateOf(false) }
@@ -362,6 +421,7 @@ fun ChatScreen(
                 fetchCurrentLocation(context) { latLng ->
                     if (latLng != null) {
                         val message = hashMapOf(
+                            "messageId" to messageRef.id,
                             "senderId" to currentUserId,
                             "messageText" to "Shared a location",
                             "messageType" to "location",
@@ -398,6 +458,7 @@ fun ChatScreen(
             IconButton(onClick = {
                 if (newMessage.isNotBlank()) {
                     val message = hashMapOf(
+                        "messageId" to messageRef.id,
                         "senderId" to currentUserId,
                         "messageText" to newMessage.trim(),
                         "messageType" to "text",
@@ -452,7 +513,7 @@ fun createImageUri(context: Context): Uri {
     return context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)!!
 }
 
-fun uploadImageToFirebase(uri: Uri, chatId: String, currentUserId: String) {
+fun uploadImageToFirebase(uri: Uri, chatId: String, currentUserId: String, messageRef:String) {
     val storageRef = FirebaseStorage.getInstance().reference
     val imageRef = storageRef.child("chat_images/${UUID.randomUUID()}.jpg")
 
@@ -466,6 +527,7 @@ fun uploadImageToFirebase(uri: Uri, chatId: String, currentUserId: String) {
         .addOnSuccessListener { downloadUrl ->
             val db = FirebaseFirestore.getInstance()
             val message = hashMapOf(
+                "messageId" to messageRef,
                 "senderId" to currentUserId,
                 "messageText" to "",
                 "messageType" to "image",
@@ -508,7 +570,8 @@ fun ChatBubble(
     msg: Message,
     isCurrentUser: Boolean,
     senderImageUrl: String,
-    receiverImageUrl: String
+    receiverImageUrl: String,
+    onDeleteMessage: (Message) -> Unit
 ) {
     val bgColor = if (isCurrentUser) Color(0xFFDCF8C6) else Color(0xFFFFFFFF)
     val horizontalArrangement = if (isCurrentUser) Arrangement.End else Arrangement.Start
@@ -532,7 +595,14 @@ fun ChatBubble(
         }
 
         Column(
-            horizontalAlignment = if (isCurrentUser) Alignment.End else Alignment.Start
+            horizontalAlignment = if (isCurrentUser) Alignment.End else Alignment.Start,
+            modifier = Modifier
+                .combinedClickable(
+                    onClick = {},
+                    onLongClick = {
+                        onDeleteMessage(msg)
+                    }
+                )
         ) {
             Box(
                 modifier = Modifier
@@ -652,6 +722,25 @@ fun ShowPermissionDeniedDialog(onDismiss: () -> Unit) {
     )
 }
 
+fun deleteMessage(chatId: String, message: Message) {
+    val db = FirebaseFirestore.getInstance()
+    val messagesRef = db.collection("chats")
+        .document(chatId)
+        .collection("messages")
+
+    if (!message.messageId.isNullOrEmpty()) {
+        messagesRef.document(message.messageId!!).delete()
+    } else {
+        // Fallback: try to find it based on timestamp (less reliable)
+        messagesRef
+            .whereEqualTo("timestamp", message.timestamp)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                snapshot.documents.firstOrNull()?.reference?.delete()
+            }
+    }
+}
+
 
 data class ChatPreview(
     val chatId: String,
@@ -662,6 +751,7 @@ data class ChatPreview(
 )
 
 data class Message(
+    val messageId: String = "",
     val senderId: String = "",
     val messageText: String = "",
     val messageType: String = "text",
