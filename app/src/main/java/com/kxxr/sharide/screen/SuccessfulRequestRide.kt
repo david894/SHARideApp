@@ -55,6 +55,7 @@ import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import com.kxxr.logiclibrary.Ratings.loadRatingScore
 import com.kxxr.sharide.db.RideDetail
 import kotlinx.coroutines.launch
 
@@ -224,7 +225,8 @@ fun DriverSection(driverId: String, navController: NavController) {
     var profileImageUrl by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-
+    var rating by remember { mutableStateOf(0.0) }
+    var totalRating by remember { mutableStateOf(0) }
     // Fetch driver info from Firestore
     LaunchedEffect(driverId) {
         db.collection("users")
@@ -242,6 +244,11 @@ fun DriverSection(driverId: String, navController: NavController) {
                 Log.e("Firestore", "Error fetching driver info", exception)
                 isLoading = false
             }
+        loadRatingScore(db, driverId) { Rating,TotalRating ->
+            rating = Rating
+            totalRating = TotalRating
+        }
+
     }
 
     Card(
@@ -291,7 +298,7 @@ fun DriverSection(driverId: String, navController: NavController) {
 
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(userName, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text("⭐ 4.5 (2)", color = Color.White, fontSize = 14.sp) // Hardcoded rating
+                    Text("⭐ $rating/5.0 ($totalRating)", color = Color.White, fontSize = 14.sp)
 
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(

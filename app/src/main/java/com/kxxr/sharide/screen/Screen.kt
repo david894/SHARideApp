@@ -275,6 +275,7 @@ fun AppNavHost(
                     ChatScreen(chatId = chatId, currentUserId = uid, navController = navController)
                 }
             }
+
             //rating
             composable(
                 "rate_ride/{receiverID}/{rideId}"){ backStackEntry ->

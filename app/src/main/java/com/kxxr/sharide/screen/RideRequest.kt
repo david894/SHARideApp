@@ -40,6 +40,8 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.kxxr.logiclibrary.Ratings.loadRatingScore
+import com.kxxr.logiclibrary.eWallet.loadWalletBalance
 import kotlinx.coroutines.launch
 
 @Composable
@@ -148,6 +150,10 @@ fun DriverCard(
     var userName by remember { mutableStateOf("Unknown") }
     var profileImageUrl by remember { mutableStateOf("") }
     var rideDetails by remember { mutableStateOf<RideDetails?>(null) }
+    var rating by remember { mutableStateOf(0.0) }
+    var totalRating by remember { mutableStateOf(0) }
+    var balance by remember { mutableStateOf(0.0) }
+    val context = LocalContext.current
 
     // Fetch both ride and driver details when the Composable is launched
     LaunchedEffect(driver.driverId) {
@@ -155,6 +161,10 @@ fun DriverCard(
             rideDetails = fetchedRide
             userName = name.ifEmpty { "Unknown" }
             profileImageUrl = imageUrl
+        }
+        loadRatingScore(firestore, driver.driverId) { Rating, TotalRating ->
+            rating = Rating
+            totalRating = TotalRating
         }
     }
 
@@ -201,7 +211,7 @@ fun DriverCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(userName, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("⭐ 4.5 (2)", color = Color.White, fontSize = 14.sp) // Hardcoded rating
+                Text("⭐ $rating/5.0 ($totalRating)", color = Color.White, fontSize = 14.sp) // Hardcoded rating
                 Text("RM 1", color = Color.Green, fontSize = 14.sp) // Hardcoded price
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -217,14 +227,23 @@ fun DriverCard(
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
                     onClick = {
-                        sendRequestToDriver(
-                            firestore = firestore,
-                            rideId = rideId,
-                            driverId = driver.driverId,
-                            passengerId = firebaseAuth.currentUser?.uid ?: "",
-                            searchId = searchId,
-                            onSuccess = { navController.navigate("home") }
-                        )
+                        firebaseAuth.currentUser?.uid ?.let { userId ->
+                            loadWalletBalance(firestore, userId!!, onResult = { bal ->
+                                balance = bal
+                                if(balance > 1.00){
+                                    sendRequestToDriver(
+                                        firestore = firestore,
+                                        rideId = rideId,
+                                        driverId = driver.driverId,
+                                        passengerId = firebaseAuth.currentUser?.uid ?: "",
+                                        searchId = searchId,
+                                        onSuccess = { navController.navigate("home") }
+                                    )
+                                }else{
+                                    Toast.makeText(context, "Insufficient eWallet Balance", Toast.LENGTH_SHORT).show()
+                                }
+                            })
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
                 ) {
