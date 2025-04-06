@@ -5,6 +5,7 @@ package com.kxxr.sharide.screen
 import android.content.Context
 import android.util.Log
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,12 +21,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -48,7 +51,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,6 +75,7 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
+import com.kxxr.logiclibrary.Ratings.loadRatingScore
 import com.kxxr.sharide.R
 import com.kxxr.sharide.db.Passenger
 import com.kxxr.sharide.db.RideDetail
@@ -466,7 +473,7 @@ fun RidePassengerListSection(rideId: String,rideTime: String,driverId: String,na
             Text("No confirmed passengers", fontSize = 16.sp, color = Color.Gray)
         } else {
             passengerListState.value.forEach { passenger ->
-                ConfirmPassengerCard(passenger,driverId, navController )
+                PassengerCard(passenger,"",driverId, navController,"Confirmed" )
             }
         }
     }
@@ -527,7 +534,7 @@ fun PendingPassengerListSection(rideId: String, rideTime: String, navController:
             Text("No pending passengers", fontSize = 16.sp, color = Color.Gray)
         } else {
             passengerListState.value.forEach { passenger ->
-                PendingPassengerCard(passenger, rideId, navController) // Pass rideId
+                PassengerCard(passenger, rideId, "",navController,"Pending") // Pass rideId
             }
         }
     }
@@ -623,7 +630,7 @@ fun CancelRideButton(firestore: FirebaseFirestore, navController: NavController,
             cancelRide(firestore, navController, rideId, context)
         },
         modifier = Modifier.fillMaxWidth(),
-        colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+        colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
     ) {
         Text("Cancel Ride", color = Color.White)
     }
@@ -663,109 +670,182 @@ fun cancelRide(firestore: FirebaseFirestore, navController: NavController , ride
 
 
 @Composable
-fun PendingPassengerCard(passenger: Passenger, rideId: String, navController: NavController) { // Receive rideId
+fun PassengerCard(passenger: Passenger, rideId: String, driverId: String, navController: NavController, type: String) { // Receive rideId
     var showDialog by remember { mutableStateOf(false) }
+    val firestore = FirebaseFirestore.getInstance()
+    var rating by remember { mutableStateOf(0.0) }
+    var totalRating by remember { mutableStateOf(0) }
+    val amount = stringResource(id = R.string.fare_amount).toInt()
+
+    loadRatingScore(firestore, passenger.passengerId) { Rating, TotalRating ->
+        rating = Rating
+        totalRating = TotalRating
+    }
+
 
     Card(
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
-        shape = RectangleShape,
         colors = CardDefaults.cardColors(containerColor = Color(0xFF0075FD)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF0075FD))
+                .padding(16.dp),
         ) {
-            AsyncImage(
-                model = passenger.imageRes.ifEmpty { R.drawable.profile_ico },
-                contentDescription = "Passenger Image",
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                if (passenger.imageRes.isNotEmpty()) {
+                    AsyncImage(
+                        model = passenger.imageRes,
+                        contentDescription = "Passenger Image",
+                        modifier = Modifier
+                            .size(50.dp)
+                            .clip(RoundedCornerShape(5.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Image(
+                        painter = painterResource(id = R.drawable.profile_ico),
+                        contentDescription = "Default Image",
+                        modifier = Modifier
+                            .size(50.dp)
+                            .clip(CircleShape)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(26.dp))
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(
+                        passenger.name,
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "⭐ $rating/5.0 ($totalRating)",
+                        color = Color.White,
+                        fontSize = 14.sp
+                    )
+                    Row{
+                        Icon(
+                            imageVector = Icons.Default.AccessTime,
+                            contentDescription = null,
+                            tint = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            passenger.time,
+                            fontSize = 14.sp,
+                            color = Color.White
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            Column(
                 modifier = Modifier
-                    .size(50.dp)
-                    .clip(CircleShape)
-            )
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.End
+            ){
+                Text(
+                    text = "RM $amount",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    modifier = Modifier
+                        .padding(top = 8.dp, end = 8.dp)
+                        .clip(BookmarkShape())
+                        .background(Color.White)
+                        .padding(horizontal = 16.dp, vertical = 10.dp) // Internal padding
+                )
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = passenger.name,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(imageVector = Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFD700))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(text = "${passenger.rating} (${passenger.reviews})", fontSize = 14.sp, color = Color.White)
             }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+        }
+        if(type == "Pending"){
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(imageVector = Icons.Default.AttachMoney, contentDescription = null, tint = Color.White)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("RM 1", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.Start
+                    ) {
+                        Button(
+                            onClick = {
+                                showDialog = true
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF008000)),
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
+                            shape = RectangleShape
+                        ) {
+                            Text("Accept", color = Color.White)
+                        }
+
+                        Button(
+                            onClick = {
+                                rejectPassenger(passenger.passengerId, rideId) {
+                                    navController.popBackStack() // Navigate back after accepting
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFCC0000)),
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
+                            shape = RectangleShape
+                        ) {
+                            Text("Reject", color = Color.White)
+                        }
+                    }
+                }
             }
+        }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(imageVector = Icons.Default.AccessTime, contentDescription = null, tint = Color.White)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(passenger.time, fontSize = 14.sp, color = Color.White)
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
+        if(type == "Confirmed" && driverId.isNotEmpty()){
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp)
+                    .height(50.dp) // Ensures button fully occupies the bottom space
             ) {
-                Row(
+                Button(
+                    onClick = {
+                        startChatWithPassenger(
+                            driverId = driverId, // You pass this from your screen
+                            passenger = passenger,
+                            navController = navController
+                        )
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Blue),
                     modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.Start
+                    shape = RectangleShape
                 ) {
-                    Button(
-                        onClick = {
-                            showDialog = true
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Green),
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
-                        shape = RectangleShape
-                    ) {
-                        Text("Accept", color = Color.White)
-                    }
-
-                    Button(
-                        onClick = {
-                            rejectPassenger(passenger.passengerId, rideId){
-                                navController.popBackStack() // Navigate back after accepting
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
-                        shape = RectangleShape
-                    ) {
-                        Text("Reject", color = Color.White)
-                    }
+                    Text("Chat", color = Color.White)
                 }
             }
         }
     }
     // Show confirmation dialog
-    if (showDialog) {
+    if (showDialog && type == "Pending") {
         AcceptConfirmationDialog(
             passenger = passenger,
             rideId = rideId,
@@ -850,99 +930,6 @@ fun rejectPassenger(passengerId: String, rideId: String, onSuccess: () -> Unit) 
                 .update("status", "rejected")
         }
         onSuccess() // Navigate back after rejecting
-    }
-}
-
-
-
-
-@Composable
-fun ConfirmPassengerCard(passenger: Passenger, driverId: String,navController: NavController) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        shape = RectangleShape, // Ensures the card has sharp corners
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0075FD)), // Blue background
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Profile Icon at the Top
-            AsyncImage(
-                model = passenger.imageRes.ifEmpty { R.drawable.profile_ico },
-                contentDescription = "Passenger Image",
-                modifier = Modifier
-                    .size(50.dp)
-                    .clip(CircleShape)
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Passenger Name
-            Text(
-                text = passenger.name,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-
-            // Rating Row (Star Icon + Rating Text)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(imageVector = Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFD700))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(text = "${passenger.rating} (${passenger.reviews})", fontSize = 14.sp, color = Color.White)
-            }
-
-            // Price Row (Money Icon + Price)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(imageVector = Icons.Default.AttachMoney, contentDescription = null, tint = Color.White)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("RM 1", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            }
-
-            // Time Row (Clock Icon + Time)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(imageVector = Icons.Default.AccessTime, contentDescription = null, tint = Color.White)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(passenger.time, fontSize = 14.sp, color = Color.White)
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // View Button (Filling the entire bottom of the card)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp) // Ensures button fully occupies the bottom space
-            ) {
-                Button(
-                    onClick = {
-                        startChatWithPassenger(
-                            driverId = driverId, // You pass this from your screen
-                            passenger = passenger,
-                            navController = navController
-                        )
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Blue),
-                    modifier = Modifier.fillMaxSize(),
-                    shape = RectangleShape
-                ) {
-                    Text("Chat", color = Color.White)
-                }
-            }
-        }
     }
 }
 

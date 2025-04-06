@@ -30,11 +30,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -43,8 +53,13 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import com.kxxr.logiclibrary.Driver.Driver
+import com.kxxr.logiclibrary.Driver.Vehicle
+import com.kxxr.logiclibrary.Driver.searchDriver
+import com.kxxr.logiclibrary.Driver.searchVehicle
 import com.kxxr.logiclibrary.Ratings.loadRatingScore
 import com.kxxr.logiclibrary.eWallet.loadWalletBalance
+import com.kxxr.sharide.R
 import kotlinx.coroutines.launch
 
 @Composable
@@ -128,7 +143,7 @@ fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, 
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         itemsIndexed(rideDriverPairs) { index, (ride, driver) ->
-                            DriverCard(navController, firebaseAuth, firestore, index + 1, driver, ride.rideId,searchId)
+                            DriverCard(navController, firebaseAuth, firestore, index + 1, driver, ride.rideId,searchId,"Request")
                         }
                     }
                 }
@@ -148,7 +163,7 @@ fun DriverCard(
     driver: DriverInfo,
     rideId: String,
     searchId: String,
-
+    type: String
 ) {
     var userName by remember { mutableStateOf("Unknown") }
     var profileImageUrl by remember { mutableStateOf("") }
@@ -157,9 +172,10 @@ fun DriverCard(
     var totalRating by remember { mutableStateOf(0) }
     var balance by remember { mutableStateOf(0.0) }
     val context = LocalContext.current
-    var vehicleColour by remember { mutableStateOf("") }
-    var vehicleModel by remember { mutableStateOf("") }
-    var vehicleRegistrationNumber by remember { mutableStateOf("") }
+    var driverDetails by remember { mutableStateOf<List<Driver>>(emptyList()) }
+    var vehicleDetails by remember { mutableStateOf<List<Vehicle>>(emptyList()) }
+    val amount = stringResource(id = R.string.fare_amount).toInt()
+    val coroutineScope = rememberCoroutineScope()
 
     // Fetch both ride and driver details when the Composable is launched
     LaunchedEffect(driver.driverId) {
@@ -173,21 +189,14 @@ fun DriverCard(
             totalRating = TotalRating
         }
         // Fetch vehicle info
-        firestore.collection("Vehicle")
-            .whereEqualTo("UserId", driver.driverId)
-            .limit(1)
-            .get()
-            .addOnSuccessListener { vehicleDocs ->
-                val vehicleDoc = vehicleDocs.documents.firstOrNull()
-                vehicleDoc?.let {
-                    vehicleColour = it.getString("CarColour") ?: ""
-                    vehicleModel = it.getString("CarModel") ?: ""
-                    vehicleRegistrationNumber = it.getString("CarRegistrationNumber") ?: ""
-                }
+        searchDriver(firestore, driver.driverId, context, onResult = { drivers ->
+            if(drivers.isNotEmpty()){
+                driverDetails = drivers
+                searchVehicle(firestore,driverDetails.first().vehiclePlate,context, onResult = { vehicles ->
+                    vehicleDetails = vehicles
+                })
             }
-            .addOnFailureListener { e ->
-                Log.e("Firestore", "Error fetching vehicle info", e)
-            }
+        })
     }
 
     Card(
@@ -196,89 +205,236 @@ fun DriverCard(
         modifier = Modifier
             .padding(horizontal = 16.dp)
             .fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0075FD))
+        colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(Color(0xFF0075FD))
                 .padding(16.dp),
-            contentAlignment = Alignment.Center
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            if(type == "Request"){
                 Text("Driver $driverNumber", color = Color.White, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
+            }
 
-                // Profile Image or Default Icon
-                if (profileImageUrl.isNotEmpty()) {
-                    AsyncImage(
-                        model = profileImageUrl,
-                        contentDescription = "Driver Image",
-                        modifier = Modifier
-                            .size(60.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = "Default Driver",
-                        tint = Color.White,
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 38.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    if (profileImageUrl.isNotEmpty()) {
+                        AsyncImage(
+                            model = profileImageUrl,
+                            contentDescription = "Driver Image",
+                            modifier = Modifier
+                                .size(60.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.Person,
+                            contentDescription = "Default Driver",
+                            tint = Color.White,
+                            modifier = Modifier.size(60.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(26.dp))
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            userName,
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "⭐ $rating/5.0 ($totalRating)",
+                            color = Color.White,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+
+            }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.End
+            ){
+                Text(
+                    text = "RM $amount",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    modifier = Modifier
+                        .padding(top = 8.dp, end = 8.dp)
+                        .clip(BookmarkShape())
+                        .background(Color.White)
+                        .padding(horizontal = 16.dp, vertical = 10.dp) // Internal padding
+                )
+
+            }
+        }
+
+        vehicleDetails.forEach { vehicle ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Spacer(modifier = Modifier.width(26.dp))
+
+                    Image(
+                        painter = painterResource(id = R.drawable.car_front),
+                        contentDescription = "Car",
                         modifier = Modifier.size(60.dp)
                     )
-                }
 
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(userName, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("⭐ $rating/5.0 ($totalRating)", color = Color.White, fontSize = 14.sp) // Hardcoded rating
-                Text("RM 1", color = Color.Green, fontSize = 14.sp) // Hardcoded price
+                    Spacer(modifier = Modifier.width(26.dp))
 
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Model: $vehicleModel", color = Color.White)
-                Text("Colour: $vehicleColour", color = Color.White)
-                Text("Plate Number: $vehicleRegistrationNumber", color = Color.White)
-                Spacer(modifier = Modifier.height(8.dp))
-                // 🚀 Show Ride Details from Firestore
-                rideDetails?.let {
-                    Text("📍 Location: ${it.location}", color = Color.White, fontSize = 14.sp)
-                    Text("🚏 Stop: ${it.stop}", color = Color.White, fontSize = 14.sp)
-                    Text("🕒 Time: ${it.time}", color = Color.White, fontSize = 14.sp)
-                    Text("🎯 Destination: ${it.destination}", color = Color.White, fontSize = 14.sp)
-                } ?: Text("Loading ride details...", color = Color.White, fontSize = 14.sp)
-
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    onClick = {
-                        firebaseAuth.currentUser?.uid ?.let { userId ->
-                            loadWalletBalance(firestore, userId!!, onResult = { bal ->
-                                balance = bal
-                                if(balance > 1.00){
-                                    sendRequestToDriver(
-                                        firestore = firestore,
-                                        rideId = rideId,
-                                        driverId = driver.driverId,
-                                        passengerId = firebaseAuth.currentUser?.uid ?: "",
-                                        searchId = searchId,
-                                        onSuccess = { navController.navigate("home") }
-                                    )
-                                }else{
-                                    Toast.makeText(context, "Insufficient eWallet Balance", Toast.LENGTH_SHORT).show()
-                                }
-                            })
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
-                ) {
-                    Text("Request")
+                    Column(
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            "${vehicle.CarRegistrationNumber}",
+                            color = Color.Black,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.background(Color.LightGray).padding(8.dp)
+                        )
+                        Text(
+                            "${vehicle.CarMake} ${vehicle.CarModel} (${vehicle.CarColour})",
+                            color = Color.Black,
+                            fontSize = 14.sp
+                        )
+                    }
                 }
             }
         }
+
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp)
+        ) {
+            Text("Ride Details", color = Color.Black, fontSize = 18.sp, fontWeight = FontWeight.Bold, textDecoration = TextDecoration.Underline)
+            Spacer(modifier = Modifier.height(8.dp))
+            // 🚀 Show Ride Details from Firestore
+            rideDetails?.let {
+                Text("📍 Location: ${it.location}", color = Color.Black, fontSize = 14.sp)
+                Text("🚏 Stop: ${it.stop}", color = Color.Black, fontSize = 14.sp)
+                Text("🕒 Time: ${it.time}", color = Color.Black, fontSize = 14.sp)
+                Text("🎯 Destination: ${it.destination}", color = Color.Black, fontSize = 14.sp)
+            } ?: Text("Loading ride details...", color = Color.Black, fontSize = 14.sp)
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ){
+                if(type == "Request"){
+                    Button(
+                        onClick = {
+                            firebaseAuth.currentUser?.uid ?.let { userId ->
+                                loadWalletBalance(firestore, userId!!, onResult = { bal ->
+                                    balance = bal
+                                    if(balance > 1.00){
+                                        sendRequestToDriver(
+                                            firestore = firestore,
+                                            rideId = rideId,
+                                            driverId = driver.driverId,
+                                            passengerId = firebaseAuth.currentUser?.uid ?: "",
+                                            searchId = searchId,
+                                            onSuccess = { navController.navigate("home") }
+                                        )
+                                    }else{
+                                        Toast.makeText(context, "Insufficient eWallet Balance", Toast.LENGTH_SHORT).show()
+                                    }
+                                })
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0075FD), contentColor = Color.White)
+                    ) {
+                        Text("Request")
+                    }
+                }else{
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                firestore.collection("requests")
+                                    .whereEqualTo("searchId", searchId)
+                                    .get()
+                                    .addOnSuccessListener { querySnapshot ->
+                                        for (document in querySnapshot.documents) {
+                                            firestore.collection("requests").document(document.id).delete()
+                                                .addOnSuccessListener {
+                                                    Toast.makeText(context, "Request canceled", Toast.LENGTH_SHORT).show()
+                                                    navController.popBackStack() // Navigate back after successful deletion
+                                                }
+                                                .addOnFailureListener {
+                                                    Toast.makeText(context, "Failed to cancel request", Toast.LENGTH_SHORT).show()
+                                                }
+                                        }
+                                    }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                    ) {
+                        Text("Cancel Request", color = Color.White)
+                    }
+                }
+
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            if(type == "Pending"){
+                Text(
+                    text = "Pending",
+                    color = Color(0xFFD5B60A),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
     }
+    Spacer(modifier = Modifier.height(18.dp))
+
 }
 
+class BookmarkShape : Shape {
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density
+    ): Outline {
+        val path = Path().apply {
+            moveTo(0f, 0f)
+            lineTo(size.width, 0f)
+            lineTo(size.width, size.height - 20f)
+            lineTo(size.width / 2f, size.height)
+            lineTo(0f, size.height - 20f)
+            close()
+        }
+        return Outline.Generic(path)
+    }
+}
 
 fun fetchRideAndDriverDetails(
     firestore: FirebaseFirestore,
@@ -471,162 +627,11 @@ fun PendingRideRequestScreen(
                 isLoading -> CircularProgressIndicator()
                 driverInfo == null || rideInfo == null -> Text("No pending request found.", fontSize = 16.sp, fontWeight = FontWeight.Medium)
                 else -> {
-                    PendingDriverCard( firestore, driverInfo!!, rideInfo!!,searchId,navController)
+                    DriverCard( navController,firebaseAuth,firestore, 1, driverInfo!!, rideInfo!!.rideId,searchId,"Pending")
                 }
             }
         }
     }
 }
 
-@Composable
-fun PendingDriverCard(
-    firestore: FirebaseFirestore,
-    driver: DriverInfo,
-    ride: RideInfo,
-    searchId: String, // Pass searchId to delete request
-    navController: NavController // Pass NavController for navigation
-) {
-
-    var userName by remember { mutableStateOf("Unknown") }
-    var profileImageUrl by remember { mutableStateOf("") }
-    var rideDetails by remember { mutableStateOf<RideDetails?>(null) }
-    val coroutineScope = rememberCoroutineScope()
-    val context = LocalContext.current
-    var vehicleColour by remember { mutableStateOf("") }
-    var vehicleModel by remember { mutableStateOf("") }
-    var vehicleRegistrationNumber by remember { mutableStateOf("") }
-    var rating by remember { mutableStateOf(0.0) }
-    var totalRating by remember { mutableStateOf(0) }
-
-    // Fetch ride and driver details
-    LaunchedEffect(driver.driverId) {
-        fetchRideAndDriverDetails(firestore, driver.driverId, ride.rideId) { fetchedRide, name, imageUrl ->
-            rideDetails = fetchedRide
-            userName = name.ifEmpty { "Unknown" }
-            profileImageUrl = imageUrl
-        }
-        // 🚗 Fetch vehicle data
-        firestore.collection("Vehicle")
-            .whereEqualTo("UserId", driver.driverId)
-            .limit(1)
-            .get()
-            .addOnSuccessListener { vehicleDocs ->
-                val vehicleDoc = vehicleDocs.documents.firstOrNull()
-                vehicleDoc?.let {
-                    vehicleModel = it.getString("CarModel") ?: ""
-                    vehicleColour = it.getString("CarColour") ?: ""
-                    vehicleRegistrationNumber = it.getString("CarRegistrationNumber") ?: ""
-                }
-            }
-            .addOnFailureListener { e ->
-                Log.e("Firestore", "Error fetching vehicle info", e)
-            }
-        loadRatingScore(firestore, driver.driverId) { Rating,TotalRating ->
-            rating = Rating
-            totalRating = TotalRating
-        }
-    }
-
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        modifier = Modifier
-            .padding(horizontal = 16.dp)
-            .fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0075FD))
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Profile Image or Default Icon
-                if (profileImageUrl.isNotEmpty()) {
-                    AsyncImage(
-                        model = profileImageUrl,
-                        contentDescription = "Driver Image",
-                        modifier = Modifier
-                            .size(60.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = "Default Driver",
-                        tint = Color.White,
-                        modifier = Modifier.size(60.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(userName, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("⭐ $rating/5.0 ($totalRating)", color = Color.White, fontSize = 14.sp)
-                Text("RM 1", color = Color.Green, fontSize = 14.sp)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("🚘 Vehicle Info:", color = Color.White, fontWeight = FontWeight.Bold)
-
-                Text("Model: $vehicleModel", color = Color.White)
-                Text("Colour: $vehicleColour", color = Color.White)
-                Text("Plate Number: $vehicleRegistrationNumber", color = Color.White)
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // 🚀 Show Ride Details from Firestore
-                rideDetails?.let {
-                    Text("📍 Location: ${it.location}", color = Color.White, fontSize = 14.sp)
-                    Text("🚏 Stop: ${it.stop}", color = Color.White, fontSize = 14.sp)
-                    Text("🕒 Time: ${it.time}", color = Color.White, fontSize = 14.sp)
-                    Text("🎯 Destination: ${it.destination}", color = Color.White, fontSize = 14.sp)
-                } ?: Text("Loading ride details...", color = Color.White, fontSize = 14.sp)
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // ❌ Cancel Request Button
-                Button(
-                    onClick = {
-                        coroutineScope.launch {
-                            firestore.collection("requests")
-                                .whereEqualTo("searchId", searchId)
-                                .get()
-                                .addOnSuccessListener { querySnapshot ->
-                                    for (document in querySnapshot.documents) {
-                                        firestore.collection("requests").document(document.id).delete()
-                                            .addOnSuccessListener {
-                                                Toast.makeText(context, "Request canceled", Toast.LENGTH_SHORT).show()
-                                                navController.popBackStack() // Navigate back after successful deletion
-                                            }
-                                            .addOnFailureListener {
-                                                Toast.makeText(context, "Failed to cancel request", Toast.LENGTH_SHORT).show()
-                                            }
-                                    }
-                                }
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-                ) {
-                    Text("Cancel Request", color = Color.White)
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // 🚦 Pending Status Indicator
-                Text(
-                    text = "Pending",
-                    color = Color.Yellow,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-    }
-}
 

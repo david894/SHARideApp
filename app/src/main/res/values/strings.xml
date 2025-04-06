@@ -11,6 +11,7 @@
         <item>What was the name of your favorite childhood character?</item>
     </string-array>
     <string name="max_pin_attempts">3</string>
+    <string name="fare_amount">1</string>
     <string name="cs_email">ngkx-wp21@student.tarc.edu.my</string>
     <string name="maps_api_key">AIzaSyAYFHXZLaqAKMiPvxHKw45xRrlm95Vng7U</string>
     <string name="google_api">424509601720-l27h6t59dlr9dk2t8sto3tg6lu9a7tsv.apps.googleusercontent.com</string>

@@ -5,19 +5,25 @@ package com.kxxr.sharide.screen
 import android.content.Context
 import android.util.Log
 import android.widget.Toast
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
@@ -46,6 +52,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -57,7 +65,15 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import com.kxxr.logiclibrary.Driver.Driver
+import com.kxxr.logiclibrary.Driver.Vehicle
+import com.kxxr.logiclibrary.Driver.searchDriver
+import com.kxxr.logiclibrary.Driver.searchVehicle
 import com.kxxr.logiclibrary.Ratings.loadRatingScore
+import com.kxxr.logiclibrary.eWallet.PinAttemptManager
+import com.kxxr.logiclibrary.eWallet.paymentAPI
+import com.kxxr.logiclibrary.eWallet.verifyCurrentPin
+import com.kxxr.sharide.R
 import com.kxxr.sharide.db.RideDetail
 import kotlinx.coroutines.launch
 
@@ -208,6 +224,7 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SuccessfulSearchTopBar(navController: NavController, index: Int) {
     TopAppBar(
@@ -229,9 +246,11 @@ fun DriverSection(driverId: String, navController: NavController) {
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var rating by remember { mutableStateOf(0.0) }
     var totalRating by remember { mutableStateOf(0) }
-    var vehicleColour by remember { mutableStateOf("") }
-    var vehicleModel by remember { mutableStateOf("") }
-    var vehicleRegistrationNumber by remember { mutableStateOf("") }
+    var driverDetails by remember { mutableStateOf<List<Driver>>(emptyList()) }
+    var vehicleDetails by remember { mutableStateOf<List<Vehicle>>(emptyList()) }
+    val amount = stringResource(id = R.string.fare_amount).toInt()
+    val firestore = FirebaseFirestore.getInstance()
+    val context = LocalContext.current
 
     // Fetch driver info from Firestore
     LaunchedEffect(driverId) {
@@ -255,21 +274,14 @@ fun DriverSection(driverId: String, navController: NavController) {
             totalRating = TotalRating
         }
         // Fetch vehicle info
-        db.collection("Vehicle")
-            .whereEqualTo("UserId", driverId)
-            .limit(1)
-            .get()
-            .addOnSuccessListener { vehicleDocs ->
-                val vehicleDoc = vehicleDocs.documents.firstOrNull()
-                vehicleDoc?.let {
-                    vehicleColour = it.getString("CarColour") ?: ""
-                    vehicleModel = it.getString("CarModel") ?: ""
-                    vehicleRegistrationNumber = it.getString("CarRegistrationNumber") ?: ""
-                }
+        searchDriver(firestore, driverId, context, onResult = { drivers ->
+            if(drivers.isNotEmpty()){
+                driverDetails = drivers
+                searchVehicle(firestore,driverDetails.first().vehiclePlate,context, onResult = { vehicles ->
+                    vehicleDetails = vehicles
+                })
             }
-            .addOnFailureListener { e ->
-                Log.e("Firestore", "Error fetching vehicle info", e)
-            }
+        })
 
     }
 
@@ -279,65 +291,137 @@ fun DriverSection(driverId: String, navController: NavController) {
         modifier = Modifier
             .padding(horizontal = 16.dp)
             .fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0075FD))
+        colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .background(Color(0xFF0075FD))
+                .padding(16.dp),
         ) {
             when {
                 isLoading -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                    CircularProgressIndicator()
                 }
+
                 errorMessage != null -> {
                     Text(text = errorMessage ?: "Error", color = Color.Red, fontSize = 16.sp)
                 }
+
                 else -> {
-                    Text("Driver", color = Color.White, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Profile Image or Default Icon
-                    if (profileImageUrl.isNotEmpty()) {
-                        AsyncImage(
-                            model = profileImageUrl,
-                            contentDescription = "Driver Image",
-                            modifier = Modifier
-                                .size(60.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = "Default Driver",
-                            tint = Color.White,
-                            modifier = Modifier.size(60.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(userName, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text("⭐ $rating/5.0 ($totalRating)", color = Color.White, fontSize = 14.sp)
-                    Text("Model: $vehicleModel", color = Color.White)
-                    Text("Colour: $vehicleColour", color = Color.White)
-                    Text("Plate Number: $vehicleRegistrationNumber", color = Color.White)
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = {
-                            startChatWithDriver(driverId, navController)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
                     ) {
-                        Text("Chat")
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            if (profileImageUrl.isNotEmpty()) {
+                                AsyncImage(
+                                    model = profileImageUrl,
+                                    contentDescription = "Driver Image",
+                                    modifier = Modifier
+                                        .size(60.dp)
+                                        .clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.Person,
+                                    contentDescription = "Default Driver",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(60.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(26.dp))
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    userName,
+                                    color = Color.White,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "⭐ $rating/5.0 ($totalRating)",
+                                    color = Color.White,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+
                     }
 
                 }
             }
         }
+        vehicleDetails.forEach { vehicle ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Spacer(modifier = Modifier.width(26.dp))
+
+                    Image(
+                        painter = painterResource(id = R.drawable.car_front),
+                        contentDescription = "Car",
+                        modifier = Modifier.size(60.dp)
+                    )
+
+                    Spacer(modifier = Modifier.width(26.dp))
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            "${vehicle.CarRegistrationNumber}",
+                            color = Color.Black,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .background(Color.LightGray)
+                                .padding(8.dp)
+                        )
+                        Text(
+                            "${vehicle.CarMake} ${vehicle.CarModel} (${vehicle.CarColour})",
+                            color = Color.Black,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ){
+            Button(
+                onClick = {
+                    startChatWithDriver(driverId, navController)
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0075FD), contentColor = Color.White)
+            ) {
+                Text("Chat")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
     }
 }
 
@@ -391,13 +475,22 @@ fun RideParticipantsSection(rideId: String, navController: NavController) {
             }
     }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+    Column(modifier = Modifier
+        .fillMaxWidth()
+        .padding(8.dp)) {
         when {
             isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
             errorMessage != null -> Text(text = errorMessage ?: "Error", color = Color.Red, fontSize = 16.sp)
             participants.isEmpty() -> Text("No participants yet.", fontSize = 16.sp, color = Color.Gray)
             else -> {
-                participants.forEach { user ->
+                participants.forEachIndexed { index,user ->
+                    var rating by remember { mutableStateOf(0.0) }
+                    var totalRating by remember { mutableStateOf(0) }
+                    loadRatingScore(db, user.firebaseUserId) { Rating, TotalRating ->
+                        rating = Rating
+                        totalRating = TotalRating
+                    }
+
                     Card(
                         shape = RoundedCornerShape(16.dp),
                         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
@@ -406,40 +499,62 @@ fun RideParticipantsSection(rideId: String, navController: NavController) {
                             .padding(8.dp),
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF0075FD))
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
+                        Text("Passanger ${index+1}",
+                            modifier = Modifier.padding(start = 18.dp, top = 10.dp),
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp)
+                                .background(Color(0xFF0075FD))
+                                .padding(16.dp),
                         ) {
-                            Text("Passenger", color = Color.White, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                // Profile Image or Default Icon
+                                if (user.imageUrl.isNotEmpty()) {
+                                    AsyncImage(
+                                        model = user.imageUrl,
+                                        contentDescription = "Passenger Image",
+                                        modifier = Modifier
+                                            .size(60.dp)
+                                            .clip(CircleShape),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Default.Person,
+                                        contentDescription = "Default Passenger",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(60.dp)
+                                    )
+                                }
 
-                            // Profile Image or Default Icon
-                            if (user.imageUrl.isNotEmpty()) {
-                                AsyncImage(
-                                    model = user.imageUrl,
-                                    contentDescription = "Passenger Image",
-                                    modifier = Modifier
-                                        .size(60.dp)
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Icon(
-                                    Icons.Default.Person,
-                                    contentDescription = "Default Passenger",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(60.dp)
-                                )
+                                Spacer(modifier = Modifier.width(26.dp))
+
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Text(
+                                        user.name,
+                                        color = Color.White,
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        "⭐ $rating/5.0 ($totalRating)",
+                                        color = Color.White,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
                             }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(user.name, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                            Text("⭐ ${user.rating}", color = Color.White, fontSize = 14.sp)
-
-                            Spacer(modifier = Modifier.height(8.dp))
                         }
                     }
                 }
@@ -540,6 +655,25 @@ fun BoardRideButton(
     searchId: String,  // Change from searchId to rideId
     context: Context
 ) {
+    val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return
+
+    // Read max attempts from strings.xml
+    val maxAttempts = stringResource(id = R.string.max_pin_attempts).toInt()
+    val amount = stringResource(id = R.string.fare_amount).toInt()
+
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showPinDialog by remember { mutableStateOf(false) }
+    var attemptsLeft by remember { mutableStateOf(3 - PinAttemptManager.getAttempts(context)) }
+    var clearPinTrigger by remember { mutableStateOf(false) } // To trigger PIN reset
+    var driverId by remember { mutableStateOf("") }
+    var documentId by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        if (PinAttemptManager.isLockedOut(context)) {
+            navController.navigate("resetPIN") // Redirect if already locked out
+        }
+    }
+
     Button(
         onClick = {
             // Find the document where rideId matches
@@ -548,19 +682,10 @@ fun BoardRideButton(
                 .get()
                 .addOnSuccessListener { querySnapshot ->
                     if (!querySnapshot.isEmpty) {
-                        val documentId = querySnapshot.documents[0].id // Get the correct document ID
+                        documentId = querySnapshot.documents[0].id // Get the correct document ID
+                        driverId = querySnapshot.documents[0].getString("driverId") ?: ""
+                        showPinDialog = true
 
-                        // Perform batched updates
-                        firestore.runBatch { batch ->
-                            val requestRef = firestore.collection("requests").document(documentId)
-                            batch.update(requestRef, "boardingStatus", "yes")
-                            batch.update(requestRef, "status", "startBoarding") // Update request status
-                        }.addOnSuccessListener {
-                            Toast.makeText(context, "You have boarded the ride!", Toast.LENGTH_SHORT).show()
-                            navController.navigate("home") // Navigate to home after confirming
-                        }.addOnFailureListener {
-                            Toast.makeText(context, "Failed to update boarding status", Toast.LENGTH_SHORT).show()
-                        }
                     } else {
                         Toast.makeText(context, "No matching ride found!", Toast.LENGTH_SHORT).show()
                     }
@@ -573,6 +698,65 @@ fun BoardRideButton(
         colors = ButtonDefaults.buttonColors(containerColor = Color.Green)
     ) {
         Text("Get On Ride")
+    }
+    if (showPinDialog) {
+        PinInputDialog(
+            title = "Enter Payment PIN",
+            description = buildString {
+                append("Please enter your current payment PIN to make payment.")
+                if (attemptsLeft < 3) {
+                    append("\n\nYou have $attemptsLeft attempts left.")
+                }
+            },
+            onPinEntered = { enteredPin ->
+                verifyCurrentPin(
+                    context = context,
+                    userId = userId,
+                    enteredPin = enteredPin,
+                    onSuccess = {
+                        PinAttemptManager.resetAttempts(context) // Reset attempt count
+                        showPinDialog = false
+                        if(driverId != "" && documentId != ""){
+                            paymentAPI(userId,driverId,amount.toDouble(), onSuccess = { result, amount ->
+                                Toast.makeText(context, "Payment Successful", Toast.LENGTH_SHORT).show()
+                                updateRideStatus(firestore, documentId, context, navController)
+                            }, onFailure = {
+                                Toast.makeText(context, "Failed to make payment to driver", Toast.LENGTH_SHORT).show()
+                            })
+                        }
+                    },
+                    onFailure = { error ->
+                        attemptsLeft = maxAttempts - PinAttemptManager.getAttempts(context) // Update attempts left
+                        errorMessage = error
+                        clearPinTrigger = !clearPinTrigger
+                    },
+                    onLockout = {
+                        navController.navigate("resetPIN") // Navigate to reset PIN screen
+                    }
+                )
+            },
+            onClearPin = clearPinTrigger,
+            onDismiss = { navController.popBackStack() }
+        )
+    }
+
+    errorMessage?.let { error ->
+        Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+        errorMessage = null
+    }
+}
+
+fun updateRideStatus(firestore: FirebaseFirestore, documentId: String, context: Context, navController: NavController) {
+    // Perform batched updates
+    firestore.runBatch { batch ->
+        val requestRef = firestore.collection("requests").document(documentId)
+        batch.update(requestRef, "boardingStatus", "yes")
+        batch.update(requestRef, "status", "startBoarding") // Update request status
+    }.addOnSuccessListener {
+        Toast.makeText(context, "You have boarded the ride!", Toast.LENGTH_SHORT).show()
+        navController.navigate("home") // Navigate to home after confirming
+    }.addOnFailureListener {
+        Toast.makeText(context, "Failed to update boarding status", Toast.LENGTH_SHORT).show()
     }
 }
 
