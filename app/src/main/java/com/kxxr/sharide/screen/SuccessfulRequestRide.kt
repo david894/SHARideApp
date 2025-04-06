@@ -173,6 +173,8 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
                                 CompleteButton(
                                     firestore = db,
                                     navController = navController,
+                                    rideId = ride.rideId,
+                                    driverId = ride.driverId,
                                     searchId = searchId,
                                     context = context
                                 )
@@ -546,7 +548,7 @@ fun BoardRideButton(
 }
 
 @Composable
-fun CompleteButton(firestore: FirebaseFirestore, navController: NavController, searchId: String, context: Context) {
+fun CompleteButton(firestore: FirebaseFirestore, navController: NavController, rideId: String, driverId: String, searchId: String, context: Context) {
     Button(
         onClick = {
             firestore.collection("requests")
@@ -558,7 +560,7 @@ fun CompleteButton(firestore: FirebaseFirestore, navController: NavController, s
                             .update("status", "complete")
                             .addOnSuccessListener {
                                 Toast.makeText(context, "Ride completed!", Toast.LENGTH_SHORT).show()
-                                navController.popBackStack() // Navigate back to home
+                                navController.navigate("rate_ride/${driverId}/${rideId}")
                             }
                             .addOnFailureListener {
                                 Toast.makeText(context, "Failed to update status", Toast.LENGTH_SHORT).show()

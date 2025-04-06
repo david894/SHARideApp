@@ -2,6 +2,8 @@ package com.kxxr.logiclibrary.Ratings
 
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -22,7 +24,10 @@ fun loadRatingScore(
                 totalRatings = document.getDouble("TotalRatings") ?: 0.0
                 totalRatingsAsInt = totalRatings.toInt()
             }
-            onResult(score/totalRatingsAsInt,totalRatingsAsInt)
+            val average = if (totalRatingsAsInt > 0) score / totalRatingsAsInt else 0.0
+            val roundedAverage = BigDecimal(average).setScale(2, RoundingMode.HALF_UP).toDouble()
+
+            onResult(roundedAverage, totalRatingsAsInt)
         }
 }
 
