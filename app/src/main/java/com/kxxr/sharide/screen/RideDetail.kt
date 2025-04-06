@@ -399,7 +399,7 @@ fun RouteDetails(pickupLocation: String, stop: String?, destination: String) {
             Text(pickupLocation, fontSize = 16.sp)
             stop?.let {
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Stop: $it", fontSize = 16.sp, color = Color.Yellow)
+                Text("$it", fontSize = 16.sp, color = Color.Black)
             }
             Spacer(modifier = Modifier.height(16.dp))
             Text(destination, fontSize = 16.sp)

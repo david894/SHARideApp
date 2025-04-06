@@ -285,9 +285,20 @@ fun AppNavHost(
             }
 
             //favourite
-            composable("favourite_driver"){FavouriteDriverScreen(navController)}
-
-                    // eWallet
+            composable("manage_driver"){ManageDriverScreen(navController)}
+            composable("recent_driver"){RecentDriverScreen(navController)}
+            composable("favourite_driver"){BackStackEntry ->
+                val currentUser = FirebaseAuth.getInstance().currentUser
+                currentUser?.uid?.let { uid ->
+                FavouriteDriverScreen(passengerId = uid, navController = navController)
+                }
+            }
+            composable("black_list_driver") { BackStackEntry ->
+                val currentUser = FirebaseAuth.getInstance().currentUser
+                currentUser?.uid?.let { uid ->
+                    BlackListDriverScreen(passengerId = uid , navController = navController)
+                }
+            }    // eWallet
             composable("ewallet") { EWalletIntro(navController) }
             composable("security_question") { SetSecurityQuestionsScreen(navController) }
             composable("ewalletDashboard") { EWalletDashboardScreen(navController) }

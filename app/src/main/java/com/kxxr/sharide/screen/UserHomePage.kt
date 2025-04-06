@@ -598,10 +598,7 @@ fun ReminderContent(
                                             val rideStatus = if (documents.isEmpty) "Unknown"
                                             else documents.documents.first().getString("status") ?: "Unknown"
 
-                                            // Retrieve ride time
-                                            val rideTimeMillis = item.time // assuming item.time is in milliseconds
 
-                                            val formatter = SimpleDateFormat("HH:mm", Locale.getDefault())
 
 
                                             val rideTimeToday = Calendar.getInstance().apply {
@@ -632,8 +629,11 @@ fun ReminderContent(
                                 checkRequestStatus(
                                     firestore = firestore,
                                     searchId = item.id,
+                                    time = item.time,
+                                    date = item.date,
                                     navController = navController,
-                                    index = index
+                                    index = index,
+                                    context = context
                                 )
                             }
                         }
@@ -647,37 +647,57 @@ fun ReminderContent(
 fun checkRequestStatus(
     firestore: FirebaseFirestore,
     searchId: String,
+    time: String,
+    date: String,
     navController: NavController,
     index: Int,
+    context: Context
 ) {
+    val formatter = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())
+    val dateTimeString = "$date $time" // Combine date and time
+    val rideTimeMillis = formatter.parse(dateTimeString)?.time ?: 0L
+
+    val currentTimeMillis = System.currentTimeMillis()
+    val timeDiff = rideTimeMillis - currentTimeMillis
+
     firestore.collection("requests")
         .whereEqualTo("searchId", searchId)
         .get()
         .addOnSuccessListener { documents ->
-            if (documents.isEmpty) {
-                // 🚀 No request found → Navigate to Matching Screen
-                navController.navigate("matching_screen")
-            } else {
-                val status = documents.documents.first().getString("status") ?: "unknown"
-                when (status) {
-                    "rejected", "cancel" -> navController.navigate("matching_screen") // ❌ Rejected or Cancelled → Go to Matching Screen
-                    "pending" -> {
-                        navController.navigate("pending_ride_requested/${searchId}")
-                    }
-                    "successful", "startBoarding" -> {
-                        navController.navigate("successful_ride_requested/${index+1}/${searchId}")
-                    }
-                    "complete" ->{
+            val expiredStatuses = listOf("pending", "Unknown", "rejected", "cancel")
 
+
+            if (documents.isEmpty) {
+                if (timeDiff > 0) {
+                    navController.navigate("matching_screen")
+                } else {
+                    Toast.makeText(context, "Ride is already past. No action taken.", Toast.LENGTH_SHORT).show()
+                }
+                return@addOnSuccessListener
+            }
+
+
+            val status = documents.documents.first().getString("status") ?: "Unknown"
+
+            if (timeDiff < 0 && status in expiredStatuses) {
+                Toast.makeText(context, "Ride is already past. No action taken.", Toast.LENGTH_SHORT).show()
+            } else {
+                when (status) {
+                    "rejected", "cancel" -> navController.navigate("matching_screen")
+                    "pending" -> navController.navigate("pending_ride_requested/$searchId")
+                    "successful", "startBoarding" -> navController.navigate("successful_ride_requested/${index + 1}/$searchId")
+                    "complete" -> {
+                        // Optional: Handle completed ride
                     }
                 }
             }
         }
         .addOnFailureListener {
-            // Handle Firestore failure (optional)
-            navController.navigate("matching_screen") // Default to Matching Screen if error occurs
+            Log.e("Firestore", "Error getting request: ${it.message}")
+            navController.navigate("matching_screen")
         }
 }
+
 
 fun convertToTimestamp(date: String, time: String): Long {
     val formatter = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())
