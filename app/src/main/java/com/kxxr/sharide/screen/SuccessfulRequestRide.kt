@@ -51,12 +51,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import com.kxxr.sharide.db.Passenger
 import com.kxxr.sharide.db.RideDetail
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 @Composable
 fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchId: String) {
@@ -221,27 +225,41 @@ fun SuccessfulSearchTopBar(navController: NavController, index: Int) {
 fun DriverSection(driverId: String, navController: NavController) {
     val db = Firebase.firestore
     var userName by remember { mutableStateOf("Unknown") }
+    var rating by remember { mutableStateOf(0.0) }
     var profileImageUrl by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     // Fetch driver info from Firestore
     LaunchedEffect(driverId) {
-        db.collection("users")
-            .whereEqualTo("firebaseUserId", driverId) // Compare with firebaseUserId
-            .limit(1)
-            .get()
-            .addOnSuccessListener { userDocs ->
-                val userDoc = userDocs.documents.firstOrNull()
-                userName = userDoc?.getString("name") ?: "Unknown"
-                profileImageUrl = userDoc?.getString("profileImageUrl") ?: ""
-                isLoading = false
-            }
-            .addOnFailureListener { exception ->
-                errorMessage = "Failed to load driver info"
-                Log.e("Firestore", "Error fetching driver info", exception)
-                isLoading = false
-            }
+        try {
+            // Fetch user info
+            val userDocs = db.collection("users")
+                .whereEqualTo("firebaseUserId", driverId)
+                .limit(1)
+                .get()
+                .await()
+
+            val userDoc = userDocs.documents.firstOrNull()
+            userName = userDoc?.getString("name") ?: "Unknown"
+            profileImageUrl = userDoc?.getString("profileImageUrl") ?: ""
+
+            // Fetch rating
+            val ratingDocs = db.collection("Ratings")
+                .whereEqualTo("userId", driverId)
+                .limit(1)
+                .get()
+                .await()
+
+            val ratingDoc = ratingDocs.documents.firstOrNull()
+            rating = ratingDoc?.getDouble("TotalRatings") ?: 0.0
+
+        } catch (e: Exception) {
+            errorMessage = "Failed to load driver info"
+            Log.e("Firestore", "Error fetching driver info", e)
+        } finally {
+            isLoading = false
+        }
     }
 
     Card(
@@ -291,14 +309,16 @@ fun DriverSection(driverId: String, navController: NavController) {
 
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(userName, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text("⭐ 4.5 (2)", color = Color.White, fontSize = 14.sp) // Hardcoded rating
+                    Text("⭐ ${rating}", color = Color.White, fontSize = 14.sp)
 
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
-                        onClick = { /* TODO: View Driver Profile */ },
+                        onClick = {
+                            startChatWithDriver(driverId, navController)
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
                     ) {
-                        Text("View")
+                        Text("Chat")
                     }
                 }
             }
@@ -405,12 +425,6 @@ fun RideParticipantsSection(rideId: String, navController: NavController) {
                             Text("⭐ ${user.rating}", color = Color.White, fontSize = 14.sp)
 
                             Spacer(modifier = Modifier.height(8.dp))
-                            Button(
-                                onClick = { /* TODO: View Passenger Profile */ },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
-                            ) {
-                                Text("View")
-                            }
                         }
                     }
                 }
@@ -575,7 +589,39 @@ fun CompleteButton(firestore: FirebaseFirestore, navController: NavController, r
     }
 }
 
+fun startChatWithDriver(
+    driverId: String,
+    navController: NavController
+) {
+    val db = FirebaseFirestore.getInstance()
+    val chatsRef = db.collection("chats")
+    val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
+    chatsRef
+        .whereEqualTo("driverId", driverId)
+        .whereEqualTo("passengerId", currentUserId)
+        .get()
+        .addOnSuccessListener { documents ->
+            if (!documents.isEmpty) {
+                // Chat already exists, navigate
+                val chatId = documents.documents[0].id
+                navController.navigate("chat_screen/$chatId")
+            } else {
+                // Create new chat
+                val newChat = hashMapOf(
+                    "driverId" to driverId,
+                    "passengerId" to currentUserId,
+                    "lastMessage" to "",
+                    "lastMessageTimestamp" to null,
+                    "createdAt" to FieldValue.serverTimestamp()
+                )
 
+                chatsRef.add(newChat)
+                    .addOnSuccessListener { docRef ->
+                        navController.navigate("chat_screen/${docRef.id}")
+                    }
+            }
+        }
+}
 
 data class SuccessfulUserInfo(
     val firebaseUserId: String = "",
