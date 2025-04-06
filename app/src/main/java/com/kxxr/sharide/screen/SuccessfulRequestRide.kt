@@ -55,6 +55,7 @@ import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import com.kxxr.sharide.db.RideDetail
 import kotlinx.coroutines.launch
 
 @Composable
@@ -136,7 +137,7 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
                         Divider(color = Color.LightGray, thickness = 1.dp)
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        RideTimeSection(ride.time)
+                        RideTimeSection(ride.time,ride.driverId,navController)
 
                         Spacer(modifier = Modifier.height(8.dp))
                         Divider(color = Color.LightGray, thickness = 1.dp)

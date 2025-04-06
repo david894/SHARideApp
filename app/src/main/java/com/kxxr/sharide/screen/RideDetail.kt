@@ -59,6 +59,7 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 
 import com.google.firebase.firestore.ktx.firestore
@@ -69,6 +70,8 @@ import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.kxxr.sharide.R
+import com.kxxr.sharide.db.Passenger
+import com.kxxr.sharide.db.RideDetail
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -129,7 +132,7 @@ fun RideDetailScreen(navController: NavController, firestore: FirebaseFirestore,
                         Spacer(modifier = Modifier.height(16.dp))
                         Divider(color = Color.LightGray, thickness = 1.dp)
                         Spacer(modifier = Modifier.height(8.dp))
-                        RideTimeSection(ride.time)
+                        RideTimeSection(ride.time, ride.driverId ,navController)
                         Spacer(modifier = Modifier.height(8.dp))
                         Divider(color = Color.LightGray, thickness = 1.dp)
                         Spacer(modifier = Modifier.height(16.dp))
@@ -143,7 +146,7 @@ fun RideDetailScreen(navController: NavController, firestore: FirebaseFirestore,
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
 
-                            RidePassengerListSection(rideId = rideId, rideTime = ride.time)
+                            RidePassengerListSection(rideId = rideId, rideTime = ride.time, driverId = ride.driverId, navController = navController)
 
                             Spacer(modifier = Modifier.height(16.dp))
 
@@ -413,7 +416,7 @@ fun RideDetailTopBar(navController: NavController, index: Int) {
 
 // **Update RideTimeSection to Show Firebase Time**
 @Composable
-fun RideTimeSection(time: String) {
+fun RideTimeSection(time: String,driverId: String, navController: NavController) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(imageVector = Icons.Default.AccessTime, contentDescription = null, tint = Color.Blue)
         Spacer(modifier = Modifier.width(4.dp))
@@ -422,7 +425,7 @@ fun RideTimeSection(time: String) {
 }
 
 @Composable
-fun RidePassengerListSection(rideId: String,rideTime: String) {
+fun RidePassengerListSection(rideId: String,rideTime: String,driverId: String,navController: NavController) {
     val db = Firebase.firestore
     val passengerListState = produceState<List<Passenger>>(initialValue = emptyList(), rideId) {
         val passengers = mutableListOf<Passenger>()
@@ -463,7 +466,7 @@ fun RidePassengerListSection(rideId: String,rideTime: String) {
             Text("No confirmed passengers", fontSize = 16.sp, color = Color.Gray)
         } else {
             passengerListState.value.forEach { passenger ->
-                ConfirmPassengerCard(passenger)
+                ConfirmPassengerCard(passenger,driverId, navController )
             }
         }
     }
@@ -854,7 +857,7 @@ fun rejectPassenger(passengerId: String, rideId: String, onSuccess: () -> Unit) 
 
 
 @Composable
-fun ConfirmPassengerCard(passenger: Passenger) {
+fun ConfirmPassengerCard(passenger: Passenger, driverId: String,navController: NavController) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -925,44 +928,62 @@ fun ConfirmPassengerCard(passenger: Passenger) {
                     .height(50.dp) // Ensures button fully occupies the bottom space
             ) {
                 Button(
-                    onClick = { /* Handle view */ },
+                    onClick = {
+                        startChatWithPassenger(
+                            driverId = driverId, // You pass this from your screen
+                            passenger = passenger,
+                            navController = navController
+                        )
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Blue),
-                    modifier = Modifier
-                        .fillMaxSize(), // Ensures button takes full space
-                    shape = RectangleShape // Makes sure button is rectangular
+                    modifier = Modifier.fillMaxSize(),
+                    shape = RectangleShape
                 ) {
-                    Text("View", color = Color.White)
+                    Text("Chat", color = Color.White)
                 }
             }
         }
     }
 }
 
+fun startChatWithPassenger(
+    driverId: String,
+    passenger: Passenger,
+    navController: NavController
+) {
+    val db = FirebaseFirestore.getInstance()
+    val chatsRef = db.collection("chats")
+
+    chatsRef
+        .whereEqualTo("driverId", driverId)
+        .whereEqualTo("passengerId", passenger.passengerId)
+        .get()
+        .addOnSuccessListener { documents ->
+            if (!documents.isEmpty) {
+                // Chat already exists, navigate
+                val chatId = documents.documents[0].id
+                navController.navigate("chat_screen/$chatId")
+            } else {
+                // Create new chat
+                val newChat = hashMapOf(
+                    "driverId" to driverId,
+                    "passengerId" to passenger.passengerId,
+                    "lastMessage" to "",
+                    "lastMessageTimestamp" to null,
+                    "createdAt" to FieldValue.serverTimestamp()
+                )
+
+                chatsRef.add(newChat)
+                    .addOnSuccessListener { docRef ->
+                        navController.navigate("chat_screen/${docRef.id}")
+                    }
+            }
+        }
+}
 
 
 
 
-data class Passenger(
-    val passengerId: String,
-    val name: String,
-    val rating: Double,
-    val reviews: Int,
-    val imageRes: String,
-    val time: String
-)
 
 
 
-
-
-data class RideDetail(
-    val rideId: String = "",
-    val driverId: String = "",
-    val location: String = "",
-    val stop: String = "",
-    val destination: String = "",
-    val time: String = "",
-    val passengerIds: List<String> = emptyList(),
-    val capacity: Int = 0,
-    val date: String = "",
-)

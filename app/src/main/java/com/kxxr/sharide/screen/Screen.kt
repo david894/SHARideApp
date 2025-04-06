@@ -252,19 +252,20 @@ fun AppNavHost(
             }
 
 
-            // ✅ Chat Screen Route with Arguments
             composable(
-                route = "chat/{chatId}/{senderId}",
+                route = "chat_list/{userId}",
                 arguments = listOf(
-                    navArgument("chatId") { type = NavType.StringType },
-                    navArgument("senderId") { type = NavType.StringType }
+                    navArgument("userId") { type = NavType.StringType }
                 )
             ) { backStackEntry ->
-                val chatId = backStackEntry.arguments?.getString("chatId") ?: ""
-                val senderId = backStackEntry.arguments?.getString("senderId") ?: ""
+                val userId = backStackEntry.arguments?.getString("userId") ?: ""
 
-                ChatScreen(firestore = FirebaseFirestore.getInstance(), chatId = chatId, senderId = senderId)
+                ChatListScreen(
+                    userId = userId,
+                    navController = navController
+                )
             }
+
 
 
 

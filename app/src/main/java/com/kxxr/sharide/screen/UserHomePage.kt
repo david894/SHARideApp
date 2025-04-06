@@ -680,12 +680,12 @@ fun formatTimeLeft(timeLeftMillis: Long, requestStatus: String?): String {
             "successful" -> "Prepare"
             "startBoarding" -> "OnGoing"
             "complete" -> "Completed"
-            else -> "Unknown"
+            else -> "Expired"
         }
         else -> when (requestStatus) {
             "pending" -> "Expired"
             "complete" -> "Completed"
-            else -> "Unknown"
+            else -> "Expired"
         }
     }
 }
