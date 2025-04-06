@@ -608,7 +608,7 @@ fun ConfirmRideButton(
         modifier = Modifier.fillMaxWidth(),
         colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
     ) {
-        Text("Confirm Ride & Start Navigation")
+        Text("Start Navigation")
     }
 }
 

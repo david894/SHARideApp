@@ -268,6 +268,14 @@ fun AppNavHost(
                 )
             }
 
+            composable("chat_screen/{chatId}") { backStackEntry ->
+                val chatId = backStackEntry.arguments?.getString("chatId") ?: ""
+                val currentUser = FirebaseAuth.getInstance().currentUser
+                currentUser?.uid?.let { uid ->
+                    ChatScreen(chatId = chatId, currentUserId = uid, navController = navController)
+                }
+            }
+
 
 
 

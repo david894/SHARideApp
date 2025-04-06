@@ -1,5 +1,17 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.kxxr.sharide.screen
 
+import android.Manifest
+import android.app.Activity
+import android.content.ContentValues
+import android.content.Context
+import android.content.pm.PackageManager
+import android.location.Location
+import android.net.Uri
+import android.provider.MediaStore
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -10,18 +22,34 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Photo
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,26 +61,38 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
 import com.google.firebase.Timestamp
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.GeoPoint
 import com.google.firebase.firestore.Query
+import com.google.firebase.storage.FirebaseStorage
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
 import com.kxxr.sharide.R
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.UUID
 
 
 @Composable
 fun ChatListScreen(userId: String, navController: NavController) {
-
     val db = FirebaseFirestore.getInstance()
     val chatList = remember { mutableStateListOf<ChatPreview>() }
     val context = LocalContext.current
@@ -70,16 +110,19 @@ fun ChatListScreen(userId: String, navController: NavController) {
                 chatList.clear()
 
                 for (doc in snapshots) {
-                    val otherUserId = if (isDriver) doc.getString("passengerId") else doc.getString("driverId")
+                    val otherUserId =
+                        if (isDriver) doc.getString("passengerId") else doc.getString("driverId")
                     val lastMessage = doc.getString("lastMessage") ?: ""
                     val timestamp = doc.getTimestamp("lastMessageTimestamp")
 
                     if (otherUserId != null) {
-                        db.collection("users").document(otherUserId)
+                        db.collection("users")
+                            .whereEqualTo("firebaseUserId", otherUserId)
                             .get()
-                            .addOnSuccessListener { userDoc ->
-                                val name = userDoc.getString("name") ?: "Unknown"
-                                val image = userDoc.getString("imageRes") ?: ""
+                            .addOnSuccessListener { userSnapshot ->
+                                val userDoc = userSnapshot.documents.firstOrNull()
+                                val name = userDoc?.getString("name") ?: "Unknown"
+                                val image = userDoc?.getString("profileImageUrl") ?: ""
                                 chatList.add(
                                     ChatPreview(
                                         chatId = doc.id,
@@ -95,15 +138,57 @@ fun ChatListScreen(userId: String, navController: NavController) {
             }
     }
 
-    LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        items(chatList) { chat ->
-            ChatPreviewCard(chat = chat) {
-                navController.navigate("chat_screen/${chat.chatId}")
+    Scaffold(
+        topBar = { ChatTopBar(navController) },
+        containerColor = Color(0xFF0075FD) // ✅ Blue background
+    ) { paddingValues ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            items(chatList) { chat ->
+                ChatPreviewCard(chat = chat) {
+                    navController.navigate("chat_screen/${chat.chatId}")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
             }
-            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }
+
+
+
+@Composable
+fun ChatTopBar(navController: NavController) {
+    TopAppBar(
+        title = {
+            Text(
+                text = "SHARide Chat",
+                color = Color.Black // Text color for white background
+            )
+        },
+        navigationIcon = {
+            IconButton(onClick = {
+                navController.navigate("home") {
+                    popUpTo("home") { inclusive = true }
+                }
+            }) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.Black // Icon color for white background
+                )
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = Color.White
+        )
+    )
+}
+
+
 
 @Composable
 fun ChatPreviewCard(chat: ChatPreview, onClick: () -> Unit) {
@@ -146,10 +231,442 @@ fun ChatPreviewCard(chat: ChatPreview, onClick: () -> Unit) {
     }
 }
 
+@Composable
+fun ChatScreen(
+    chatId: String,
+    currentUserId: String,
+    navController: NavController
+) {
+    val context = LocalContext.current
+    val contentResolver = context.contentResolver
+    val db = FirebaseFirestore.getInstance()
+    val messages = remember { mutableStateListOf<Message>() }
+    var newMessage by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+
+    var receiverName by remember { mutableStateOf("Chat") }
+    var receiverImageUrl by remember { mutableStateOf("") }
+    var currentUserImageUrl by remember { mutableStateOf("") }
+    // For capturing camera image
+    val imageUri = remember { mutableStateOf<Uri?>(null) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success && imageUri.value != null) {
+            // Upload to Firebase or send as chat message
+            uploadImageToFirebase(imageUri.value!!, chatId, currentUserId)
+        }
+    }
+    // Step 1: Get the chat document and determine receiver ID
+    LaunchedEffect(chatId) {
+        db.collection("chats").document(chatId).get()
+            .addOnSuccessListener { chatDoc ->
+                val driverId = chatDoc.getString("driverId")
+                val passengerId = chatDoc.getString("passengerId")
+
+                val receiverId = if (driverId == currentUserId) passengerId else driverId
+
+                // Step 2: Fetch receiver's user profile
+                db.collection("users")
+                    .whereEqualTo("firebaseUserId", receiverId)
+                    .get()
+                    .addOnSuccessListener { userSnapshot ->
+                        val userDoc = userSnapshot.documents.firstOrNull()
+                        if (userDoc != null) {
+                            receiverName = userDoc.getString("name") ?: "User"
+                            receiverImageUrl = userDoc.getString("profileImageUrl") ?: ""
+                        }
+                    }
+            }
+    }
+    // Fetch current user image
+    LaunchedEffect(currentUserId) {
+        db.collection("users")
+            .whereEqualTo("firebaseUserId", currentUserId)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                val doc = snapshot.documents.firstOrNull()
+                if (doc != null) {
+                    currentUserImageUrl = doc.getString("profileImageUrl") ?: ""
+                }
+            }
+    }
+    // Step 3: Listen for chat messages
+    LaunchedEffect(chatId) {
+        db.collection("chats")
+            .document(chatId)
+            .collection("messages")
+            .orderBy("timestamp", Query.Direction.ASCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+
+                messages.clear()
+                for (doc in snapshot.documents) {
+                    val message = doc.toObject(Message::class.java)
+                    if (message != null) messages.add(message)
+                }
+            }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0075FD)) // Set screen background to blue
+    ) {
+
+    TopAppBar(
+
+            title = { Text(receiverName) },
+            navigationIcon = {
+                IconButton(onClick = { navController.popBackStack() }) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                }
+            }
+        )
+
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .weight(1f)
+                .padding(8.dp)
+        ) {
+            items(messages) { msg ->
+                ChatBubble(
+                    msg = msg,
+                    isCurrentUser = msg.senderId == currentUserId,
+                    senderImageUrl = currentUserImageUrl,
+                    receiverImageUrl = receiverImageUrl
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+        }
+        var requestCameraPermission by remember { mutableStateOf(false) }
+        var showPermissionDenied by remember { mutableStateOf(false) }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+
+            IconButton(onClick = {
+                requestCameraPermission = true
+            }) {
+                Icon(Icons.Default.Photo, contentDescription = "Send Photo")
+            }
+
+
+
+            val context = LocalContext.current
+
+            IconButton(onClick = {
+                fetchCurrentLocation(context) { latLng ->
+                    if (latLng != null) {
+                        val message = hashMapOf(
+                            "senderId" to currentUserId,
+                            "messageText" to "Shared a location",
+                            "messageType" to "location",
+                            "location" to GeoPoint(latLng.latitude, latLng.longitude),
+                            "timestamp" to FieldValue.serverTimestamp(),
+                            "isRead" to false
+                        )
+
+                        db.collection("chats")
+                            .document(chatId)
+                            .collection("messages")
+                            .add(message)
+
+                        db.collection("chats").document(chatId).update(
+                            mapOf(
+                                "lastMessage" to "Shared a location",
+                                "lastMessageTimestamp" to FieldValue.serverTimestamp()
+                            )
+                        )
+                    } else {
+
+                    }
+                }
+            }) {
+                Icon(Icons.Default.LocationOn, contentDescription = "Send Location")
+            }
+
+            TextField(
+                value = newMessage,
+                onValueChange = { newMessage = it },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Type a message...") }
+            )
+            IconButton(onClick = {
+                if (newMessage.isNotBlank()) {
+                    val message = hashMapOf(
+                        "senderId" to currentUserId,
+                        "messageText" to newMessage.trim(),
+                        "messageType" to "text",
+                        "timestamp" to FieldValue.serverTimestamp(),
+                        "isRead" to false
+                    )
+                    db.collection("chats")
+                        .document(chatId)
+                        .collection("messages")
+                        .add(message)
+
+                    db.collection("chats").document(chatId).update(
+                        mapOf(
+                            "lastMessage" to newMessage.trim(),
+                            "lastMessageTimestamp" to FieldValue.serverTimestamp()
+                        )
+                    )
+                    newMessage = ""
+                }
+            }) {
+                Icon(Icons.Default.Send, contentDescription = "Send")
+            }
+            if (requestCameraPermission) {
+                CameraPermissionHandler(
+                    onPermissionGranted = {
+                        requestCameraPermission = false
+                        val photoUri = createImageUri(context)
+                        imageUri.value = photoUri
+                        launcher.launch(photoUri)
+                    },
+                    onPermissionDenied = {
+                        requestCameraPermission = false
+                        showPermissionDenied = true
+                    }
+                )
+            }
+            if (showPermissionDenied) {
+                ShowPermissionDeniedDialog(onDismiss = {
+                    showPermissionDenied = false
+                })
+            }
+
+        }
+    }
+}
+
+fun createImageUri(context: Context): Uri {
+    val contentValues = ContentValues().apply {
+        put(MediaStore.MediaColumns.DISPLAY_NAME, "chat_image_${System.currentTimeMillis()}.jpg")
+        put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+    }
+    return context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)!!
+}
+
+fun uploadImageToFirebase(uri: Uri, chatId: String, currentUserId: String) {
+    val storageRef = FirebaseStorage.getInstance().reference
+    val imageRef = storageRef.child("chat_images/${UUID.randomUUID()}.jpg")
+
+    imageRef.putFile(uri)
+        .continueWithTask { task ->
+            if (!task.isSuccessful) {
+                task.exception?.let { throw it }
+            }
+            imageRef.downloadUrl
+        }
+        .addOnSuccessListener { downloadUrl ->
+            val db = FirebaseFirestore.getInstance()
+            val message = hashMapOf(
+                "senderId" to currentUserId,
+                "messageText" to "",
+                "messageType" to "image",
+                "imageUrl" to downloadUrl.toString(),
+                "timestamp" to FieldValue.serverTimestamp(),
+                "isRead" to false
+            )
+            db.collection("chats")
+                .document(chatId)
+                .collection("messages")
+                .add(message)
+        }
+}
+
+
+fun fetchCurrentLocation(context: Context, onLocationResult: (LatLng?) -> Unit) {
+    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+
+    if (ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+    ) {
+        fusedLocationClient.lastLocation
+            .addOnSuccessListener { location: Location? ->
+                if (location != null) {
+                    val latLng = LatLng(location.latitude, location.longitude)
+                    onLocationResult(latLng)
+                } else {
+                    onLocationResult(null)
+                }
+            }
+    } else {
+        onLocationResult(null)
+    }
+}
+
+@Composable
+fun ChatBubble(
+    msg: Message,
+    isCurrentUser: Boolean,
+    senderImageUrl: String,
+    receiverImageUrl: String
+) {
+    val bgColor = if (isCurrentUser) Color(0xFFDCF8C6) else Color(0xFFFFFFFF)
+    val horizontalArrangement = if (isCurrentUser) Arrangement.End else Arrangement.Start
+    val imageUrl = if (isCurrentUser) senderImageUrl else receiverImageUrl
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = horizontalArrangement
+    ) {
+        if (!isCurrentUser) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = "Receiver Image",
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+        }
+
+        Column(
+            horizontalAlignment = if (isCurrentUser) Alignment.End else Alignment.Start
+        ) {
+            Box(
+                modifier = Modifier
+                    .background(bgColor, RoundedCornerShape(12.dp))
+                    .padding(12.dp)
+                    .widthIn(max = 250.dp)
+            ) {
+                Column {
+                    when (msg.messageType) {
+                        "text" -> {
+                            Text(text = msg.messageText, color = Color.Black)
+                        }
+                        "image" -> {
+                            msg.imageUrl?.let { imageUrl ->
+                                AsyncImage(
+                                    model = imageUrl,
+                                    contentDescription = "Shared Image",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 150.dp, max = 250.dp)
+                                        .clip(RoundedCornerShape(10.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        }                        "location" -> {
+                            msg.location?.let { geo ->
+                                val location = LatLng(geo.latitude, geo.longitude)
+                                val cameraPositionState = rememberCameraPositionState {
+                                    position = CameraPosition.fromLatLngZoom(location, 15f)
+                                }
+                                GoogleMap(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(150.dp)
+                                        .clip(RoundedCornerShape(8.dp)),
+                                    cameraPositionState = cameraPositionState
+                                ) {
+                                    Marker(
+                                        state = MarkerState(position = location),
+                                        title = "Shared location"
+                                    )
+                                }
+                            } ?: Text("Location unavailable", color = Color.Red)
+                        }
+                    }
+
+                    msg.timestamp?.let {
+                        Text(
+                            text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(it.toDate()),
+                            fontSize = 10.sp,
+                            color = Color.Gray,
+                            modifier = Modifier.align(Alignment.End)
+                        )
+                    }
+                }
+            }
+        }
+
+        if (isCurrentUser) {
+            Spacer(modifier = Modifier.width(6.dp))
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = "Sender Image",
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+            )
+        }
+    }
+}
+
+
+@Composable
+fun CameraPermissionHandler(
+    onPermissionGranted: () -> Unit,
+    onPermissionDenied: () -> Unit
+) {
+    val context = LocalContext.current
+    val activity = context as? Activity
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            if (isGranted) {
+                onPermissionGranted()
+            } else {
+                onPermissionDenied()
+            }
+        }
+    )
+
+    LaunchedEffect(Unit) {
+        val permissionStatus = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.CAMERA
+        )
+
+        if (permissionStatus == PackageManager.PERMISSION_GRANTED) {
+            onPermissionGranted()
+        } else {
+            permissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+}
+
+@Composable
+fun ShowPermissionDeniedDialog(onDismiss: () -> Unit) {
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Camera Permission Required") },
+        text = { Text("We need camera access to let you take photos.") },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("OK")
+            }
+        }
+    )
+}
+
+
 data class ChatPreview(
     val chatId: String,
     val passengerName: String,
     val passengerImage: String,
     val lastMessage: String,
     val lastMessageTimestamp: Timestamp?
+)
+
+data class Message(
+    val senderId: String = "",
+    val messageText: String = "",
+    val messageType: String = "text",
+    val timestamp: Timestamp? = null,
+    val location: GeoPoint? = null,
+    val isRead: Boolean = false,
+    val imageUrl: String? = null,
 )
