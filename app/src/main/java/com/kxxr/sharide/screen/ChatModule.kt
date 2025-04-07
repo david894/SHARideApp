@@ -13,6 +13,7 @@ import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -65,6 +66,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -142,19 +144,43 @@ fun ChatListScreen(userId: String, navController: NavController) {
 
     Scaffold(
         topBar = { ChatTopBar(navController) },
-        containerColor = Color.White // ✅ Blue background
+        containerColor = Color.White,
+        bottomBar = { BottomNavBar("chat_list", navController) },
+
     ) { paddingValues ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            items(chatList) { chat ->
-                ChatPreviewCard(chat = chat) {
-                    navController.navigate("chat_screen/${chat.chatId}")
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                items(chatList) { chat ->
+                    ChatPreviewCard(chat = chat) {
+                        navController.navigate("chat_screen/${chat.chatId}")
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // 🔵 Floating Chatbot Button
+            IconButton(
+                onClick = { navController.navigate("chatbot") },
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(16.dp)
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF1976D2))
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.gemeni_logo),
+                    contentDescription = "Chatbot",
+                    modifier = Modifier.size(28.dp)
+                )
             }
         }
     }
@@ -162,7 +188,9 @@ fun ChatListScreen(userId: String, navController: NavController) {
 
 
 
-@Composable
+
+
+    @Composable
 fun ChatTopBar(navController: NavController) {
     TopAppBar(
         title = {

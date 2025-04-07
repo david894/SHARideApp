@@ -516,9 +516,9 @@ fun BottomNavBar(screen: String, navController: NavController) {
                 )
                 val currentUser = FirebaseAuth.getInstance().currentUser
                 BottomNavItem(
-                    icon = R.drawable.chat_ico,
+                    icon = R.drawable.chat_icon,
                     label = "Chat",
-                    isSelected = screen == "chat",
+                    isSelected = screen == "chat_list",
                     onClick = {
                         currentUser?.uid?.let { userId ->
                             navController.navigate("chat_list/$userId")
