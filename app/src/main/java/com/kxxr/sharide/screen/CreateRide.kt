@@ -66,6 +66,11 @@ import com.google.firebase.firestore.FirebaseFirestore
 import java.util.Calendar
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -348,28 +353,42 @@ fun ConfirmRideButton(
                 ).show()
                 return@Button
             }
-            val rideRef = firestore.collection("rides").document() // Auto-generate ride ID
-            val rideId = rideRef.id
+            CoroutineScope(Dispatchers.Main).launch {
+                val canSearch = withContext(Dispatchers.IO) {
+                    canUserCreateAgainInOneHour(firestore, userId, date, time)
+                }
 
-            // Initialize passengerId list with "null" based on capacity
-            val passengerIds = List(capacity) { "null" }
+                if (!canSearch) {
+                    Toast.makeText(
+                        context,
+                        "You can only create one ride every hour.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return@launch // Stops here, doesn't continue
+                }
+                val rideRef = firestore.collection("rides").document() // Auto-generate ride ID
+                val rideId = rideRef.id
 
-            val rideData = mapOf(
-                "rideId" to rideId,
-                "driverId" to userId, // Store userId as driverId
-                "date" to date,
-                "time" to time,
-                "location" to location,
-                "stop" to stop,
-                "destination" to destination,
-                "capacity" to capacity,
-                "passengerIds" to passengerIds, // Store passenger IDs
-                "timestamp" to FieldValue.serverTimestamp() // Add server timestamp
-            )
+                // Initialize passengerId list with "null" based on capacity
+                val passengerIds = List(capacity) { "null" }
 
-            rideRef.set(rideData).addOnSuccessListener {
-                onRideIdChange(rideId) // Update rideId in UI state
-                navController.navigate("home") // Navigate to MatchingScreen
+                val rideData = mapOf(
+                    "rideId" to rideId,
+                    "driverId" to userId, // Store userId as driverId
+                    "date" to date,
+                    "time" to time,
+                    "location" to location,
+                    "stop" to stop,
+                    "destination" to destination,
+                    "capacity" to capacity,
+                    "passengerIds" to passengerIds, // Store passenger IDs
+                    "timestamp" to FieldValue.serverTimestamp() // Add server timestamp
+                )
+
+                rideRef.set(rideData).addOnSuccessListener {
+                    onRideIdChange(rideId) // Update rideId in UI state
+                    navController.navigate("home") // Navigate to MatchingScreen
+                }
             }
         },
         modifier = Modifier.fillMaxWidth(),
@@ -380,6 +399,34 @@ fun ConfirmRideButton(
     }
 }
 
+private suspend fun canUserCreateAgainInOneHour(
+    firestore: FirebaseFirestore,
+    userId: String,
+    currentDate: String,
+    currentTime: String
+): Boolean {
+    val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+    val nowTime = sdf.parse(currentTime)
+
+    val snapshot = firestore.collection("rides")
+        .whereEqualTo("driverId", userId)
+        .whereEqualTo("date", currentDate)
+        .get()
+        .await()
+
+    for (document in snapshot.documents) {
+        val timeStr = document.getString("time") ?: continue
+        val pastTime = sdf.parse(timeStr) ?: continue
+
+        val diffInMillis = nowTime.time - pastTime.time
+        val diffInMinutes = diffInMillis / (60 * 1000)
+
+        if (diffInMinutes in -59..59) {
+            return false // Less than 1 hour apart
+        }
+    }
+    return true
+}
 
 @Composable
 fun CapacitySelector(capacity: Int, onCapacityChanged: (Int) -> Unit) {

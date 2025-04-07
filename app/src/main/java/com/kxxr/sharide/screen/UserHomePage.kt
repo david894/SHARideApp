@@ -46,7 +46,6 @@ import com.google.maps.android.compose.*
 import com.kxxr.sharide.R
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Locale
 
 // Main home screen(driver and passenger
@@ -609,11 +608,11 @@ fun ReminderContent(
 
                                             val currentTimeMillis = System.currentTimeMillis()
                                             val timeDiff = rideTimeMillis - currentTimeMillis
-
+                                            val gracePeriodMillis = -30 * 60 * 1000 // -30 minutes in milliseconds
 
                                             if (rideStatus !in listOf("complete", "pending", "Unknown","successful")) {
                                                 navController.navigate("ride_detail/${index + 1}/${item.id}")
-                                            } else if ((rideStatus == "pending" || rideStatus == "Unknown" || rideStatus == "successful") && timeDiff > -30) {
+                                            } else if ((rideStatus == "pending" || rideStatus == "Unknown" || rideStatus == "successful") && timeDiff >= gracePeriodMillis) {
                                                 navController.navigate("ride_detail/${index + 1}/${item.id}")
                                             } else {
                                                 Toast.makeText(context, "Ride is already past. No action taken.", Toast.LENGTH_SHORT).show()
@@ -677,8 +676,9 @@ fun checkRequestStatus(
 
 
             val status = documents.documents.first().getString("status") ?: "Unknown"
+            val gracePeriodMillis = -30 * 60 * 1000 // -30 minutes in milliseconds
 
-            if (timeDiff < -30 && status in expiredStatuses) {
+            if (timeDiff <  gracePeriodMillis && status in expiredStatuses) {
                 Toast.makeText(context, "Ride is already past. No action taken.", Toast.LENGTH_SHORT).show()
             } else {
                 when (status) {
@@ -708,21 +708,42 @@ fun convertToTimestamp(date: String, time: String): Long {
 }
 
 fun formatTimeLeft(timeLeftMillis: Long, requestStatus: String?): String {
+    // Grace period of -30 minutes in milliseconds
+    val gracePeriodMillis = -30 * 60 * 1000
+
     return when {
-        timeLeftMillis > 3600000 -> "${timeLeftMillis / 3600000} hr ${timeLeftMillis % 3600000 / 60000} min left"
-        // Between 1 min and 1 hour → Show status (OnGoing, Completed, etc.)
+        // If more than 1 hour is left
+        timeLeftMillis > 3600000 -> {
+            val hours = timeLeftMillis / 3600000
+            val minutes = (timeLeftMillis % 3600000) / 60000
+            "$hours hr $minutes min left"
+        }
+
+        // If time is between 1 minute and 1 hour
         timeLeftMillis > 60000 -> when (requestStatus) {
             "startBoarding" -> "OnGoing"
             "complete" -> "Completed"
             else -> "${timeLeftMillis / 60000} min left"
         }
-        timeLeftMillis > 0 -> when (requestStatus) {
+
+        // If time is late but within the 30-minute grace period
+        timeLeftMillis in (gracePeriodMillis + 1)..0 -> when (requestStatus) {
+            "pending", "successful" -> "Prepare"       // Let users prepare even if a bit late
+            "startBoarding" -> "OnGoing"
+            "complete" -> "Completed"
+            else -> "Expired"
+        }
+
+        // If time has passed and is beyond the grace period (late by more than 30 minutes)
+        timeLeftMillis <= gracePeriodMillis -> when (requestStatus) {
             "pending" -> "Expired"
             "successful" -> "Prepare"
             "startBoarding" -> "OnGoing"
             "complete" -> "Completed"
             else -> "Expired"
         }
+
+        // Default fallback (should rarely be hit)
         else -> when (requestStatus) {
             "pending" -> "Expired"
             "complete" -> "Completed"
@@ -730,6 +751,7 @@ fun formatTimeLeft(timeLeftMillis: Long, requestStatus: String?): String {
         }
     }
 }
+
 
 
 

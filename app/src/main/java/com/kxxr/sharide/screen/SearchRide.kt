@@ -61,6 +61,11 @@ import com.google.firebase.firestore.FirebaseFirestore
 import java.util.Calendar
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -388,40 +393,86 @@ fun ConfirmSearchButton(
                 return@Button
             }
 
-            val searchRef = firestore.collection("searchs").document() // Auto-generate search ID
-            val searchId = searchRef.id
-
-            val searchData = mapOf(
-                "searchId" to searchId,
-                "passengerId" to userId, // Store userId as passengerId
-                "date" to date,
-                "time" to time,
-                "location" to location,
-                "destination" to destination,
-                "petPreference" to petPreference,
-                "genderPreference" to genderPreference,
-                "vehicleType" to vehicleType,
-                "capacity" to capacity,
-                "driverIdsString" to "",
-                "rideIdsString" to "",
-                "timestamp" to FieldValue.serverTimestamp() // Add server timestamp
-            )
-
-            searchRef.set(searchData)
-                .addOnSuccessListener {
-                    onSearchIdChange(searchId) // Update searchId in UI state
-                    navController.navigate("matching_screen") // Navigate to MatchingScreen
+            CoroutineScope(Dispatchers.Main).launch {
+                val canSearch = withContext(Dispatchers.IO) {
+                    canUserSearchAgainInOneHour(firestore, userId, date, time)
                 }
-                .addOnFailureListener { e ->
-                    Toast.makeText(context, "Failed to create search: ${e.message}", Toast.LENGTH_LONG).show()
+
+                if (!canSearch) {
+                    Toast.makeText(
+                        context,
+                        "You can only search one ride every hour.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return@launch // Stops here, doesn't continue
                 }
-        },
+
+                // ✅ Only run this if the user is allowed to search
+                val searchRef = firestore.collection("searchs").document()
+                val searchId = searchRef.id
+
+                val searchData = mapOf(
+                    "searchId" to searchId,
+                    "passengerId" to userId,
+                    "date" to date,
+                    "time" to time,
+                    "location" to location,
+                    "destination" to destination,
+                    "petPreference" to petPreference,
+                    "genderPreference" to genderPreference,
+                    "vehicleType" to vehicleType,
+                    "capacity" to capacity,
+                    "driverIdsString" to "",
+                    "rideIdsString" to "",
+                    "timestamp" to FieldValue.serverTimestamp()
+                )
+
+                searchRef.set(searchData)
+                    .addOnSuccessListener {
+                        onSearchIdChange(searchId)
+                        navController.navigate("matching_screen")
+                    }
+                    .addOnFailureListener { e ->
+                        Toast.makeText(context, "Failed to create search: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+            }
+        }
+        ,
         modifier = Modifier.fillMaxWidth(),
         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0075FD)),
         shape = RoundedCornerShape(12.dp)
     ) {
         Text("Confirm Search", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
     }
+}
+
+private suspend fun canUserSearchAgainInOneHour(
+    firestore: FirebaseFirestore,
+    userId: String,
+    currentDate: String,
+    currentTime: String
+): Boolean {
+    val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+    val nowTime = sdf.parse(currentTime)
+
+    val snapshot = firestore.collection("searchs")
+        .whereEqualTo("passengerId", userId)
+        .whereEqualTo("date", currentDate)
+        .get()
+        .await()
+
+    for (document in snapshot.documents) {
+        val timeStr = document.getString("time") ?: continue
+        val pastTime = sdf.parse(timeStr) ?: continue
+
+        val diffInMillis = nowTime.time - pastTime.time
+        val diffInMinutes = diffInMillis / (60 * 1000)
+
+        if (diffInMinutes in -59..59) {
+            return false // Less than 1 hour apart
+        }
+    }
+    return true
 }
 
 @Composable
