@@ -601,20 +601,17 @@ fun ReminderContent(
 
 
 
-                                            val rideTimeToday = Calendar.getInstance().apply {
-                                                val timeParts = item.time.split(":")
-                                                set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
-                                                set(Calendar.MINUTE, timeParts[1].toInt())
-                                                set(Calendar.SECOND, 0)
-                                                set(Calendar.MILLISECOND, 0)
-                                            }.timeInMillis
+                                            val formatter = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())
+                                            val dateTimeString = "$item.date $item.time" // Combine date and time
+                                            val rideTimeMillis = formatter.parse(dateTimeString)?.time ?: 0L
 
                                             val currentTimeMillis = System.currentTimeMillis()
-                                            val timeLeftMinutes = (rideTimeToday - currentTimeMillis) / (60 * 1000)
+                                            val timeDiff = rideTimeMillis - currentTimeMillis
+
 
                                             if (rideStatus !in listOf("complete", "pending", "Unknown")) {
                                                 navController.navigate("ride_detail/${index + 1}/${item.id}")
-                                            } else if ((rideStatus == "pending" || rideStatus == "Unknown") && timeLeftMinutes > 0) {
+                                            } else if ((rideStatus == "pending" || rideStatus == "Unknown") && timeDiff > 0) {
                                                 navController.navigate("ride_detail/${index + 1}/${item.id}")
                                             } else {
                                                 Toast.makeText(context, "Ride is already past. No action taken.", Toast.LENGTH_SHORT).show()
