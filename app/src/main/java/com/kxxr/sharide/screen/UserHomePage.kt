@@ -393,9 +393,10 @@ fun RideReminder(
                         val rideId = doc.id
                         val timestamp = convertToTimestamp(date, time)
                         val timeLeftMillis = timestamp - currentTime
+                        val rideIdStatus = doc.getString("rideStatus") ?: return@forEach
 
                         // Default status (assumes "Prepare" until requestStatus is retrieved)
-                        var status = formatTimeLeft(timeLeftMillis, null)
+                        var status = formatTimeLeft(timeLeftMillis, null,null)
 
                         firestore.collection("requests")
                             .whereEqualTo("rideId", rideId)
@@ -403,7 +404,7 @@ fun RideReminder(
                             .addOnSuccessListener { querySnapshot ->
                                 val requestStatus = querySnapshot.documents
                                     .firstOrNull()?.getString("status") // Take first request status if exists
-                                val updatedStatus = formatTimeLeft(timeLeftMillis, requestStatus)
+                                val updatedStatus = formatTimeLeft(timeLeftMillis,rideIdStatus,requestStatus)
 
                                 // Update rideItems inside listener
                                 rideItems.removeIf { it.id == rideId }
@@ -488,9 +489,9 @@ fun SearchReminder(
                         val searchId = doc.id
                         val timestamp = convertToTimestamp(date, time)
                         val timeLeftMillis = timestamp - currentTime
-
+                        val rideIdStatus = "null"
                         // Default status (assumes "Prepare" until requestStatus is retrieved)
-                        var status = formatTimeLeft(timeLeftMillis, null)
+                        var status = formatTimeLeft(timeLeftMillis, null,null)
 
                         // Fetch status from "requests" collection using searchId
                         firestore.collection("requests")
@@ -499,7 +500,7 @@ fun SearchReminder(
                             .addOnSuccessListener { querySnapshot ->
                                 val requestStatus = querySnapshot.documents
                                     .firstOrNull()?.getString("status") // Take first matching request status
-                                val updatedStatus = formatTimeLeft(timeLeftMillis, requestStatus)
+                                val updatedStatus = formatTimeLeft(timeLeftMillis,rideIdStatus, requestStatus)
 
                                 // Update searchItems list with correct status
                                 searchItems.removeIf { it.id == searchId }
@@ -608,13 +609,14 @@ fun ReminderContent(
 
                                             val currentTimeMillis = System.currentTimeMillis()
                                             val timeDiff = rideTimeMillis - currentTimeMillis
-                                            val gracePeriodMillis = -30 * 60 * 1000 // -30 minutes in milliseconds
+                                            val gracePeriodMillis = -60 * 60 * 1000
 
-                                            if (rideStatus !in listOf("complete", "pending", "Unknown","successful")) {
+                                            if (rideStatus !in listOf("pending", "Unknown","successful")) {
                                                 navController.navigate("ride_detail/${index + 1}/${item.id}")
                                             } else if ((rideStatus == "pending" || rideStatus == "Unknown" || rideStatus == "successful") && timeDiff >= gracePeriodMillis) {
                                                 navController.navigate("ride_detail/${index + 1}/${item.id}")
-                                            } else {
+                                            }
+                                            else {
                                                 Toast.makeText(context, "Ride is already past. No action taken.", Toast.LENGTH_SHORT).show()
                                             }
                                         }
@@ -676,17 +678,14 @@ fun checkRequestStatus(
 
 
             val status = documents.documents.first().getString("status") ?: "Unknown"
-            val gracePeriodMillis = -30 * 60 * 1000 // -30 minutes in milliseconds
+            val gracePeriodMillis = -60 * 60 * 1000
 
             if (timeDiff <  gracePeriodMillis && status in expiredStatuses) {
                 Toast.makeText(context, "Ride is already past. No action taken.", Toast.LENGTH_SHORT).show()
             } else {
                 when (status) {
                     "pending" -> navController.navigate("pending_ride_requested/$searchId")
-                    "successful", "startBoarding" -> navController.navigate("successful_ride_requested/${index + 1}/$searchId")
-                    "complete" -> {
-                        // Optional: Handle completed ride
-                    }
+                    "successful", "startBoarding","onBoarding" -> navController.navigate("successful_ride_requested/${index + 1}/$searchId")
                 }
             }
         }
@@ -707,11 +706,11 @@ fun convertToTimestamp(date: String, time: String): Long {
     }
 }
 
-fun formatTimeLeft(timeLeftMillis: Long, requestStatus: String?): String {
-    // Grace period of -30 minutes in milliseconds
-    val gracePeriodMillis = -30 * 60 * 1000
+fun formatTimeLeft(timeLeftMillis: Long, rideIdStatus: String?, requestStatus: String?): String {
+    val gracePeriodMillis = -60 * 60 * 1000
 
     return when {
+        rideIdStatus == "complete" -> "Completed"
         // If more than 1 hour is left
         timeLeftMillis > 3600000 -> {
             val hours = timeLeftMillis / 3600000
@@ -721,7 +720,7 @@ fun formatTimeLeft(timeLeftMillis: Long, requestStatus: String?): String {
 
         // If time is between 1 minute and 1 hour
         timeLeftMillis > 60000 -> when (requestStatus) {
-            "startBoarding" -> "OnGoing"
+            "startBoarding","onBoarding" -> "OnGoing"
             "complete" -> "Completed"
             else -> "${timeLeftMillis / 60000} min left"
         }
@@ -729,7 +728,7 @@ fun formatTimeLeft(timeLeftMillis: Long, requestStatus: String?): String {
         // If time is late but within the 30-minute grace period
         timeLeftMillis in (gracePeriodMillis + 1)..0 -> when (requestStatus) {
             "pending", "successful" -> "Prepare"       // Let users prepare even if a bit late
-            "startBoarding" -> "OnGoing"
+            "startBoarding","onBoarding" -> "OnGoing"
             "complete" -> "Completed"
             else -> "Expired"
         }
@@ -738,7 +737,7 @@ fun formatTimeLeft(timeLeftMillis: Long, requestStatus: String?): String {
         timeLeftMillis <= gracePeriodMillis -> when (requestStatus) {
             "pending" -> "Expired"
             "successful" -> "Prepare"
-            "startBoarding" -> "OnGoing"
+            "startBoarding","onBoarding" -> "OnGoing"
             "complete" -> "Completed"
             else -> "Expired"
         }

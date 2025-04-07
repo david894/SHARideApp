@@ -103,6 +103,19 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
                 Log.e("Firestore", "Error fetching request", exception)
             }
     }
+    var isOnBoarding by remember { mutableStateOf(false) }
+    // Check if any request has "onBoarding" status
+    LaunchedEffect(searchId) {
+        db.collection("requests")
+            .whereEqualTo("searchId", searchId)
+            .whereEqualTo("status", "onBoarding")
+            .get()
+            .addOnSuccessListener { querySnapshot ->
+                if (!querySnapshot.isEmpty) {
+                    isOnBoarding = true
+                }
+            }
+    }
     var isStartBoarding by remember { mutableStateOf(false) }
     // Check if any request has "startBoarding" status
     LaunchedEffect(searchId) {
@@ -112,7 +125,7 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
             .get()
             .addOnSuccessListener { querySnapshot ->
                 if (!querySnapshot.isEmpty) {
-                    isStartBoarding = true
+                    isOnBoarding = true
                 }
             }
     }
@@ -188,7 +201,7 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
                             val oneHourMillis = 60 * 60 * 1000
 
                             // 🚀 If "Start Boarding", show Complete Button
-                            if (isStartBoarding) {
+                            if (isOnBoarding) {
                                 CompleteButton(
                                     firestore = db,
                                     navController = navController,
@@ -197,7 +210,7 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
                                     searchId = searchId,
                                     context = context
                                 )
-                            } else if (timeLeftMillis <= oneHourMillis) {
+                            } else if (timeLeftMillis <= oneHourMillis && isStartBoarding) {
                                 BoardRideButton(
                                     firestore = db,
                                     navController = navController,
@@ -749,7 +762,7 @@ fun updateRideStatus(firestore: FirebaseFirestore, documentId: String, context: 
     firestore.runBatch { batch ->
         val requestRef = firestore.collection("requests").document(documentId)
         batch.update(requestRef, "boardingStatus", "yes")
-        batch.update(requestRef, "status", "startBoarding") // Update request status
+        batch.update(requestRef, "status", "onBoarding") // Update request status
     }.addOnSuccessListener {
         Toast.makeText(context, "You have boarded the ride!", Toast.LENGTH_SHORT).show()
         navController.navigate("home") // Navigate to home after confirming

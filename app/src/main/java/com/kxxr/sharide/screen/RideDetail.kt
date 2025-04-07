@@ -100,6 +100,23 @@ fun RideDetailScreen(navController: NavController, firestore: FirebaseFirestore,
                 Log.e("Firestore", "Error fetching ride", exception)
             }
     }
+    val status = remember { mutableStateOf(false) }
+
+    LaunchedEffect(rideId) {
+        firestore.collection("requests")
+            .whereEqualTo("rideId", rideId)
+            .get()
+            .addOnSuccessListener { querySnapshot ->
+                val hasBoardingStatus = querySnapshot.documents.any { doc ->
+                    val statusValue = doc.getString("status")
+                    statusValue == "startBoarding" || statusValue == "onBoarding"
+                }
+                status.value = hasBoardingStatus
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Failed to fetch request status: ${e.message}")
+            }
+    }
 
     Scaffold(
         topBar = { RideDetailTopBar(navController, index) }
@@ -178,8 +195,12 @@ fun RideDetailScreen(navController: NavController, firestore: FirebaseFirestore,
                             val timeLeftMillis = convertToTimestamp(ride.date, ride.time) - System.currentTimeMillis()
                             val oneHourMillis = 60 * 60 * 1000
                             val tenMinMillis = -10 * 60 * 1000
-                            if (timeLeftMillis in tenMinMillis..oneHourMillis) {
-                                ConfirmRideButton(
+                            if (ride.rideStatus == "complete"){
+                                // nothing
+                            }else if (status.value) {
+                                CompleteRideButton(firestore = firestore, rideId = rideId, navController = navController,context = context)
+                            }else if (timeLeftMillis in tenMinMillis..oneHourMillis) {
+                                StartNavigationButton(
                                     context = context,
                                     firestore = firestore,
                                     rideId = rideId,
@@ -195,8 +216,6 @@ fun RideDetailScreen(navController: NavController, firestore: FirebaseFirestore,
                                     context = context
                                 )
                             }
-// If timeLeftMillis <= 0, no button will be shown (default behavior)
-
                         }
                     }
                 }
@@ -541,7 +560,7 @@ fun PendingPassengerListSection(rideId: String, rideTime: String, navController:
 }
 
 @Composable
-fun ConfirmRideButton(
+fun StartNavigationButton(
     context: Context,
     firestore: FirebaseFirestore,
     rideId: String,
@@ -559,54 +578,70 @@ fun ConfirmRideButton(
                             val driverId = rideSnapshot.getString("driverId") ?: return@addOnSuccessListener
 
                             // Search for any requests associated with this ride
-                firestore.collection("requests")
-                    .whereEqualTo("rideId", rideId) // Find requests with this rideId
-                    .get()
-                    .addOnSuccessListener { querySnapshot ->
-                        if (!querySnapshot.isEmpty) {
-                            firestore.collection("rides").document(rideId)
-                                .get()
-                                .addOnSuccessListener { rideSnapshot ->
-                                    val passengerIds = rideSnapshot.get("passengerIds") as? List<String> ?: emptyList()
-
-                                    passengerIds.forEach { passengerId ->
-                                        startChatWithPassengerAndSendMessage(
-                                            driverId = driverId,
-                                            passengerId = passengerId,
-                                            message = "I start ride now. Please prepare."
-                                        )
-                                    }
-
-                                    openGoogleMapsNavigation(context, pickup, stop, destination)
-                                }
-                                .addOnFailureListener {
-                                    Toast.makeText(context, "Failed to fetch ride info", Toast.LENGTH_SHORT).show()
-                                }
-                        }else {
-                            // No passengers → Create a new request document
-                            val newRequest = hashMapOf(
-                                "rideId" to rideId,
-                                "driverId" to driverId,
-                                "status" to "complete",
-                                "timestamp" to System.currentTimeMillis()
-                            )
-
                             firestore.collection("requests")
-                                .add(newRequest)
-                                .addOnSuccessListener {
-                                    Toast.makeText(context, "No passengers. Ride completed!", Toast.LENGTH_SHORT).show()
-                                    openGoogleMapsNavigation(context, pickup, stop, destination)
+                                .whereEqualTo("rideId", rideId) // Find requests with this rideId
+                                .get()
+                                .addOnSuccessListener { querySnapshot ->
+                                    if (!querySnapshot.isEmpty) {
+                                        for (document in querySnapshot.documents) {
+                                            firestore.collection("requests")
+                                                .document(document.id)
+                                                .update("status", "startBoarding")
+                                        }
+                                        firestore.collection("rides").document(rideId)
+                                            .get()
+                                            .addOnSuccessListener { rideSnapshot ->
+
+                                                val passengerIds = rideSnapshot.get("passengerIds") as? List<String> ?: emptyList()
+
+                                                passengerIds.forEach { passengerId ->
+                                                    startChatWithPassengerAndSendMessage(
+                                                        driverId = driverId,
+                                                        passengerId = passengerId,
+                                                        message = "I start ride now. Please prepare."
+                                                    )
+                                                }
+
+                                                openGoogleMapsNavigation(context, pickup, stop, destination)
+                                            }
+                                            .addOnFailureListener {
+                                                Toast.makeText(context, "Failed to fetch ride info", Toast.LENGTH_SHORT).show()
+                                            }
+                                    }else {
+                                        // No passengers → Directly update the ride status to "complete"
+                                        firestore.collection("rides").document(rideId)
+                                            .update("rideStatus", "complete")
+                                            .addOnSuccessListener {
+                                                Toast.makeText(context, "No passengers. Ride completed!", Toast.LENGTH_SHORT).show()
+                                                openGoogleMapsNavigation(context, pickup, stop, destination)
+                                            }
+                                            .addOnFailureListener { e ->
+                                                Toast.makeText(context, "Failed to update ride status", Toast.LENGTH_SHORT).show()
+                                                Log.e("FirestoreError", "Error updating ride status: ${e.message}")
+                                            }
+                                        val newRequest = hashMapOf(
+                                            "rideId" to rideId,
+                                            "driverId" to driverId,
+                                            "status" to "startBoarding",
+                                            "timestamp" to System.currentTimeMillis()
+                                        )
+
+                                        firestore.collection("requests")
+                                            .add(newRequest)
+                                            .addOnSuccessListener {
+                                                Toast.makeText(context, "No passengers. Ride completed!", Toast.LENGTH_SHORT).show()
+                                                openGoogleMapsNavigation(context, pickup, stop, destination)
+                                            }
+                                            .addOnFailureListener { e ->
+                                                Toast.makeText(context, "Failed to update ride status", Toast.LENGTH_SHORT).show()
+                                                Log.e("FirestoreError", "Error updating ride status: ${e.message}")
+                                            }
+                                    }
                                 }
                                 .addOnFailureListener { e ->
-                                    Toast.makeText(context, "Failed to update ride status", Toast.LENGTH_SHORT).show()
-                                    Log.e("FirestoreError", "Error updating ride status: ${e.message}")
+                                    Toast.makeText(context, "Error finding ride requests: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    Log.e("FirestoreError", "Error finding ride requests: ${e.message}")
                                 }
-                        }
-                    }
-                    .addOnFailureListener { e ->
-                        Toast.makeText(context, "Error finding ride requests: ${e.message}", Toast.LENGTH_SHORT).show()
-                        Log.e("FirestoreError", "Error finding ride requests: ${e.message}")
-                    }
                         } else {
                             Toast.makeText(context, "Ride not found!", Toast.LENGTH_SHORT).show()
                         }
@@ -734,6 +769,61 @@ fun cancelRide(firestore: FirebaseFirestore, navController: NavController, rideI
         }
 }
 
+@Composable
+fun CompleteRideButton(
+    firestore: FirebaseFirestore,
+    rideId: String,
+    navController: NavController,
+    context: Context
+) {
+    Button(
+        onClick = {
+            completeRide(
+                firestore = firestore,
+                rideId = rideId,
+                onSuccess = {
+                    Toast.makeText(context, "Ride completed successfully", Toast.LENGTH_SHORT).show()
+                    navController.navigate("home") {
+                        popUpTo("home") { inclusive = true }
+                    }
+                },
+                onFailure = {
+                    Toast.makeText(context, "Failed to complete ride", Toast.LENGTH_SHORT).show()
+                }
+            )
+        },
+        modifier = Modifier.fillMaxWidth(),
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF008000)) // Green
+    ) {
+        Text("Complete Ride", color = Color.White, fontWeight = FontWeight.Bold)
+    }
+}
+
+fun completeRide(firestore: FirebaseFirestore, rideId: String, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
+    val rideRef = firestore.collection("rides").document(rideId)
+
+    rideRef.get()
+        .addOnSuccessListener { document ->
+            if (document.exists()) {
+                rideRef.update("rideStatus", "complete")
+                    .addOnSuccessListener {
+                        Log.d("Firestore", "Ride marked as complete.")
+                        onSuccess()
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("Firestore", "Failed to update ride status: ${e.message}")
+                        onFailure(e)
+                    }
+            } else {
+                Log.e("Firestore", "Ride not found!")
+                onFailure(Exception("Ride not found"))
+            }
+        }
+        .addOnFailureListener { e ->
+            Log.e("Firestore", "Error fetching ride: ${e.message}")
+            onFailure(e)
+        }
+}
 
 
 

@@ -14,5 +14,6 @@ data class RideDetail(
     val time: String = "",
     val passengerIds: List<String> = emptyList(),
     val capacity: Int = 0,
-    val date: String = ""
+    val date: String = "",
+    val rideStatus: String ="",
 )

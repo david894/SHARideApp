@@ -371,6 +371,8 @@ fun ConfirmRideButton(
 
                 // Initialize passengerId list with "null" based on capacity
                 val passengerIds = List(capacity) { "null" }
+                // Initialize rideStatus to "process"
+                val rideStatus = "process"
 
                 val rideData = mapOf(
                     "rideId" to rideId,
@@ -382,6 +384,7 @@ fun ConfirmRideButton(
                     "destination" to destination,
                     "capacity" to capacity,
                     "passengerIds" to passengerIds, // Store passenger IDs
+                    "rideStatus" to rideStatus,
                     "timestamp" to FieldValue.serverTimestamp() // Add server timestamp
                 )
 
