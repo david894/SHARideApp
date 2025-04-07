@@ -142,7 +142,7 @@ fun ChatListScreen(userId: String, navController: NavController) {
 
     Scaffold(
         topBar = { ChatTopBar(navController) },
-        containerColor = Color(0xFF0075FD) // ✅ Blue background
+        containerColor = Color.White // ✅ Blue background
     ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
@@ -168,7 +168,7 @@ fun ChatTopBar(navController: NavController) {
         title = {
             Text(
                 text = "SHARide Chat",
-                color = Color.Black // Text color for white background
+                color = Color.White // Text color for white background
             )
         },
         navigationIcon = {
@@ -180,12 +180,12 @@ fun ChatTopBar(navController: NavController) {
                 Icon(
                     imageVector = Icons.Default.ArrowBack,
                     contentDescription = "Back",
-                    tint = Color.Black // Icon color for white background
+                    tint = Color.White // Icon color for white background
                 )
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = Color.White
+            containerColor = Color(0xFF0075FD)
         )
     )
 }
@@ -199,7 +199,8 @@ fun ChatPreviewCard(chat: ChatPreview, onClick: () -> Unit) {
             .fillMaxWidth()
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0075FD))
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -216,8 +217,8 @@ fun ChatPreviewCard(chat: ChatPreview, onClick: () -> Unit) {
             Spacer(modifier = Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(chat.passengerName, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text(chat.lastMessage, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(chat.passengerName, fontWeight = FontWeight.Bold, fontSize = 16.sp,color = Color.White)
+                Text(chat.lastMessage, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,color = Color.White)
             }
 
             Spacer(modifier = Modifier.width(8.dp))
@@ -227,7 +228,7 @@ fun ChatPreviewCard(chat: ChatPreview, onClick: () -> Unit) {
                     SimpleDateFormat("hh:mm a", Locale.getDefault()).format(it)
                 } ?: "",
                 fontSize = 12.sp,
-                color = Color.Gray
+                color = Color.White
             )
         }
     }
@@ -318,18 +319,21 @@ fun ChatScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0075FD)) // Set screen background to blue
+            .background(Color.White) // Set screen background to blue
     ) {
-
-    TopAppBar(
-
-            title = { Text(receiverName) },
+        TopAppBar(
+            title = { Text(receiverName, color = Color.White) },
             navigationIcon = {
                 IconButton(onClick = { navController.popBackStack() }) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
                 }
-            }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = Color(0xFF0075FD), // Blue background
+                titleContentColor = Color.White      // Title text color
+            )
         )
+
 
         LazyColumn(
             state = listState,
@@ -573,7 +577,7 @@ fun ChatBubble(
     receiverImageUrl: String,
     onDeleteMessage: (Message) -> Unit
 ) {
-    val bgColor = if (isCurrentUser) Color(0xFFDCF8C6) else Color(0xFFFFFFFF)
+    val bgColor = if (isCurrentUser) Color(0xFF0075FD) else Color.DarkGray
     val horizontalArrangement = if (isCurrentUser) Arrangement.End else Arrangement.Start
     val imageUrl = if (isCurrentUser) senderImageUrl else receiverImageUrl
 
@@ -613,7 +617,7 @@ fun ChatBubble(
                 Column {
                     when (msg.messageType) {
                         "text" -> {
-                            Text(text = msg.messageText, color = Color.Black)
+                            Text(text = msg.messageText, color = Color.White)
                         }
                         "image" -> {
                             msg.imageUrl?.let { imageUrl ->
@@ -653,7 +657,7 @@ fun ChatBubble(
                         Text(
                             text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(it.toDate()),
                             fontSize = 10.sp,
-                            color = Color.Gray,
+                            color = Color.White,
                             modifier = Modifier.align(Alignment.End)
                         )
                     }

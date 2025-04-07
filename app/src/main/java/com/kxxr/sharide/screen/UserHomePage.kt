@@ -52,6 +52,8 @@ import java.util.Locale
 // Main home screen(driver and passenger
 @Composable
 fun HomePage(navController: NavController, firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
+
+
     MaterialTheme {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -611,7 +613,7 @@ fun ReminderContent(
 
                                             if (rideStatus !in listOf("complete", "pending", "Unknown","successful")) {
                                                 navController.navigate("ride_detail/${index + 1}/${item.id}")
-                                            } else if ((rideStatus == "pending" || rideStatus == "Unknown" || rideStatus == "successful") && timeDiff > 0) {
+                                            } else if ((rideStatus == "pending" || rideStatus == "Unknown" || rideStatus == "successful") && timeDiff > -30) {
                                                 navController.navigate("ride_detail/${index + 1}/${item.id}")
                                             } else {
                                                 Toast.makeText(context, "Ride is already past. No action taken.", Toast.LENGTH_SHORT).show()
@@ -676,7 +678,7 @@ fun checkRequestStatus(
 
             val status = documents.documents.first().getString("status") ?: "Unknown"
 
-            if (timeDiff < 0 && status in expiredStatuses) {
+            if (timeDiff < -30 && status in expiredStatuses) {
                 Toast.makeText(context, "Ride is already past. No action taken.", Toast.LENGTH_SHORT).show()
             } else {
                 when (status) {

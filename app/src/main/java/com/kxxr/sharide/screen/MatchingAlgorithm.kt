@@ -1,5 +1,6 @@
 package com.kxxr.sharide.screen
 
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -66,9 +67,15 @@ fun getMatchingDrivers(
     searchSnapshot: QuerySnapshot,
     usersSnapshot: QuerySnapshot,
 ): List<DocumentSnapshot> {
+    val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: return emptyList()
     val matchingRides = mutableListOf<DocumentSnapshot>()
 
     rideSnapshot.forEach { ride ->
+        val driverId = ride.getString("driverId") ?: return@forEach
+
+        // ❌ Skip ride if it's driven by the current user
+        if (driverId == currentUserId) return@forEach
+
         val rideDate = ride.getString("date") ?: return@forEach
         val rideLocation = ride.getString("location") ?: return@forEach
         val rideStop = ride.getString("stop") // Can be null
@@ -76,7 +83,6 @@ fun getMatchingDrivers(
         val rideTime = ride.getString("time") ?: "00:00"
         val rideTimeMinutes = timeToMinutes(rideTime)
         val rideCapacity = ride.getLong("capacity")?.toInt() ?: 0
-        val driverId = ride.getString("driverId") ?: return@forEach
         val passengerIds = ride.get("passengerIds") as? List<String> ?: emptyList()
 
         val driverGender = usersSnapshot.documents.find {

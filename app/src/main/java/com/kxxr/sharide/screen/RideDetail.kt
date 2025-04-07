@@ -573,7 +573,7 @@ fun ConfirmRideButton(
                                         startChatWithPassengerAndSendMessage(
                                             driverId = driverId,
                                             passengerId = passengerId,
-                                            message = "I start ride now. Please prepare"
+                                            message = "I start ride now. Please prepare."
                                         )
                                     }
 

@@ -271,7 +271,7 @@ fun AlternativeSolutionDialog(
                     TextButton(onClick = {
                         when (index) {
                             0 -> navController.navigate("search_screen") // Search another ride
-                            1 -> navController.navigate("chat_bot") // Chat with TAR UMT Bus bot
+                            1 -> navController.navigate("chatbot") // Chat with TAR UMT Bus bot
                             2 -> {
                                 cancelSearch(searchId, firestore) {
                                     Toast.makeText(context, "Matching Canceled", Toast.LENGTH_SHORT).show()

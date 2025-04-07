@@ -275,6 +275,8 @@ fun AppNavHost(
                     ChatScreen(chatId = chatId, currentUserId = uid, navController = navController)
                 }
             }
+            composable("chatbot"){ChatbotScreen()}
+
 
             //rating
             composable(
