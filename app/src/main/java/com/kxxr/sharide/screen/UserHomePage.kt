@@ -602,16 +602,16 @@ fun ReminderContent(
 
 
                                             val formatter = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())
-                                            val dateTimeString = "$item.date $item.time" // Combine date and time
+                                            val dateTimeString = "${item.date} ${item.time}" // Combine date and time
                                             val rideTimeMillis = formatter.parse(dateTimeString)?.time ?: 0L
 
                                             val currentTimeMillis = System.currentTimeMillis()
                                             val timeDiff = rideTimeMillis - currentTimeMillis
 
 
-                                            if (rideStatus !in listOf("complete", "pending", "Unknown")) {
+                                            if (rideStatus !in listOf("complete", "pending", "Unknown","successful")) {
                                                 navController.navigate("ride_detail/${index + 1}/${item.id}")
-                                            } else if ((rideStatus == "pending" || rideStatus == "Unknown") && timeDiff > 0) {
+                                            } else if ((rideStatus == "pending" || rideStatus == "Unknown" || rideStatus == "successful") && timeDiff > 0) {
                                                 navController.navigate("ride_detail/${index + 1}/${item.id}")
                                             } else {
                                                 Toast.makeText(context, "Ride is already past. No action taken.", Toast.LENGTH_SHORT).show()
@@ -661,7 +661,7 @@ fun checkRequestStatus(
         .whereEqualTo("searchId", searchId)
         .get()
         .addOnSuccessListener { documents ->
-            val expiredStatuses = listOf("pending", "Unknown", "rejected", "cancel")
+            val expiredStatuses = listOf("pending", "Unknown","successful")
 
 
             if (documents.isEmpty) {
@@ -680,7 +680,6 @@ fun checkRequestStatus(
                 Toast.makeText(context, "Ride is already past. No action taken.", Toast.LENGTH_SHORT).show()
             } else {
                 when (status) {
-                    "rejected", "cancel" -> navController.navigate("matching_screen")
                     "pending" -> navController.navigate("pending_ride_requested/$searchId")
                     "successful", "startBoarding" -> navController.navigate("successful_ride_requested/${index + 1}/$searchId")
                     "complete" -> {
@@ -739,8 +738,7 @@ fun getStatusColor(status: String): Color {
         status == "Expired" -> Color(0xFFFF4444) // Red for expired
         status == "Prepare" -> Color(0xFFFFA500) // Orange for preparing
         status == "OnGoing" -> Color(0xFF800080) // Purple for ongoing
-        status == "Cancelled" -> Color(0xFFB22222) // Dark red for cancelled rides
-        else -> Color(0xFF808080) // Gray for unknown statuses
+        else -> Color(0xFFB22222) // Gray for unknown statuses
     }
 }
 

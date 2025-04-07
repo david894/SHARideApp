@@ -564,18 +564,25 @@ fun ConfirmRideButton(
                     .get()
                     .addOnSuccessListener { querySnapshot ->
                         if (!querySnapshot.isEmpty) {
-                            // There are passengers → update status to "startBoarding"
-                            val documentId = querySnapshot.documents[0].id
-                            firestore.collection("requests").document(documentId)
-                                .update("status", "startBoarding")
-                                .addOnSuccessListener {
+                            firestore.collection("rides").document(rideId)
+                                .get()
+                                .addOnSuccessListener { rideSnapshot ->
+                                    val passengerIds = rideSnapshot.get("passengerIds") as? List<String> ?: emptyList()
+
+                                    passengerIds.forEach { passengerId ->
+                                        startChatWithPassengerAndSendMessage(
+                                            driverId = driverId,
+                                            passengerId = passengerId,
+                                            message = "I start ride now. Please prepare"
+                                        )
+                                    }
+
                                     openGoogleMapsNavigation(context, pickup, stop, destination)
                                 }
-                                .addOnFailureListener { e ->
-                                    Toast.makeText(context, "Failed to update ride status", Toast.LENGTH_SHORT).show()
-                                    Log.e("FirestoreError", "Error updating request status: ${e.message}")
+                                .addOnFailureListener {
+                                    Toast.makeText(context, "Failed to fetch ride info", Toast.LENGTH_SHORT).show()
                                 }
-                        } else {
+                        }else {
                             // No passengers → Create a new request document
                             val newRequest = hashMapOf(
                                 "rideId" to rideId,
@@ -619,6 +626,64 @@ fun ConfirmRideButton(
     }
 }
 
+fun startChatWithPassengerAndSendMessage(
+    driverId: String,
+    passengerId: String,
+    message: String
+) {
+    val db = FirebaseFirestore.getInstance()
+    val chatsRef = db.collection("chats")
+
+    chatsRef
+        .whereEqualTo("driverId", driverId)
+        .whereEqualTo("passengerId", passengerId)
+        .get()
+        .addOnSuccessListener { documents ->
+            if (!documents.isEmpty) {
+                val chatId = documents.documents[0].id
+                sendMessageToChat(chatId, driverId, message)
+            } else {
+                val newChat = hashMapOf(
+                    "driverId" to driverId,
+                    "passengerId" to passengerId,
+                    "lastMessage" to message,
+                    "lastMessageTimestamp" to FieldValue.serverTimestamp(),
+                    "createdAt" to FieldValue.serverTimestamp()
+                )
+
+                chatsRef.add(newChat)
+                    .addOnSuccessListener { docRef ->
+                        sendMessageToChat(docRef.id, driverId, message)
+                    }
+            }
+        }
+}
+
+fun sendMessageToChat(chatId: String, senderId: String, text: String) {
+    val messageData = hashMapOf(
+        "senderId" to senderId,
+        "text" to text,
+        "timestamp" to FieldValue.serverTimestamp()
+    )
+
+    FirebaseFirestore.getInstance()
+        .collection("chats")
+        .document(chatId)
+        .collection("messages")
+        .add(messageData)
+
+    // Optionally update lastMessage and lastMessageTimestamp
+    FirebaseFirestore.getInstance()
+        .collection("chats")
+        .document(chatId)
+        .update(
+            mapOf(
+                "lastMessage" to text,
+                "lastMessageTimestamp" to FieldValue.serverTimestamp()
+            )
+        )
+}
+
 
 
 
@@ -636,26 +701,28 @@ fun CancelRideButton(firestore: FirebaseFirestore, navController: NavController,
     }
 }
 
-// Function to update the "requests" status to "cancel"
-fun cancelRide(firestore: FirebaseFirestore, navController: NavController , rideId: String, context: Context) {
+fun cancelRide(firestore: FirebaseFirestore, navController: NavController, rideId: String, context: Context) {
     firestore.collection("requests")
         .whereEqualTo("rideId", rideId)
         .get()
         .addOnSuccessListener { documents ->
             val batch = firestore.batch()
+
+            // Delete all related requests
             for (document in documents) {
-                val docRef = firestore.collection("requests").document(document.id)
-                batch.update(docRef, "status", "cancel")
+                batch.delete(document.reference)
             }
-            // Delete the ride from "rides" collection
+
+            // Delete the ride itself
             val rideRef = firestore.collection("rides").document(rideId)
             batch.delete(rideRef)
 
+            // Commit batch deletion
             batch.commit()
                 .addOnSuccessListener {
                     Toast.makeText(context, "Ride canceled successfully!", Toast.LENGTH_SHORT).show()
-                    navController.navigate("home") { // 👈 Navigate to Home Page
-                        popUpTo("home") { inclusive = true } // 👈 Clear back stack
+                    navController.navigate("home") {
+                        popUpTo("home") { inclusive = true }
                     }
                 }
                 .addOnFailureListener {
@@ -666,6 +733,7 @@ fun cancelRide(firestore: FirebaseFirestore, navController: NavController , ride
             Toast.makeText(context, "Error fetching ride requests.", Toast.LENGTH_SHORT).show()
         }
 }
+
 
 
 
@@ -927,11 +995,12 @@ fun rejectPassenger(passengerId: String, rideId: String, onSuccess: () -> Unit) 
     requestQuery.get().addOnSuccessListener { querySnapshot ->
         for (document in querySnapshot.documents) {
             db.collection("requests").document(document.id)
-                .update("status", "rejected")
+                .delete()
         }
-        onSuccess() // Navigate back after rejecting
+        onSuccess() // Navigate back after deletion
     }
 }
+
 
 fun startChatWithPassenger(
     driverId: String,

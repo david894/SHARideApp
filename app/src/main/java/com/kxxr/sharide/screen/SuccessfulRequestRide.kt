@@ -601,13 +601,11 @@ private fun cancelRide(
             val passengerIds = document.get("passengerIds") as? MutableList<String> ?: mutableListOf()
 
             if (passengerIds.contains(currentUserId)) {
-                val updatedPassengerIds = passengerIds.filterNot { it == currentUserId }
+                val updatedPassengerIds = passengerIds.map { if (it == currentUserId) "null" else it }
 
-                // Update passengerIds in the rides collection
                 firestore.collection("rides").document(rideId)
                     .update("passengerIds", updatedPassengerIds)
                     .addOnSuccessListener {
-                        // Update the request status to "canceled"
                         firestore.collection("requests")
                             .whereEqualTo("rideId", rideId)
                             .whereEqualTo("passengerId", currentUserId)
@@ -616,7 +614,7 @@ private fun cancelRide(
                                 val batch = firestore.batch()
 
                                 for (doc in requestDocs.documents) {
-                                    batch.update(doc.reference, "status", "cancel")
+                                    batch.delete(doc.reference) // 👈 directly delete the request
                                 }
 
                                 batch.commit()
@@ -625,8 +623,8 @@ private fun cancelRide(
                                         navController.popBackStack()
                                     }
                                     .addOnFailureListener { e ->
-                                        Toast.makeText(context, "Failed to update request status", Toast.LENGTH_SHORT).show()
-                                        Log.e("Firestore", "Error updating request status", e)
+                                        Toast.makeText(context, "Failed to remove request", Toast.LENGTH_SHORT).show()
+                                        Log.e("Firestore", "Error removing request", e)
                                     }
                             }
                             .addOnFailureListener { e ->
