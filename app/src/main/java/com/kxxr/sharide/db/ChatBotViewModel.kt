@@ -1,5 +1,6 @@
 package com.kxxr.sharide.db
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kxxr.sharide.StoreInterface.GeminiApi
@@ -22,6 +23,7 @@ class ChatBotViewModel : ViewModel() {
     val response = _response.asStateFlow()
 
     private val geminiApi: GeminiApi
+    private var busRouteData: String? = null
 
     init {
         val logging = HttpLoggingInterceptor().apply {
@@ -40,13 +42,34 @@ class ChatBotViewModel : ViewModel() {
 
         geminiApi = retrofit.create(GeminiApi::class.java)
     }
-
+    // Call this once in your Composable to load the route data
+    fun initialize(context: Context) {
+        if (busRouteData == null) {
+            busRouteData = loadRoutesFromAssets(context)
+        }
+    }
+    // Load data.json from assets
+    private fun loadRoutesFromAssets(context: Context): String {
+        return context.assets.open("data.json")
+            .bufferedReader()
+            .use { it.readText() }
+    }
     fun generateContent(prompt: String) {
         viewModelScope.launch(Dispatchers.IO) {
+            val fullPrompt = """
+                You are a helpful university campus bus assistant.
+                Below is the full bus route data in JSON format:
+
+                $busRouteData
+
+                Based on this, answer the following question:
+                $prompt
+            """.trimIndent()
+
             val request = GeminiRequest(
                 contents = listOf(
                     Content(
-                        parts = listOf(Part(text = prompt)),
+                        parts = listOf(Part(text = fullPrompt)),
                         role = "user"
                     )
                 )
@@ -74,4 +97,5 @@ class ChatBotViewModel : ViewModel() {
             }
         }
     }
+
 }

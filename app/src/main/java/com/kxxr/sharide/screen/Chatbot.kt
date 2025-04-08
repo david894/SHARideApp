@@ -1,6 +1,7 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
 package com.kxxr.sharide.screen
+import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.*
 import androidx.compose.material3.Button
@@ -22,6 +23,9 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import com.google.gson.Gson
+import com.kxxr.sharide.db.BusData
 
 @Composable
 fun ChatbotScreen(viewModel: ChatBotViewModel = viewModel()) {
@@ -30,6 +34,10 @@ fun ChatbotScreen(viewModel: ChatBotViewModel = viewModel()) {
     val messages = remember { mutableStateListOf<ChatbotMessage>() }
 
     val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        viewModel.initialize(context)
+    }
 
     Scaffold(
         topBar = {
@@ -132,3 +140,15 @@ fun MessageBubble(message: ChatbotMessage) {
 }
 
 data class ChatbotMessage(val text: String, val isUser: Boolean)
+
+fun loadBusData(context: Context): BusData? {
+    return try {
+        val inputStream = context.assets.open("data.json")
+        val json = inputStream.bufferedReader().use { it.readText() }
+        val gson = Gson()
+        gson.fromJson(json, BusData::class.java)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+}
