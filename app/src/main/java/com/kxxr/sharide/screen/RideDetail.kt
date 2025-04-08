@@ -783,6 +783,7 @@ fun CompleteRideButton(
                 rideId = rideId,
                 onSuccess = {
                     Toast.makeText(context, "Ride completed successfully", Toast.LENGTH_SHORT).show()
+                    // kahxian
                     navController.navigate("home") {
                         popUpTo("home") { inclusive = true }
                     }

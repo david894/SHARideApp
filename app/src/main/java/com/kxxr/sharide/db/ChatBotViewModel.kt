@@ -42,7 +42,7 @@ class ChatBotViewModel : ViewModel() {
 
         geminiApi = retrofit.create(GeminiApi::class.java)
     }
-    // Call this once in your Composable to load the route data
+    // Call this in Composable to load the route data
     fun initialize(context: Context) {
         if (busRouteData == null) {
             busRouteData = loadRoutesFromAssets(context)

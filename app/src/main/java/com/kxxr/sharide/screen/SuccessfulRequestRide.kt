@@ -125,7 +125,7 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
             .get()
             .addOnSuccessListener { querySnapshot ->
                 if (!querySnapshot.isEmpty) {
-                    isOnBoarding = true
+                    isStartBoarding = true
                 }
             }
     }
@@ -706,7 +706,7 @@ fun BoardRideButton(
                 }
         },
         modifier = Modifier.fillMaxWidth(),
-        colors = ButtonDefaults.buttonColors(containerColor = Color.Green)
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF800080))
     ) {
         Text("Get On Ride")
     }
