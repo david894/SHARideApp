@@ -379,6 +379,7 @@ fun AdminLoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
     var showDialog by remember { mutableStateOf(false) }
     var showEmailDialog by remember { mutableStateOf(false) }
     val type = "admin"
+    var loadmsg by remember { mutableStateOf("Logging in...") }
 
     Box(
         modifier = Modifier
@@ -441,8 +442,12 @@ fun AdminLoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
                     ) { result ->
                         if (result.resultCode == Activity.RESULT_OK) {
                             showDialog = true
-                            handleGoogleSignIn(result.data, firebaseAuth, navController, context, type){
-                                showDialog = false
+                            handleGoogleSignIn(result.data, firebaseAuth, navController, context, type){ info ->
+                                if (info == "MFA"){
+                                    loadmsg = "Requesting MFA.."
+                                }else{
+                                    showDialog = false
+                                }
                             }
                         }
                     }
@@ -569,7 +574,7 @@ fun AdminLoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
                                 showDialog = true
                                 signInWithEmailPassword(email, password, firebaseAuth, context, navController,
                                     onMfaRequired = { resolver ->
-                                        showDialog = false
+                                        loadmsg = "Requesting MFA.."
                                         Toast.makeText(context, "MFA Required. Please Verify", Toast.LENGTH_SHORT).show()
                                         handleMultiFactorAuthentication(resolver, firebaseAuth, navController, context,type)
                                     },

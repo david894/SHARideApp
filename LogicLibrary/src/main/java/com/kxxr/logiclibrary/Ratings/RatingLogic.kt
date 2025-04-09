@@ -93,6 +93,18 @@ fun recordRatings(userId: String, score: Double, description: String,from :Strin
         .addOnFailureListener { e ->
             println("Failed to Record Transaction: ${e.message}")
         }
+
+    //warning to user
+    if(score <= 1.00){
+        firestore.collection("RatingsWarning")
+            .add(RatingTransaction)
+            .addOnSuccessListener {
+                println("Rating Transaction Recorded Successfully")
+            }
+            .addOnFailureListener { e ->
+                println("Failed to Record Transaction: ${e.message}")
+            }
+    }
 }
 
 fun ratingAPI(
