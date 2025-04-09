@@ -366,6 +366,8 @@ fun AppNavHost(
             }
         }
     }
+    // Show Loading Dialog
+    LoadingDialog(text= "Loading...",showDialog = startDestination == null, onDismiss = { startDestination != null})
 }
 
 @Composable
