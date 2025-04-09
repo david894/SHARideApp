@@ -36,7 +36,8 @@ fun SearchLocationScreen(navController: NavController, locationType: Int) {
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(predefinedLocations.first().second, 15f)
     }
-    var isExpanded by remember { mutableStateOf(false) }
+    var isExpanded by remember { mutableStateOf(true) }
+
 
     Scaffold(
         topBar = {
@@ -47,7 +48,7 @@ fun SearchLocationScreen(navController: NavController, locationType: Int) {
                     filteredSuggestions = predefinedLocations.filter {
                         it.first.contains(newQuery, ignoreCase = true)
                     }
-                    isExpanded = false
+                    isExpanded = true
                 },
                 onExpandToggle = { isExpanded = !isExpanded },
                 onSelectSuggestion = { name, latLng ->
@@ -83,10 +84,21 @@ fun SearchLocationScreen(navController: NavController, locationType: Int) {
 
 // Predefined locations list
 val predefinedLocations = listOf(
-    "TAR UMT Main Entrance" to LatLng(3.1869, 101.6958),
-    "Block A" to LatLng(3.1875, 101.6973),
-    "Library" to LatLng(3.1882, 101.6990),
-    "Canteen" to LatLng(3.1890, 101.7005)
+    "LRT Wangsa Maju" to LatLng(3.20576, 101.73199),
+    "Hospital ATM Tuanku Mizan" to LatLng(3.20996, 101.73909),
+    "Metroview Bus Stop" to LatLng(3.20594, 101.73742),
+    "TAR UMT East Campus Bus Stop" to LatLng(3.21694, 101.73246),
+    "TAR UMT CITC Bus Stop" to LatLng(3.21416, 101.72669),
+    "TAR UMT Library" to LatLng(3.21746, 101.72790),
+    "TAR UMT Block K Entrance(GATE 3)" to LatLng(3.21661, 101.72494),
+    "Melati Utama (PV 3)" to LatLng(3.22320, 101.72938),
+    "Danau Kota Suite Apt" to LatLng(3.20916, 101.71876),
+    "PV 12" to LatLng(3.20731, 101.71887),
+    "Pv 18" to LatLng(3.20381, 101.71318),
+    "Teratai Residency" to LatLng(3.20088, 101.71146),
+    "Prima Setapak Bus Stop" to LatLng(3.19751, 101.71160),
+    "Colombia Hospital Bus Stop" to LatLng(3.21844, 101.76932),
+    "Setapak Central" to LatLng(3.20550, 101.72024)
 )
 
 @Composable
@@ -136,15 +148,22 @@ fun SearchBar(
             }
         }
         if (isExpanded && suggestions.isNotEmpty()) {
-            LazyColumn(modifier = Modifier.fillMaxWidth().background(Color.White)) {
-                items(suggestions) { (name, latLng) ->
-                    Text(
-                        text = name,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelectSuggestion(name, latLng) }
-                            .padding(16.dp)
-                    )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 230.dp) // Adjust height for ~4 items (each item ~48dp)
+                    .background(Color.White)
+            ) {
+                LazyColumn {
+                    items(suggestions) { (name, latLng) ->
+                        Text(
+                            text = name,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelectSuggestion(name, latLng) }
+                                .padding(16.dp)
+                        )
+                    }
                 }
             }
         }
