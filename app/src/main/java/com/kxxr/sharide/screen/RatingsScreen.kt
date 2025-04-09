@@ -2,6 +2,7 @@ package com.kxxr.sharide.screen
 
 import android.widget.Toast
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +25,8 @@ import androidx.compose.material.icons.filled.StarHalf
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardColors
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconToggleButton
@@ -55,7 +58,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.kxxr.logiclibrary.Driver.Driver
 import com.kxxr.logiclibrary.Driver.searchDriver
+import com.kxxr.logiclibrary.Ratings.Ratings
 import com.kxxr.logiclibrary.Ratings.fetchPassengerInfoForRide
+import com.kxxr.logiclibrary.Ratings.loadRatingHistory
 import com.kxxr.logiclibrary.Ratings.loadRatingScore
 import com.kxxr.logiclibrary.Ratings.ratingAPI
 import com.kxxr.logiclibrary.User.User
@@ -67,9 +72,6 @@ fun RatingsScreen(navController: NavController, firebaseAuth: FirebaseAuth, rece
     val context = LocalContext.current
     val firestore = FirebaseFirestore.getInstance()
 
-    var user by remember { mutableStateOf<User?>(null) }
-//    var pre_rating by remember { mutableStateOf(0.0) }
-//    var totalRating by remember { mutableStateOf(0) }
     var passengerInfo by remember { mutableStateOf<List<User>>(emptyList()) }
 
     var isDriver by remember { mutableStateOf<List<Driver>>(emptyList()) }
@@ -80,7 +82,6 @@ fun RatingsScreen(navController: NavController, firebaseAuth: FirebaseAuth, rece
     }
     val initializedUserIds = remember { mutableStateListOf<String>() }
     val ratedUserIds = remember { mutableStateListOf<String>() }
-
 
     val currentUser = firebaseAuth.currentUser
 
@@ -364,4 +365,172 @@ fun RatingsScreen(navController: NavController, firebaseAuth: FirebaseAuth, rece
     LoadingDialog(text = "Loading...", showDialog = showDialog, onDismiss = { showDialog = false })
 
 }
+
+@Composable
+fun RatingDashboardScreen(navController: NavController) {
+    val userId = FirebaseAuth.getInstance().currentUser?.uid
+    val context = LocalContext.current
+    val firestore = FirebaseFirestore.getInstance()
+
+    // State to hold score and transactions
+    var rating by remember { mutableStateOf(0.0) }
+    var totalRating by remember { mutableStateOf(0) }
+
+    var transactions by remember { mutableStateOf<List<Ratings>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(false) }
+
+    // Fetch data from Firestore
+    LaunchedEffect(Unit) {
+        isLoading = true
+
+        // Fetch rating
+        if (userId != null) {
+            loadRatingScore(firestore, userId) { Rating, TotalRating ->
+                rating = Rating
+                totalRating = TotalRating
+            }
+            loadRatingHistory(firestore,userId){
+                transactions = it
+            }
+            isLoading = false
+        }
+
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(280.dp)
+            .background(Color.Blue)
+            .padding(16.dp)
+    ) {
+        Spacer(modifier = Modifier.height(54.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .clickable { navController.navigate("profile") }
+        ) {
+            Icon(
+                imageVector = Icons.Default.ArrowBack,
+                contentDescription = "Back",
+                tint = Color.White,
+                modifier = Modifier.size(28.dp)
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Text(
+                text = "Ratings Dashboard",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        }
+        Spacer(modifier = Modifier.height(50.dp))
+        Text(
+            "Overall Ratings \n",
+            color = Color.White,
+            fontSize = 23.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ){
+            Image(
+                painter = painterResource(id = R.drawable.ratings_ico),
+                contentDescription = "Ratings Icon",
+                modifier = Modifier.size(20.dp)
+            )
+            Text("$rating/5.0 ($totalRating)",
+                color = Color.White,
+                fontSize = 23.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 280.dp)
+            .verticalScroll(rememberScrollState()), // Enable scrolling
+    ) {
+        // Transaction History Section
+        Text("Rating History", fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.padding(15.dp))
+
+        if (transactions.isEmpty()) {
+            Text("No Rating History", color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier
+                .fillMaxWidth()
+                .padding(15.dp))
+        } else {
+
+            transactions.forEach { transaction ->
+                var profileUrl by remember { mutableStateOf("") }
+                loadUserDetails(firestore,transaction.from){
+                    if (it != null) {
+                        profileUrl = it.profileImageUrl
+                    }
+                }
+                RatingsItem(transaction, profileUrl)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(130.dp))
+
+    }
+    // Show Loading Dialog
+    LoadingDialog(text = "Loading...", showDialog = isLoading, onDismiss = { isLoading = false })
+
+}
+
+@Composable
+fun RatingsItem(transaction: Ratings, profileUrl: String) {
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardColors(containerColor = Color.White, contentColor = Color.Black, disabledContentColor = Color.Gray, disabledContainerColor = Color.LightGray),
+        //elevation = 4,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+            .border(2.dp, Color.LightGray, RoundedCornerShape(16.dp))
+    ) {
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Image(
+                painter = rememberAsyncImagePainter(profileUrl),
+                contentDescription = "Profile Image",
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(RoundedCornerShape(8.dp))
+            )
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            val score = transaction.Score
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ){
+                    Image(
+                        painter = painterResource(id = R.drawable.ratings_ico),
+                        contentDescription = "Ratings Icon",
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(text = score.toString(), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
+                Text(text = transaction.description, fontSize = 15.sp)
+                Text(text = transaction.date, fontSize = 12.sp, color = Color.Gray)
+
+            }
+        }
+    }
+}
+
 

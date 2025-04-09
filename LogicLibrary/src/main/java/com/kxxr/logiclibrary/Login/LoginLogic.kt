@@ -73,6 +73,7 @@ fun handleGoogleSignIn(
                                 if (user.isEmailVerified) {
                                     isBanned(FirebaseFirestore.getInstance(),user.uid, onResult = { remark,banned ->
                                         if(banned){
+                                            firebaseAuth.signOut()
                                             onComplete("BANNED")
                                             navController.navigate("banned_user/${user.uid}/$remark")
                                         }else{
@@ -131,6 +132,7 @@ private fun checkIfAdmin(
             if (!documents.isEmpty) {
                 isBanned(FirebaseFirestore.getInstance(),userId, onResult = { remark,banned ->
                     if(banned){
+                        firebaseAuth.signOut()
                         navController.navigate("banned_user/${userId}/$remark")
                     }else{
                         Toast.makeText(context, "Admin Sign-In Successful", Toast.LENGTH_LONG).show()
@@ -233,6 +235,7 @@ fun signInWithEmailPassword(
                                     if (!documents.isEmpty) {
                                         isBanned(FirebaseFirestore.getInstance(),user.uid, onResult = { remark,banned ->
                                             if(banned){
+                                                firebaseAuth.signOut()
                                                 navController.navigate("banned_user/${user.uid}/$remark")
                                             }else{
                                                 Toast.makeText(context, "Sign-In Successful", Toast.LENGTH_LONG).show()
@@ -250,6 +253,7 @@ fun signInWithEmailPassword(
                         }else{
                             isBanned(FirebaseFirestore.getInstance(),user.uid, onResult = { remark,banned ->
                                 if(banned){
+                                    firebaseAuth.signOut()
                                     navController.navigate("banned_user/${user.uid}/$remark")
                                 }else{
                                     Toast.makeText(context, "Sign-In Successful", Toast.LENGTH_LONG).show()
