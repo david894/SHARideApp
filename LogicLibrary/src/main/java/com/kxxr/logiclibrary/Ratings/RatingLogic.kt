@@ -2,6 +2,8 @@ package com.kxxr.logiclibrary.Ratings
 
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
+import com.kxxr.logiclibrary.User.User
+import com.kxxr.logiclibrary.User.loadUserDetails
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.SimpleDateFormat
@@ -61,7 +63,7 @@ fun updateUserRating(userId: String, score: Double,onSuccess: () -> Unit,onFailu
     }
 }
 
-fun recordRatings(userId: String, score: Double, description: String,from :String,to:String) {
+fun recordRatings(userId: String, score: Double, description: String,from :String,to:String,rideId:String) {
     val firestore = FirebaseFirestore.getInstance()
     // Set Malaysia Time Zone (MYT)
     val timeZone = TimeZone.getTimeZone("Asia/Kuala_Lumpur")
@@ -79,6 +81,7 @@ fun recordRatings(userId: String, score: Double, description: String,from :Strin
         "description" to description,
         "from" to from,
         "to" to to,
+        "rideId" to rideId
     )
 
     // Add transaction to Firestore
@@ -97,6 +100,7 @@ fun ratingAPI(
     receiver: String,
     score : Double,
     description: String,
+    rideId: String,
     onSuccess: () -> Unit,
     onFailure: (String) -> Unit
 ) {
@@ -106,7 +110,7 @@ fun ratingAPI(
         onSuccess={
             if(!hasRecordedUserTransaction){
                 hasRecordedUserTransaction = true
-                recordRatings(receiver,score,description,userId,receiver)
+                recordRatings(receiver,score,description,userId,receiver,rideId)
                 onSuccess()
             }
         },onFailure={
@@ -133,6 +137,7 @@ fun loadRatingHistory(
                         from = transactionData["from"].toString(),
                         to = transactionData["to"].toString(),
                         userId = transactionData["userId"].toString(),
+                        rideId = transactionData["rideId"].toString()
                     )
                 }
                 val transactions = data.sortedByDescending {
@@ -146,6 +151,48 @@ fun loadRatingHistory(
             }
         }
         .addOnFailureListener { e ->
+            onResult(emptyList())
+        }
+}
+
+fun fetchPassengerInfoForRide(
+    rideId: String,
+    onResult: (List<User>) -> Unit
+) {
+    val db = FirebaseFirestore.getInstance()
+
+    db.collection("rides")
+        .whereEqualTo("rideId", rideId)
+        .get()
+        .addOnSuccessListener { rideDocs ->
+            if (!rideDocs.isEmpty) {
+                val passengerIds = rideDocs.documents[0].get("passengerIds") as? List<String> ?: emptyList()
+                val filteredIds = passengerIds.filter { it != "null" && it.isNotBlank() }
+
+                if (filteredIds.isEmpty()) {
+                    onResult(emptyList())
+                    return@addOnSuccessListener
+                }
+
+                val userList = mutableListOf<User>()
+                val total = filteredIds.size
+                var completed = 0
+
+                for (id in filteredIds) {
+                    loadUserDetails(db,id){ user ->
+                        user?.let { userList.add(it) }
+
+                        completed++
+                        if (completed == total) {
+                            onResult(userList)
+                        }
+                    }
+                }
+            } else {
+                onResult(emptyList())
+            }
+        }
+        .addOnFailureListener {
             onResult(emptyList())
         }
 }

@@ -6,5 +6,6 @@ data class Ratings(
     val Score: Double,
     val description: String,
     val from: String,
-    val to: String
+    val to: String,
+    val rideId: String
 )

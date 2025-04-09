@@ -524,6 +524,9 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
     var showDialog by remember { mutableStateOf(false) }
     var showEmailDialog by remember { mutableStateOf(false) }
     val type = "user"
+
+    var loadmsg by remember { mutableStateOf("Logging in...") }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -557,8 +560,12 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
         ) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
                 showDialog = true
-                handleGoogleSignIn(result.data, firebaseAuth, navController, context,type){
-                    showDialog = false
+                handleGoogleSignIn(result.data, firebaseAuth, navController, context,type){ info ->
+                    if (info == "MFA"){
+                        loadmsg = "Requesting MFA.."
+                    }else{
+                        showDialog = false
+                    }
                 }
             }
         }
@@ -672,7 +679,7 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
                     showDialog = true
                     signInWithEmailPassword(email, password, firebaseAuth, context, navController,
                         onMfaRequired = { resolver ->
-                            showDialog = false
+                            loadmsg = "Requesting MFA..."
                             Toast.makeText(context, "MFA Required. Please Verify", Toast.LENGTH_SHORT).show()
                             handleMultiFactorAuthentication(resolver, firebaseAuth, navController, context,type)
                         },
@@ -737,7 +744,7 @@ fun LoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
     }
 
     // Show Loading Dialog
-    LoadingDialog(text="Logging in...",showDialog = showDialog, onDismiss = { showDialog = false })
+    LoadingDialog(text= loadmsg,showDialog = showDialog, onDismiss = { showDialog = false })
 }
 
 @Composable

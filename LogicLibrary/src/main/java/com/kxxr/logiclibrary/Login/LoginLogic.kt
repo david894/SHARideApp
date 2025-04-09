@@ -30,7 +30,7 @@ fun handleGoogleSignIn(
     navController: NavController,
     context: Context,
     type: String,
-    onComplete: () -> Unit
+    onComplete: (String) -> Unit
 ) {
     val task = GoogleSignIn.getSignedInAccountFromIntent(data)
     try {
@@ -43,7 +43,7 @@ fun handleGoogleSignIn(
             Toast.makeText(context, "Only TARC emails are allowed", Toast.LENGTH_SHORT).show()
             firebaseAuth.signOut()
             navController.navigate("login")
-            onComplete()
+            onComplete("TARUMT EMAIL ERROR")
             return
         }
 
@@ -60,7 +60,7 @@ fun handleGoogleSignIn(
                         context, "Account does not exist. Please register first.",
                         Toast.LENGTH_LONG
                     ).show()
-                    onComplete()
+                    onComplete("ACCOUNT NOT EXIST")
                     return@addOnSuccessListener
                 }
 
@@ -73,16 +73,16 @@ fun handleGoogleSignIn(
                                 if (user.isEmailVerified) {
                                     isBanned(FirebaseFirestore.getInstance(),user.uid, onResult = { remark,banned ->
                                         if(banned){
-                                            onComplete()
+                                            onComplete("BANNED")
                                             navController.navigate("banned_user/${user.uid}/$remark")
                                         }else{
                                             if (type == "admin") {
                                                 checkIfAdmin(user.uid, db, firebaseAuth, navController, context)
-                                                onComplete()
+                                                onComplete("ADMIN")
                                             } else {
                                                 Toast.makeText(context, "Sign-In Successful", Toast.LENGTH_LONG).show()
                                                 navController.navigate("home")
-                                                onComplete()
+                                                onComplete("SIGN IN SUCCESSFULLY")
                                             }
                                         }
                                     })
@@ -92,7 +92,7 @@ fun handleGoogleSignIn(
                                         context, "Please verify your email before signing in.",
                                         Toast.LENGTH_LONG
                                     ).show()
-                                    onComplete()
+                                    onComplete("VERIFY EMAIL")
                                 }
                             }
                         } else {
@@ -101,10 +101,10 @@ fun handleGoogleSignIn(
                                 // MFA required – trigger the resolver
                                 Toast.makeText(context, "MFA Required. Please Verify.", Toast.LENGTH_LONG).show()
                                 handleMultiFactorAuthentication(exception.resolver, firebaseAuth, navController, context, type)
-                                onComplete()
+                                onComplete("MFA")
                             } else {
                                 Toast.makeText(context, "Login Failed: ${exception?.localizedMessage}", Toast.LENGTH_LONG).show()
-                                onComplete()
+                                onComplete("ERROR")
                             }
                         }
                     }
