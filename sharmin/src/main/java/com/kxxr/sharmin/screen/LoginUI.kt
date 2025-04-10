@@ -624,7 +624,7 @@ fun AdminLoginScreen(navController: NavController, firebaseAuth: FirebaseAuth) {
     }
 
      // Show Loading Dialog
-    LoadingDialog(text="Logging in...",showDialog = showDialog, onDismiss = { showDialog = false })
+    LoadingDialog(text=loadmsg,showDialog = showDialog, onDismiss = { showDialog = false })
 }
 
 

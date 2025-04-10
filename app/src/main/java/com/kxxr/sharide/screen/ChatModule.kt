@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.net.Uri
 import android.provider.MediaStore
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -77,6 +78,7 @@ import coil.compose.AsyncImage
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
+import com.google.firebase.Firebase
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
@@ -84,6 +86,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.GeoPoint
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.firestore
 import com.google.firebase.storage.FirebaseStorage
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.Marker
@@ -160,7 +163,22 @@ fun ChatListScreen(userId: String, navController: NavController) {
             ) {
                 items(chatList) { chat ->
                     ChatPreviewCard(chat = chat) {
-                        navController.navigate("chat_screen/${chat.chatId}")
+                        val db = Firebase.firestore
+                        val messagesRef = db.collection("chats")
+                            .document(chat.chatId)
+                            .collection("messages")
+
+                        messagesRef.get().addOnSuccessListener { snapshot ->
+                            for (doc in snapshot.documents) {
+                                doc.reference.update("isRead", true)
+                            }
+                            // Navigate after updating
+                            navController.navigate("chat_screen/${chat.chatId}")
+                        }.addOnFailureListener { e ->
+                            // Optional: Handle error
+                            Log.e("Firestore", "Failed to update messages: ", e)
+                            navController.navigate("chat_screen/${chat.chatId}") // Still navigate
+                        }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                 }
