@@ -89,6 +89,7 @@ fun NotificationScreen(
             })
 
             observeNotifications(context,userId, firestore, notifications, notificationDao)
+            observeUnreadMessages(context, userId,firestore,notifications,notificationDao )
         }
     }
 
@@ -128,6 +129,7 @@ fun observeNotifications(
                 if (existingNotifications.none { it.title == newNotification.title && it.description == newNotification.description }) {
                     existingNotifications.add(newNotification)
                     showAndroidNotification(context, newNotification)
+
                 }
             }
 
@@ -338,4 +340,87 @@ private fun showAndroidNotification(context: Context, notification: Notification
         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
 
     notificationManager.notify(notification.title.hashCode(), builder.build())
+}
+
+
+fun observeUnreadMessages(
+    context: Context,
+    currentUserId: String,
+    firestore: FirebaseFirestore,
+    notifications: MutableList<NotificationEntity>,
+    notificationDao: NotificationDao
+) {
+    firestore.collection("chats")
+        .whereEqualTo("driverId", currentUserId)
+        .get()
+        .addOnSuccessListener { driverChats ->
+            firestore.collection("chats")
+                .whereEqualTo("passengerId", currentUserId)
+                .get()
+                .addOnSuccessListener { passengerChats ->
+
+                    val allChats = driverChats.documents + passengerChats.documents
+
+                    allChats.forEach { chatDoc ->
+                        val chatId = chatDoc.id
+
+                        firestore.collection("chats")
+                            .document(chatId)
+                            .collection("messages")
+                            .whereEqualTo("isRead", false)
+                            .whereNotEqualTo("senderId", currentUserId)
+                            .addSnapshotListener { messagesSnap, msgError ->
+                                if (msgError != null || messagesSnap == null) return@addSnapshotListener
+
+                                val unreadMessages = messagesSnap.documents
+                                val messagesBySender = unreadMessages.groupBy { it.getString("senderId") ?: "Unknown" }
+
+                                messagesBySender.forEach { (senderId, senderMessages) ->
+                                    val messageCount = senderMessages.size
+                                    val latestMsg = senderMessages.maxByOrNull {
+                                        it.getTimestamp("timestamp")?.toDate()?.time ?: 0L
+                                    }
+
+                                    val latestText = latestMsg?.getString("messageText") ?: "New message"
+                                    val latestTime = latestMsg?.getTimestamp("timestamp")?.toDate()
+                                    val formattedTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(latestTime ?: Date())
+
+                                    // Fetch sender name from users collection
+                                    firestore.collection("users")
+                                        .whereEqualTo("firebaseUserId", senderId)
+                                        .limit(1)
+                                        .get()
+                                        .addOnSuccessListener { userSnapshot ->
+                                            val senderName = userSnapshot.documents.firstOrNull()?.getString("name") ?: "Someone"
+
+                                            val notification = NotificationEntity(
+                                                image = R.drawable.chat_icon,
+                                                title = " Message from $senderName",
+                                                description = "You have $messageCount new message${if (messageCount > 1) "s" else ""}: \"$latestText\"",
+                                                time = "Unread Message",
+                                                postTime = " $formattedTime"
+                                            )
+
+                                            val alreadyShown = notifications.any {
+                                                it.postTime == notification.postTime &&
+                                                        it.description == notification.description
+                                            }
+
+                                            if (!alreadyShown) {
+                                                notifications.add(notification)
+                                                showAndroidNotification(context, notification)
+
+                                                GlobalScope.launch(Dispatchers.IO) {
+                                                    val exists = notificationDao.getNotification(notification.title, notification.description) != null
+                                                    if (!exists) {
+                                                        notificationDao.insertNotification(notification)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                }
+                            }
+                    }
+                }
+        }
 }
