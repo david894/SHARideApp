@@ -82,6 +82,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.Exclude
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.GeoPoint
@@ -395,8 +396,12 @@ fun ChatScreen(
                 messages.clear()
                 for (doc in snapshot.documents) {
                     val message = doc.toObject(Message::class.java)
-                    if (message != null) messages.add(message)
+                    if (message != null) {
+                        message.firestoreId = doc.id // store the actual document ID
+                        messages.add(message)
+                    }
                 }
+
             }
     }
 
@@ -499,7 +504,10 @@ fun ChatScreen(
             IconButton(onClick = {
                 requestCameraPermission = true
             }) {
-                Icon(Icons.Default.Photo, contentDescription = "Send Photo")
+                Icon(
+                    painter = painterResource(id = R.drawable.camera_icon),
+                    contentDescription = "Send Photo"
+                )
             }
 
 
@@ -812,23 +820,14 @@ fun ShowPermissionDeniedDialog(onDismiss: () -> Unit) {
 }
 
 fun deleteMessage(chatId: String, message: Message) {
-    val db = FirebaseFirestore.getInstance()
-    val messagesRef = db.collection("chats")
+    FirebaseFirestore.getInstance()
+        .collection("chats")
         .document(chatId)
         .collection("messages")
-
-    if (!message.messageId.isNullOrEmpty()) {
-        messagesRef.document(message.messageId!!).delete()
-    } else {
-        // Fallback: try to find it based on timestamp (less reliable)
-        messagesRef
-            .whereEqualTo("timestamp", message.timestamp)
-            .get()
-            .addOnSuccessListener { snapshot ->
-                snapshot.documents.firstOrNull()?.reference?.delete()
-            }
-    }
+        .document(message.firestoreId)
+        .delete()
 }
+
 
 
 data class ChatPreview(
@@ -848,4 +847,5 @@ data class Message(
     val location: GeoPoint? = null,
     val isRead: Boolean = false,
     val imageUrl: String? = null,
+    @get:Exclude var firestoreId: String = ""
 )
