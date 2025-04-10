@@ -160,6 +160,8 @@ fun RideDetailScreen(navController: NavController, firestore: FirebaseFirestore,
                         Spacer(modifier = Modifier.height(8.dp))
                         Divider(color = Color.LightGray, thickness = 1.dp)
                         Spacer(modifier = Modifier.height(16.dp))
+                        EmergencyCallButton()
+                        Spacer(modifier = Modifier.height(16.dp))
 
                         Column {
                             // Ride Passenger Section

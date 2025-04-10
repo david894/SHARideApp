@@ -15,4 +15,9 @@
     <string name="cs_email">ngkx-wp21@student.tarc.edu.my</string>
     <string name="maps_api_key">AIzaSyAYFHXZLaqAKMiPvxHKw45xRrlm95Vng7U</string>
     <string name="google_api">424509601720-l27h6t59dlr9dk2t8sto3tg6lu9a7tsv.apps.googleusercontent.com</string>
+    <string name="polis_phone">0340232222</string>
+    <string name="tarumt_phone">0341450250</string>
+    <string name="ambulance_phone">0341459999</string>
+    <string name="fire_phone">0340235544</string>
+
 </resources>

@@ -3,6 +3,8 @@
 package com.kxxr.sharide.screen
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
@@ -26,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -57,6 +60,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
@@ -174,7 +178,8 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
                         Spacer(modifier = Modifier.height(8.dp))
                         Divider(color = Color.LightGray, thickness = 1.dp)
                         Spacer(modifier = Modifier.height(16.dp))
-
+                        EmergencyCallButton()
+                        Spacer(modifier = Modifier.height(16.dp))
                         Column {
                             // 🚗 **Driver Section**
                             Text(
@@ -233,6 +238,108 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
                     Text("Error loading ride details. Please try again.", color = Color.Red)
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun EmergencyCallButton() {
+    var showDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val tarumt_phone = stringResource(id = R.string.tarumt_phone)
+    val polis_phone = stringResource(id = R.string.polis_phone)
+    val ambulance_phone = stringResource(id = R.string.ambulance_phone)
+    val fire_phone = stringResource(id = R.string.fire_phone)
+
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Button(onClick = { showDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Color.Red, contentColor = Color.White)) {
+            Text("Emergency Call")
+        }
+
+        if (showDialog) {
+            AlertDialog(
+                onDismissRequest = { showDialog = false },
+                title = { Text("Emergency Services") },
+                text = { Text("Who would you like to call?") },
+                confirmButton = {
+                    Column {
+                        Button(
+                            onClick = {
+                                showDialog = false
+                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse(tarumt_phone))
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                ContextCompat.startActivity(context, intent, null)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue, contentColor = Color.White)
+                        ) {
+                            Text("Call TAR UMT Security")
+                        }
+
+                        Button(
+                            onClick = {
+                                showDialog = false
+                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse(polis_phone))
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                ContextCompat.startActivity(context, intent, null)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue, contentColor = Color.White)
+                        ) {
+                            Text("Call Police Station")
+                        }
+
+                        Button(
+                            onClick = {
+                                showDialog = false
+                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse(ambulance_phone))
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                ContextCompat.startActivity(context, intent, null)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue, contentColor = Color.White)
+                        ) {
+                            Text("Call Ambulance")
+                        }
+
+                        Button(
+                            onClick = {
+                                showDialog = false
+                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse(fire_phone))
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                ContextCompat.startActivity(context, intent, null)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue, contentColor = Color.White)
+                        ) {
+                            Text("Call Fire Fighting Station")
+                        }
+                        Button(
+                            onClick = { showDialog = false },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red, contentColor = Color.White)
+
+                        ) {
+                            Text("Cancel")
+                        }
+                    }
+                },
+                dismissButton = {}
+            )
         }
     }
 }
