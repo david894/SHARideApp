@@ -76,136 +76,6 @@ import com.kxxr.logiclibrary.User.loadUserDetails
 import com.kxxr.sharide.R
 
 @Composable
-fun HomeScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
-    val currentUser = firebaseAuth.currentUser
-    val context = LocalContext.current
-    val firestore = Firebase.firestore
-
-    var userName by remember { mutableStateOf("") }
-    var studentId by remember { mutableStateOf("") }
-    var profileImageUrl by remember { mutableStateOf("") }
-    var profileBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var showDialog by remember { mutableStateOf(false) }
-
-    // Fetch user data from Firestore
-    LaunchedEffect(Unit) {
-        showDialog = true
-        currentUser?.uid?.let { userId ->
-            firestore.collection("users")
-                .whereEqualTo("firebaseUserId", userId)
-                .get()
-                .addOnSuccessListener { querySnapshot ->
-                    val document = querySnapshot.documents.firstOrNull()
-                    document?.let {
-                        userName = it.getString("name").orEmpty()
-                        studentId = it.getString("studentId").orEmpty()
-                        profileImageUrl = it.getString("profileImageUrl").orEmpty()
-
-                        if (profileImageUrl.isNotEmpty()) {
-                            val storageReference =
-                                FirebaseStorage.getInstance().getReferenceFromUrl(profileImageUrl)
-                            storageReference.getBytes(1024 * 1024)
-                                .addOnSuccessListener { bytes ->
-                                    showDialog = false
-                                    profileBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                }
-                                .addOnFailureListener { e ->
-                                    showDialog = false
-                                    Toast.makeText(context, "Error fetching image: ${e.message}", Toast.LENGTH_SHORT)
-                                        .show()
-                                }
-                        }
-                    }
-                }
-                .addOnFailureListener { e ->
-                    showDialog = false
-                    Toast.makeText(context, "Error fetching user data: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
-        }
-    }
-
-    // **Scaffold Layout for BottomAppBar Placement**
-    Scaffold(
-        bottomBar = { BottomNavBar("home",navController) }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues) // Ensures content is not overlapped by BottomBar
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top
-        ) {
-            Spacer(modifier = Modifier.height(56.dp))
-
-            Text(text = "Welcome to Home Screen", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(16.dp))
-
-            profileBitmap?.let {
-                Image(
-                    bitmap = it.asImageBitmap(),
-                    contentDescription = "Profile Picture",
-                    modifier = Modifier
-                        .size(150.dp)
-                        .border(5.dp, Color.Gray)
-                )
-            } ?: Text(text = "No Profile Image", fontSize = 16.sp)
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(text = "Name: $userName", fontSize = 18.sp, fontWeight = FontWeight.Medium)
-            Text(text = "Student ID: $studentId", fontSize = 18.sp, fontWeight = FontWeight.Medium)
-            Text(text = "Email: ${currentUser?.email.orEmpty()}", fontSize = 18.sp, fontWeight = FontWeight.Medium)
-
-            Spacer(modifier = Modifier.height(36.dp))
-
-            // **Driver Button**
-            Button(
-                onClick = {
-                    currentUser?.let {
-                        firestore.collection("driver")
-                            .whereEqualTo("userId", it.uid)
-                            .get()
-                            .addOnSuccessListener { querySnapshot ->
-                                if (querySnapshot.isEmpty) {
-                                    navController.navigate("driverintro")
-                                } else {
-                                    navController.navigate("home")
-                                }
-                            }
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-            ) {
-                Text(text = "Driver", color = Color.White, fontSize = 16.sp)
-            }
-
-            // **Log Out Button**
-            Button(
-                onClick = {
-                    firebaseAuth.signOut()
-                    navController.navigate("intro") {
-                        popUpTo("home") { inclusive = true }
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-            ) {
-                Text(text = "Log Out", color = Color.White, fontSize = 16.sp)
-            }
-        }
-    }
-
-    // Show Loading Dialog
-    LoadingDialog(text = "Loading...", showDialog = showDialog, onDismiss = { showDialog = false })
-}
-
-@Composable
 fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
     val currentUser = firebaseAuth.currentUser
     val context = LocalContext.current
@@ -245,8 +115,8 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
             loadRatingScore(firestore, userId) { Rating,TotalRating ->
                 rating = Rating
                 totalRating = TotalRating
+                showDialog = false
             }
-            showDialog = false
         }
     }
 
@@ -348,6 +218,8 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
                     ProfileCard(title = "Driver Management",img = "manage", onClick = { navController.navigate("manage_driver") })
                     Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
                 }
+                ProfileCard(title = "Rating",img = "ratings_dashboard", onClick = {navController.navigate("rate_ride/${"Driver"}/${"3WiWYZ0sCBabUhPFF0SZ"}")})
+
             }
 
             Spacer(modifier = Modifier.height(50.dp)) // Pushes Log Out button to bottom
@@ -516,7 +388,7 @@ fun BottomNavBar(screen: String, navController: NavController) {
                 )
                 val currentUser = FirebaseAuth.getInstance().currentUser
                 BottomNavItem(
-                    icon = R.drawable.chat_icon,
+                    icon = R.drawable.authentication,
                     label = "Chat",
                     isSelected = screen == "chat_list",
                     onClick = {
@@ -671,169 +543,3 @@ fun EditPersonalInfoDialog(
     )
 }
 
-@Composable
-fun RatingDashboardScreen(navController: NavController) {
-    val userId = FirebaseAuth.getInstance().currentUser?.uid
-    val context = LocalContext.current
-    val firestore = FirebaseFirestore.getInstance()
-
-    // State to hold score and transactions
-    var rating by remember { mutableStateOf(0.0) }
-    var totalRating by remember { mutableStateOf(0) }
-
-    var transactions by remember { mutableStateOf<List<Ratings>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(false) }
-
-    // Fetch data from Firestore
-    LaunchedEffect(Unit) {
-        isLoading = true
-
-        // Fetch rating
-        if (userId != null) {
-            loadRatingScore(firestore, userId) { Rating, TotalRating ->
-                rating = Rating
-                totalRating = TotalRating
-            }
-            loadRatingHistory(firestore,userId){
-                transactions = it
-            }
-            isLoading = false
-        }
-
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(280.dp)
-            .background(Color.Blue)
-            .padding(16.dp)
-    ) {
-        Spacer(modifier = Modifier.height(54.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .clickable { navController.navigate("profile") }
-        ) {
-            Icon(
-                imageVector = Icons.Default.ArrowBack,
-                contentDescription = "Back",
-                tint = Color.White,
-                modifier = Modifier.size(28.dp)
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Text(
-                text = "Ratings Dashboard",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-        }
-        Spacer(modifier = Modifier.height(50.dp))
-        Text(
-            "Overall Ratings \n",
-            color = Color.White,
-            fontSize = 23.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ){
-            Image(
-                painter = painterResource(id = R.drawable.ratings_ico),
-                contentDescription = "Ratings Icon",
-                modifier = Modifier.size(20.dp)
-            )
-            Text("$rating/5.0 ($totalRating)",
-                color = Color.White,
-                fontSize = 23.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(top = 280.dp)
-            .verticalScroll(rememberScrollState()), // Enable scrolling
-    ) {
-        // Transaction History Section
-        Text("Rating History", fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.padding(15.dp))
-
-        if (transactions.isEmpty()) {
-            Text("No Rating History", color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier
-                .fillMaxWidth()
-                .padding(15.dp))
-        } else {
-
-            transactions.forEach { transaction ->
-                var profileUrl by remember { mutableStateOf("") }
-                loadUserDetails(firestore,transaction.from){
-                    if (it != null) {
-                        profileUrl = it.profileImageUrl
-                    }
-                }
-                RatingsItem(transaction, profileUrl)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(130.dp))
-
-    }
-    // Show Loading Dialog
-    LoadingDialog(text = "Loading...", showDialog = isLoading, onDismiss = { isLoading = false })
-
-}
-
-@Composable
-fun RatingsItem(transaction: Ratings, profileUrl: String) {
-
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardColors(containerColor = Color.White, contentColor = Color.Black, disabledContentColor = Color.Gray, disabledContainerColor = Color.LightGray),
-        //elevation = 4,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(8.dp)
-            .border(2.dp, Color.LightGray, RoundedCornerShape(16.dp))
-    ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Image(
-                painter = rememberAsyncImagePainter(profileUrl),
-                contentDescription = "Profile Image",
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(8.dp))
-            )
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            val score = transaction.Score
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ){
-                    Image(
-                        painter = painterResource(id = R.drawable.ratings_ico),
-                        contentDescription = "Ratings Icon",
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(text = score.toString(), fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                }
-                Text(text = transaction.description, fontSize = 15.sp)
-                Text(text = transaction.date, fontSize = 12.sp, color = Color.Gray)
-
-            }
-        }
-    }
-}

@@ -354,6 +354,7 @@ fun BannedUserScreen(navController: NavController, userId: String, remark: Strin
                 userEmail = user.email
             }
         }
+        firebaseAuth.signOut()
     }
 
     val emailSubject = "Dispute of Banned User - User : $username"

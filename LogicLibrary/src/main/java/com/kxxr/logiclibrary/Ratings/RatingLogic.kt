@@ -7,6 +7,7 @@ import com.kxxr.logiclibrary.User.loadUserDetails
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
 
@@ -94,15 +95,29 @@ fun recordRatings(userId: String, score: Double, description: String,from :Strin
             println("Failed to Record Transaction: ${e.message}")
         }
 
-    //warning to user
-    if(score <= 1.00){
+    // Check and add to RatingsWarning only if score is low and rideId doesn't already exist
+    if (score <= 1.00) {
         firestore.collection("RatingsWarning")
-            .add(RatingTransaction)
-            .addOnSuccessListener {
-                println("Rating Transaction Recorded Successfully")
+            .whereEqualTo("rideId", rideId)
+            .whereEqualTo("userId", userId)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                if (snapshot.isEmpty) {
+                    // No duplicate rideId, safe to upload
+                    firestore.collection("RatingsWarning")
+                        .add(RatingTransaction)
+                        .addOnSuccessListener {
+                            println("Warning Recorded Successfully")
+                        }
+                        .addOnFailureListener { e ->
+                            println("Failed to Record Warning: ${e.message}")
+                        }
+                } else {
+                    println("Warning already exists for rideId: $rideId — skipping upload")
+                }
             }
             .addOnFailureListener { e ->
-                println("Failed to Record Transaction: ${e.message}")
+                println("Error checking existing warning: ${e.message}")
             }
     }
 }
@@ -163,6 +178,63 @@ fun loadRatingHistory(
             }
         }
         .addOnFailureListener { e ->
+            onResult(emptyList())
+        }
+}
+
+fun loadRatingWarningHistory(
+    firestore: FirebaseFirestore,
+    userId: String,
+    onResult: (List<Ratings>) -> Unit
+) {
+    firestore.collection("RatingsWarning")
+        .whereEqualTo("userId", userId)
+        .get()
+        .addOnSuccessListener { snapshot ->
+            if (!snapshot.isEmpty) {
+                val timeZone = TimeZone.getTimeZone("Asia/Kuala_Lumpur")
+                val sdf = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
+                sdf.timeZone = timeZone
+
+                val now = Calendar.getInstance(timeZone).time
+
+                val filteredData = snapshot.mapNotNull { document ->
+                    val data = document.data
+                    try {
+                        val dateStr = data["date"].toString()
+                        val ratingDate = sdf.parse(dateStr)
+
+                        // Check if within the last 30 days
+                        if (ratingDate != null) {
+                            val diffMillis = now.time - ratingDate.time
+                            val daysDiff = diffMillis / (1000 * 60 * 60 * 24)
+                            if (daysDiff <= 30) {
+                                Ratings(
+                                    date = dateStr,
+                                    description = data["description"].toString(),
+                                    Score = data["Score"].toString().toDouble(),
+                                    from = data["from"].toString(),
+                                    to = data["to"].toString(),
+                                    userId = data["userId"].toString(),
+                                    rideId = data["rideId"].toString()
+                                )
+                            } else null
+                        } else null
+                    } catch (e: Exception) {
+                        null // skip bad date formats
+                    }
+                }
+
+                val sorted = filteredData.sortedByDescending {
+                    sdf.parse(it.date)
+                }
+
+                onResult(sorted)
+            } else {
+                onResult(emptyList())
+            }
+        }
+        .addOnFailureListener {
             onResult(emptyList())
         }
 }

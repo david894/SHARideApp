@@ -75,11 +75,15 @@ import com.kxxr.logiclibrary.AiDetector.detectFaceFromIdCard
 import com.kxxr.logiclibrary.AiDetector.detectPlateNumber
 import com.kxxr.logiclibrary.AiDetector.extractInfoFromIdCard
 import com.kxxr.logiclibrary.AiDetector.saveBitmapToCache
+import com.kxxr.logiclibrary.Banned.banUser
+import com.kxxr.logiclibrary.Banned.isBanned
 import com.kxxr.logiclibrary.Login.handleGoogleSignIn
 import com.kxxr.logiclibrary.Login.handleMultiFactorAuthentication
 import com.kxxr.logiclibrary.Login.resetPassword
 import com.kxxr.logiclibrary.Login.signInWithEmailPassword
 import com.kxxr.logiclibrary.Network.NetworkViewModel
+import com.kxxr.logiclibrary.Ratings.Ratings
+import com.kxxr.logiclibrary.Ratings.loadRatingWarningHistory
 import com.kxxr.logiclibrary.SignUp.handleVehicleSubmission
 import com.kxxr.logiclibrary.SignUp.loadVehicleData
 import com.kxxr.logiclibrary.SignUp.performSignUp
@@ -102,220 +106,330 @@ fun AppNavHost(
 ) {
     val navController = rememberNavController()
     val isConnected by networkViewModel.isConnected.collectAsState(initial = true) // Observe connectivity
+    val currentUser = firebaseAuth.currentUser
+    var isBanned by remember { mutableStateOf(false) }
+    var startDestination by remember { mutableStateOf<String?>(null) }
 
     if (!isConnected) {
         // Show the "No Internet Connection" screen
         NoInternetScreen(onRetry = { })
     } else {
         // Determine the start destination based on user login status
-        val startDestination = if (firebaseAuth.currentUser != null) "home" else "intro"
+        LaunchedEffect(Unit) {
+            if (currentUser != null && currentUser.uid.isNotEmpty()) {
+                loadRatingWarningHistory(firestore, currentUser.uid) { ratings ->
+                    val warningCount = ratings.size
 
-        AnimatedNavHost(
-            navController = navController,
-            startDestination = startDestination,
-            enterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { 1000 },
-                    animationSpec = tween(700, easing = FastOutSlowInEasing)
-                ) + fadeIn(animationSpec = tween(700)) + scaleIn(
-                    initialScale = 0.9f,
-                    animationSpec = tween(500)
-                )
-            },
-            exitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { -800 },
-                    animationSpec = tween(600)
-                ) + fadeOut(animationSpec = tween(600))
-            },
-            popEnterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { -1000 },
-                    animationSpec = tween(700, easing = LinearOutSlowInEasing)
-                ) + fadeIn(animationSpec = tween(700)) + scaleIn(
-                    initialScale = 0.9f,
-                    animationSpec = tween(500)
-                )
-            },
-            popExitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { 800 },
-                    animationSpec = tween(600, easing = FastOutLinearInEasing)
-                ) + fadeOut(animationSpec = tween(600)) + scaleOut(
-                    targetScale = 1.2f,
-                    animationSpec = tween(500)
-                )
-            }
-        ){
-            composable("intro") { IntroScreen(navController) }
-            composable("login") { LoginScreen(navController, firebaseAuth) }
-            composable("signup") { SignupIntroScreen(navController) }
-            composable("signup1") { IdVerificationScreen(navController) }
-            composable("signupScreen/{name}/{studentId}/{imagePath}") { backStackEntry ->
-                val name = backStackEntry.arguments?.getString("name").orEmpty()
-                val studentId = backStackEntry.arguments?.getString("studentId").orEmpty()
-                val imagePath = Uri.decode(backStackEntry.arguments?.getString("imagePath").orEmpty())
+                    if (warningCount > 3) {
+                        val reason = ratings.take(3).joinToString(" | ") { it.description }
 
-                SignUpScreen(navController, name, studentId, imagePath)
-            }
-            composable("emailverify") { EmailVerify(navController) }
-            composable("signupFailed") { UnableToVerifyScreen(navController) }
-            composable("signupFailedFace") { UnableToVerifyFace(navController) }
-            composable("duplicateID") { UnableToVerifyDuplicateID(navController) }
-            composable("customerServiceTARUMTID") { CustomerServiceScreen(navController) }
-            composable("ReportSubmitted/{link}") { backStackEntry ->
-                val link = backStackEntry.arguments?.getString("link").orEmpty()
-                ReportSubmitted(navController, link)
-            }
+                        isBanned(firestore, currentUser.uid) { remark, banned ->
+                            if (banned) {
+                                startDestination = "banned_user/${currentUser.uid}/$remark"
+                            } else {
+                                banUser(
+                                    firestore,
+                                    currentUser.uid,
+                                    "Rating Warning Exceeded 3 Times in 30 Days due to $reason"
+                                ) {}
 
-            // Driver Signup
-            composable("driverintro") { DriverIntroScreen(navController) }
-            composable("driversignup") { DriverSignupIntroScreen(navController) }
-            composable("driversignup1") { DriverIdVerificationScreen(navController) }
-            composable("driverFailed") { DriverFailed(navController) }
-            composable("driverFailedFace") { UnableToVerifyDriverFace(navController) }
-            composable("driversignupscreen/{drivingid}/{lesen}/{imagePath}") { backStackEntry ->
-                val drivingid = backStackEntry.arguments?.getString("drivingid").orEmpty()
-                val lesen = Uri.decode(backStackEntry.arguments?.getString("lesen").orEmpty())
-                val imagePath = Uri.decode(backStackEntry.arguments?.getString("imagePath").orEmpty())
-
-                DriverSignUpScreen(navController, drivingid, lesen, imagePath)
-            }
-            composable("duplicateDrivingID") { UnableToVerifyDuplicateDrivingID(navController) }
-            composable("addnewcar") { AddNewVehicle(navController) }
-            composable("driversuccess") { DriverSuccess(navController) }
-            composable("duplicatecar") { DuplicateVehicle(navController) }
-            composable("driverCustomerService") { DriverCustomerService(navController) }
-
-            // Profile
-            composable("profile") { ProfileScreen(firebaseAuth, navController) }
-            composable("check_mfa") { CheckMfaEnrollment(firebaseAuth, navController) }
-            composable("reg_otp") { RegisterPhoneNumberScreen(firebaseAuth, navController) }
-            composable("verifyOtp/{verifyID}/{phone}/{route}") { backStackEntry ->
-                val verifyID = backStackEntry.arguments?.getString("verifyID").orEmpty()
-                val phone = backStackEntry.arguments?.getString("phone").orEmpty()
-                val route = backStackEntry.arguments?.getString("route").orEmpty()
-
-                VerifyOtpScreen(navController, verifyID,firebaseAuth,phone,route)
-            }
-            composable("ratingsDashboard") { RatingDashboardScreen(navController) }
-
-            composable("banned_user/{userId}/{remark}") { backStackEntry ->
-                val userId = backStackEntry.arguments?.getString("userId") ?: ""
-                val remark = backStackEntry.arguments?.getString("remark") ?: ""
-                BannedUserScreen(navController,userId,remark)
-            }
-
-            // Home (Updated to pass FirebaseAuth & Firestore)
-            composable("home") { HomePage(navController, firebaseAuth, firestore) }
-
-            // Ride & Location
-            composable("create_ride") { CreateRideScreen(navController) }
-            composable("search_location") { SearchLocationScreen(navController, locationType = 0) }
-            composable("search_stop") { SearchLocationScreen(navController, locationType = 1) }
-            composable("search_destination") { SearchLocationScreen(navController, locationType = 2) }
-            composable("notification") { NotificationScreen(navController, firebaseAuth, firestore,context) }
-            composable("matching_screen") { MatchingScreen(navController,firestore) }
-            composable("search_ride") { SearchRideScreen(navController) }
-            composable("request_ride/{driverId}/{rideId}/{searchId}") { backStackEntry ->
-                val driverId = backStackEntry.arguments?.getString("driverId") ?: ""
-                val rideId = backStackEntry.arguments?.getString("rideId") ?: ""
-                val searchId = backStackEntry.arguments?.getString("searchId") ?: ""
-                RideRequestScreen(firebaseAuth,navController,driverId, rideId,searchId)
-            }
-            composable(
-                "ride_detail/{index}/{rideId}",
-                arguments = listOf(
-                    navArgument("index") { type = NavType.IntType },
-                    navArgument("rideId") { type = NavType.StringType }
-                )
-            ) { backStackEntry ->
-                val index = backStackEntry.arguments?.getInt("index") ?: 0
-                val rideId = backStackEntry.arguments?.getString("rideId") ?: ""
-
-                RideDetailScreen(navController, firestore,index, rideId)
-            }
-            composable(
-                "successful_ride_requested/{index}/{searchId}",
-                arguments = listOf(
-                    navArgument("index") { type = NavType.IntType },
-                    navArgument("searchId") { type = NavType.StringType }
-                )
-            ) { backStackEntry ->
-                val index = backStackEntry.arguments?.getInt("index") ?: 0
-                val searchId = backStackEntry.arguments?.getString("searchId") ?: ""
-                SuccessfulRequestRideScreen(navController, index,searchId)
-            }
-
-            composable(
-                "pending_ride_requested/{searchId}"){ backStackEntry ->
-                    val searchId = backStackEntry.arguments?.getString("searchId") ?: ""
-                PendingRideRequestScreen(firebaseAuth,navController,searchId,firestore)
-            }
-
-
-            composable(
-                route = "chat_list/{userId}",
-                arguments = listOf(
-                    navArgument("userId") { type = NavType.StringType }
-                )
-            ) { backStackEntry ->
-                val userId = backStackEntry.arguments?.getString("userId") ?: ""
-
-                ChatListScreen(
-                    userId = userId,
-                    navController = navController
-                )
-            }
-
-            composable("chat_screen/{chatId}") { backStackEntry ->
-                val chatId = backStackEntry.arguments?.getString("chatId") ?: ""
-                val currentUser = FirebaseAuth.getInstance().currentUser
-                currentUser?.uid?.let { uid ->
-                    ChatScreen(chatId = chatId, currentUserId = uid, navController = navController)
+                                val encodedReason = Uri.encode(reason)
+                                startDestination = "banned_user/${currentUser.uid}/$encodedReason"
+                            }
+                        }
+                    } else if (ratings.isNotEmpty()) {
+                        val encodedDate = Uri.encode(ratings.first().date)
+                        val encodedDescription = Uri.encode(ratings.first().description)
+                        startDestination = "warning_user/${warningCount}/${encodedDate}/${encodedDescription}"
+                    } else {
+                        startDestination = "home"
+                    }
                 }
+            } else {
+                startDestination = "intro"
             }
-            composable("chatbot"){ChatbotScreen()}
-
-
-            //rating
-            composable(
-                "rate_ride/{receiverID}/{rideId}"){ backStackEntry ->
-                val receiverID = backStackEntry.arguments?.getString("receiverID") ?: ""
-                val rideId = backStackEntry.arguments?.getString("rideId") ?: ""
-                RatingsScreen(navController,firebaseAuth,receiverID,rideId)
-            }
-
-            //favourite
-            composable("manage_driver"){ManageDriverScreen(navController)}
-            composable("recent_driver"){RecentDriverScreen(navController)}
-            composable("favourite_driver"){BackStackEntry ->
-                val currentUser = FirebaseAuth.getInstance().currentUser
-                currentUser?.uid?.let { uid ->
-                FavouriteDriverScreen(passengerId = uid, navController = navController)
-                }
-            }
-            composable("black_list_driver") { BackStackEntry ->
-                val currentUser = FirebaseAuth.getInstance().currentUser
-                currentUser?.uid?.let { uid ->
-                    BlackListDriverScreen(passengerId = uid , navController = navController)
-                }
-            }    // eWallet
-            composable("ewallet") { EWalletIntro(navController) }
-            composable("security_question") { SetSecurityQuestionsScreen(navController) }
-            composable("ewalletDashboard") { EWalletDashboardScreen(navController) }
-            composable("topup") { TopUpScreen(navController) }
-            composable("topupsuccess/{topup}/{balance}") { backStackEntry ->
-                val topup = backStackEntry.arguments?.getString("topup")?.toDoubleOrNull() ?: 0.0
-                val balance = backStackEntry.arguments?.getString("balance")?.toDoubleOrNull() ?: 0.0
-                TopUpSuccessScreen(navController, topup, balance)
-            }
-            composable("changePIN") { ChangePaymentPIN(navController) }
-            composable("resetPIN") { ResetPinScreen(navController) }
-            composable("updatePIN") { UpdatePinScreen(navController) }
-            composable("reset_question") { ResetSecurityQuestions(navController) }
-
         }
+
+        if(startDestination != null){
+            AnimatedNavHost(
+                navController = navController,
+                startDestination = startDestination!!,
+                enterTransition = {
+                    slideInHorizontally(
+                        initialOffsetX = { 1000 },
+                        animationSpec = tween(700, easing = FastOutSlowInEasing)
+                    ) + fadeIn(animationSpec = tween(700)) + scaleIn(
+                        initialScale = 0.9f,
+                        animationSpec = tween(500)
+                    )
+                },
+                exitTransition = {
+                    slideOutHorizontally(
+                        targetOffsetX = { -800 },
+                        animationSpec = tween(600)
+                    ) + fadeOut(animationSpec = tween(600))
+                },
+                popEnterTransition = {
+                    slideInHorizontally(
+                        initialOffsetX = { -1000 },
+                        animationSpec = tween(700, easing = LinearOutSlowInEasing)
+                    ) + fadeIn(animationSpec = tween(700)) + scaleIn(
+                        initialScale = 0.9f,
+                        animationSpec = tween(500)
+                    )
+                },
+                popExitTransition = {
+                    slideOutHorizontally(
+                        targetOffsetX = { 800 },
+                        animationSpec = tween(600, easing = FastOutLinearInEasing)
+                    ) + fadeOut(animationSpec = tween(600)) + scaleOut(
+                        targetScale = 1.2f,
+                        animationSpec = tween(500)
+                    )
+                }
+            ){
+                composable("intro") { IntroScreen(navController) }
+                composable("login") { LoginScreen(navController, firebaseAuth) }
+                composable("signup") { SignupIntroScreen(navController) }
+                composable("signup1") { IdVerificationScreen(navController) }
+                composable("signupScreen/{name}/{studentId}/{imagePath}") { backStackEntry ->
+                    val name = backStackEntry.arguments?.getString("name").orEmpty()
+                    val studentId = backStackEntry.arguments?.getString("studentId").orEmpty()
+                    val imagePath = Uri.decode(backStackEntry.arguments?.getString("imagePath").orEmpty())
+
+                    SignUpScreen(navController, name, studentId, imagePath)
+                }
+                composable("emailverify") { EmailVerify(navController) }
+                composable("signupFailed") { UnableToVerifyScreen(navController) }
+                composable("signupFailedFace") { UnableToVerifyFace(navController) }
+                composable("duplicateID") { UnableToVerifyDuplicateID(navController) }
+                composable("customerServiceTARUMTID") { CustomerServiceScreen(navController) }
+                composable("ReportSubmitted/{link}") { backStackEntry ->
+                    val link = backStackEntry.arguments?.getString("link").orEmpty()
+                    ReportSubmitted(navController, link)
+                }
+
+                // Driver Signup
+                composable("driverintro") { DriverIntroScreen(navController) }
+                composable("driversignup") { DriverSignupIntroScreen(navController) }
+                composable("driversignup1") { DriverIdVerificationScreen(navController) }
+                composable("driverFailed") { DriverFailed(navController) }
+                composable("driverFailedFace") { UnableToVerifyDriverFace(navController) }
+                composable("driversignupscreen/{drivingid}/{lesen}/{imagePath}") { backStackEntry ->
+                    val drivingid = backStackEntry.arguments?.getString("drivingid").orEmpty()
+                    val lesen = Uri.decode(backStackEntry.arguments?.getString("lesen").orEmpty())
+                    val imagePath = Uri.decode(backStackEntry.arguments?.getString("imagePath").orEmpty())
+
+                    DriverSignUpScreen(navController, drivingid, lesen, imagePath)
+                }
+                composable("duplicateDrivingID") { UnableToVerifyDuplicateDrivingID(navController) }
+                composable("addnewcar") { AddNewVehicle(navController) }
+                composable("driversuccess") { DriverSuccess(navController) }
+                composable("duplicatecar") { DuplicateVehicle(navController) }
+                composable("driverCustomerService") { DriverCustomerService(navController) }
+
+                // Profile
+                composable("profile") { ProfileScreen(firebaseAuth, navController) }
+                composable("check_mfa") { CheckMfaEnrollment(firebaseAuth, navController) }
+                composable("reg_otp") { RegisterPhoneNumberScreen(firebaseAuth, navController) }
+                composable("verifyOtp/{verifyID}/{phone}/{route}") { backStackEntry ->
+                    val verifyID = backStackEntry.arguments?.getString("verifyID").orEmpty()
+                    val phone = backStackEntry.arguments?.getString("phone").orEmpty()
+                    val route = backStackEntry.arguments?.getString("route").orEmpty()
+
+                    VerifyOtpScreen(navController, verifyID,firebaseAuth,phone,route)
+                }
+                composable("ratingsDashboard") { RatingDashboardScreen(navController) }
+
+                composable("banned_user/{userId}/{remark}") { backStackEntry ->
+                    val userId = backStackEntry.arguments?.getString("userId") ?: ""
+                    val remark = backStackEntry.arguments?.getString("remark") ?: ""
+                    BannedUserScreen(navController,userId,remark)
+                }
+                composable("warning_user/{count}/{date}/{reason}") { backStackEntry ->
+                    val count = backStackEntry.arguments?.getString("count") ?: ""
+                    val warningDate = Uri.decode(backStackEntry.arguments?.getString("date") ?: "")
+                    val warningReason = Uri.decode(backStackEntry.arguments?.getString("reason") ?: "")
+
+                    WarningScreen(navController,count, warningDate, warningReason)
+                }
+
+                // Home (Updated to pass FirebaseAuth & Firestore)
+                composable("home") { HomePage(navController, firebaseAuth, firestore) }
+
+                // Ride & Location
+                composable("create_ride") { CreateRideScreen(navController) }
+                composable("search_location") { SearchLocationScreen(navController, locationType = 0) }
+                composable("search_stop") { SearchLocationScreen(navController, locationType = 1) }
+                composable("search_destination") { SearchLocationScreen(navController, locationType = 2) }
+                composable("notification") { NotificationScreen(navController, firebaseAuth, firestore,context) }
+                composable("matching_screen") { MatchingScreen(navController,firestore) }
+                composable("search_ride") { SearchRideScreen(navController) }
+                composable("request_ride/{driverId}/{rideId}/{searchId}") { backStackEntry ->
+                    val driverId = backStackEntry.arguments?.getString("driverId") ?: ""
+                    val rideId = backStackEntry.arguments?.getString("rideId") ?: ""
+                    val searchId = backStackEntry.arguments?.getString("searchId") ?: ""
+                    RideRequestScreen(firebaseAuth,navController,driverId, rideId,searchId)
+                }
+                composable(
+                    "ride_detail/{index}/{rideId}",
+                    arguments = listOf(
+                        navArgument("index") { type = NavType.IntType },
+                        navArgument("rideId") { type = NavType.StringType }
+                    )
+                ) { backStackEntry ->
+                    val index = backStackEntry.arguments?.getInt("index") ?: 0
+                    val rideId = backStackEntry.arguments?.getString("rideId") ?: ""
+
+                    RideDetailScreen(navController, firestore,index, rideId)
+                }
+                composable(
+                    "successful_ride_requested/{index}/{searchId}",
+                    arguments = listOf(
+                        navArgument("index") { type = NavType.IntType },
+                        navArgument("searchId") { type = NavType.StringType }
+                    )
+                ) { backStackEntry ->
+                    val index = backStackEntry.arguments?.getInt("index") ?: 0
+                    val searchId = backStackEntry.arguments?.getString("searchId") ?: ""
+                    SuccessfulRequestRideScreen(navController, index,searchId)
+                }
+
+                composable(
+                    "pending_ride_requested/{searchId}"){ backStackEntry ->
+                    val searchId = backStackEntry.arguments?.getString("searchId") ?: ""
+                    PendingRideRequestScreen(firebaseAuth,navController,searchId,firestore)
+                }
+
+
+                composable(
+                    route = "chat_list/{userId}",
+                    arguments = listOf(
+                        navArgument("userId") { type = NavType.StringType }
+                    )
+                ) { backStackEntry ->
+                    val userId = backStackEntry.arguments?.getString("userId") ?: ""
+
+                    ChatListScreen(
+                        userId = userId,
+                        navController = navController
+                    )
+                }
+
+                composable("chat_screen/{chatId}") { backStackEntry ->
+                    val chatId = backStackEntry.arguments?.getString("chatId") ?: ""
+                    val currentUser = FirebaseAuth.getInstance().currentUser
+                    currentUser?.uid?.let { uid ->
+                        ChatScreen(chatId = chatId, currentUserId = uid, navController = navController)
+                    }
+                }
+                composable("chatbot"){ChatbotScreen()}
+
+
+                //rating
+                composable(
+                    "rate_ride/{receiverID}/{rideId}"){ backStackEntry ->
+                    val receiverID = backStackEntry.arguments?.getString("receiverID") ?: ""
+                    val rideId = backStackEntry.arguments?.getString("rideId") ?: ""
+                    RatingsScreen(navController,firebaseAuth,receiverID,rideId)
+                }
+
+                //favourite
+                composable("manage_driver"){ManageDriverScreen(navController)}
+                composable("recent_driver"){RecentDriverScreen(navController)}
+                composable("favourite_driver"){BackStackEntry ->
+                    val currentUser = FirebaseAuth.getInstance().currentUser
+                    currentUser?.uid?.let { uid ->
+                        FavouriteDriverScreen(passengerId = uid, navController = navController)
+                    }
+                }
+                composable("black_list_driver") { BackStackEntry ->
+                    val currentUser = FirebaseAuth.getInstance().currentUser
+                    currentUser?.uid?.let { uid ->
+                        BlackListDriverScreen(passengerId = uid , navController = navController)
+                    }
+                }    // eWallet
+                composable("ewallet") { EWalletIntro(navController) }
+                composable("security_question") { SetSecurityQuestionsScreen(navController) }
+                composable("ewalletDashboard") { EWalletDashboardScreen(navController) }
+                composable("topup") { TopUpScreen(navController) }
+                composable("topupsuccess/{topup}/{balance}") { backStackEntry ->
+                    val topup = backStackEntry.arguments?.getString("topup")?.toDoubleOrNull() ?: 0.0
+                    val balance = backStackEntry.arguments?.getString("balance")?.toDoubleOrNull() ?: 0.0
+                    TopUpSuccessScreen(navController, topup, balance)
+                }
+                composable("changePIN") { ChangePaymentPIN(navController) }
+                composable("resetPIN") { ResetPinScreen(navController) }
+                composable("updatePIN") { UpdatePinScreen(navController) }
+                composable("reset_question") { ResetSecurityQuestions(navController) }
+
+            }
+        }
+    }
+    // Show Loading Dialog
+    LoadingDialog(text= "Loading...",showDialog = startDestination == null, onDismiss = { startDestination != null})
+}
+
+@Composable
+fun WarningScreen(navController: NavController, warningCount: String, warningDate: String, warningReason: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.error), // Replace with your error image resource
+            contentDescription = "Error Icon",
+            modifier = Modifier.size(64.dp)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "You Have Been Warned!",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.Red,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("• Warning Count: $warningCount/3" , fontWeight = FontWeight.Bold)
+        Text("• Last Warning Date: $warningDate")
+        Text("• Reason: $warningReason")
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "If you receive more than 3 warnings within 30 days, your account will be banned.",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color.DarkGray,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = "This action was taken as your previous ride may violate SHARide Terms and Condition, the warning will be reset after 30 days",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color.DarkGray,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(onClick = {navController.navigate("home")}, colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)) {
+            Text("Okay, Take me home")
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = "SHARide ® Together We Build Community",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color.DarkGray,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
