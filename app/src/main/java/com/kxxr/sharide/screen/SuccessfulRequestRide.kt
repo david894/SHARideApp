@@ -270,7 +270,7 @@ fun EmergencyCallButton() {
                         Button(
                             onClick = {
                                 showDialog = false
-                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse(tarumt_phone))
+                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$tarumt_phone"))
                                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 ContextCompat.startActivity(context, intent, null)
                             },
@@ -285,7 +285,7 @@ fun EmergencyCallButton() {
                         Button(
                             onClick = {
                                 showDialog = false
-                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse(polis_phone))
+                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$polis_phone"))
                                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 ContextCompat.startActivity(context, intent, null)
                             },
@@ -300,7 +300,7 @@ fun EmergencyCallButton() {
                         Button(
                             onClick = {
                                 showDialog = false
-                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse(ambulance_phone))
+                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$ambulance_phone"))
                                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 ContextCompat.startActivity(context, intent, null)
                             },
@@ -315,7 +315,7 @@ fun EmergencyCallButton() {
                         Button(
                             onClick = {
                                 showDialog = false
-                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse(fire_phone))
+                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$fire_phone"))
                                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 ContextCompat.startActivity(context, intent, null)
                             },
