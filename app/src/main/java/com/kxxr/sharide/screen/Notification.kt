@@ -139,15 +139,6 @@ fun observeNotifications(
                 activeNotifications.forEach { notification ->
                     val exists = notificationDao.getNotification(notification.title, notification.description) != null
                     if (!exists) {
-                        notificationDao.insertNotification(
-                            NotificationEntity(
-                                image = notification.image,
-                                title = notification.title,
-                                description = notification.description,
-                                time = notification.time,
-                                postTime = notification.postTime
-                            )
-                        )
                         notificationDao.insertNotification(notification)
                     }
                 }

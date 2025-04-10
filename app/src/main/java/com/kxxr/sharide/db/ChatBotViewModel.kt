@@ -25,6 +25,9 @@ class ChatBotViewModel : ViewModel() {
     private val geminiApi: GeminiApi
     private var busRouteData: String? = null
 
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading = _isLoading.asStateFlow()
+
     init {
         val logging = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
@@ -56,15 +59,25 @@ class ChatBotViewModel : ViewModel() {
     }
     fun generateContent(prompt: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            val fullPrompt = """
-                You are a helpful university campus bus assistant.
-                Below is the full bus route data in JSON format:
+            _isLoading.value = true
 
-                $busRouteData
+            val isBusQuestion = listOf(
+                "route", "stop", "bus", "arrival", "Wangsa", "Melati", "PV"
+            ).any { prompt.contains(it, ignoreCase = true) }
 
-                Based on this, answer the following question:
-                $prompt
+            val fullPrompt = if (isBusQuestion && busRouteData != null) {
+                """
+            You are a helpful university campus bus assistant.
+            Below is the full bus route data in JSON format:
+
+            $busRouteData
+
+            Based on this, answer the following question:
+            $prompt
             """.trimIndent()
+            } else {
+                prompt // Let Gemini use its general knowledge
+            }
 
             val request = GeminiRequest(
                 contents = listOf(
@@ -94,8 +107,9 @@ class ChatBotViewModel : ViewModel() {
                 }
             } catch (e: Exception) {
                 _response.value = "Error: ${e.localizedMessage}"
+            } finally {
+                _isLoading.value = false
             }
         }
     }
-
 }

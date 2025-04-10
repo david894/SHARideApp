@@ -31,6 +31,7 @@ import com.kxxr.sharide.db.BusData
 fun ChatbotScreen(viewModel: ChatBotViewModel = viewModel()) {
     var userInput by remember { mutableStateOf("") }
     val botResponse by viewModel.response.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
     val messages = remember { mutableStateListOf<ChatbotMessage>() }
 
     val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
@@ -72,6 +73,33 @@ fun ChatbotScreen(viewModel: ChatBotViewModel = viewModel()) {
                 }
             }
 
+            // ✅ Typing indicator ABOVE input field
+            if (isLoading) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 80.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.Start
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .background(Color.DarkGray, shape = MaterialTheme.shapes.medium)
+                            .padding(12.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Gemini is typing...", color = Color.White)
+                        }
+                    }
+                }
+            }
+
+            // 📝 Input Row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -102,11 +130,12 @@ fun ChatbotScreen(viewModel: ChatBotViewModel = viewModel()) {
                     Icon(
                         imageVector = Icons.Default.Send,
                         contentDescription = "Send",
-                        tint = Color(0xFF0075FD) // Optional: match your theme
+                        tint = Color(0xFF0075FD)
                     )
                 }
             }
 
+            // 🪄 Add bot response after generation
             LaunchedEffect(botResponse) {
                 if (botResponse.isNotBlank()) {
                     messages.add(ChatbotMessage(botResponse, isUser = false))
