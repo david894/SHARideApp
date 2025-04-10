@@ -240,6 +240,15 @@ fun ChatTopBar(navController: NavController) {
 
 @Composable
 fun ChatPreviewCard(chat: ChatPreview, onClick: () -> Unit) {
+    val context = LocalContext.current
+    var hasUnread by remember { mutableStateOf(false) }
+
+    LaunchedEffect(chat.chatId) {
+        checkUnreadMessages(chat.chatId) { unread ->
+            hasUnread = unread
+        }
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -248,37 +257,67 @@ fun ChatPreviewCard(chat: ChatPreview, onClick: () -> Unit) {
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF0075FD))
     ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            AsyncImage(
-                model = chat.passengerImage.ifEmpty { R.drawable.profile_ico },
-                contentDescription = "Passenger Image",
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-            )
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AsyncImage(
+                    model = chat.passengerImage.ifEmpty { R.drawable.profile_ico },
+                    contentDescription = "Passenger Image",
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                )
 
-            Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
-            Column(modifier = Modifier.weight(1f)) {
-                Text(chat.passengerName, fontWeight = FontWeight.Bold, fontSize = 16.sp,color = Color.White)
-                Text(chat.lastMessage, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,color = Color.White)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(chat.passengerName, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+                    Text(chat.lastMessage, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = Color.White)
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Text(
+                    text = chat.lastMessageTimestamp?.toDate()?.let {
+                        SimpleDateFormat("hh:mm a", Locale.getDefault()).format(it)
+                    } ?: "",
+                    fontSize = 12.sp,
+                    color = Color.White
+                )
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Text(
-                text = chat.lastMessageTimestamp?.toDate()?.let {
-                    SimpleDateFormat("hh:mm a", Locale.getDefault()).format(it)
-                } ?: "",
-                fontSize = 12.sp,
-                color = Color.White
-            )
+            // 🔴 Red dot for unread messages
+            if (hasUnread) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(10.dp)
+                        .background(Color.Red, shape = CircleShape)
+                )
+            }
         }
     }
 }
+
+fun checkUnreadMessages(chatId: String, onResult: (Boolean) -> Unit) {
+    val db = Firebase.firestore
+    db.collection("chats")
+        .document(chatId)
+        .collection("messages")
+        .whereEqualTo("isRead", false)
+        .limit(1)
+        .get()
+        .addOnSuccessListener { snapshot ->
+            onResult(!snapshot.isEmpty)
+        }
+        .addOnFailureListener {
+            onResult(false) // fallback
+        }
+}
+
 
 @Composable
 fun ChatScreen(
