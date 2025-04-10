@@ -2,6 +2,7 @@ package com.kxxr.logiclibrary.Banned
 
 import android.content.Context
 import android.widget.Toast
+import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.FirebaseFirestore
 import com.kxxr.logiclibrary.User.User
 
@@ -47,11 +48,32 @@ fun unbanUser(
     userId: String,
     onComplete: (Boolean) -> Unit
 ){
-    firestore.collection("Banned")
-        .document(userId)
-        .delete()
-        .addOnSuccessListener { onComplete(true) }
-        .addOnFailureListener { onComplete(false) }
+    val ratingsWarningCollection = firestore.collection("RatingsWarning")
+
+    // First, delete documents in RatingsWarning collection containing the userId
+    ratingsWarningCollection
+        .whereEqualTo("userId", userId)
+        .get()
+        .addOnSuccessListener { querySnapshot ->
+            // Delete all matching documents
+            val deleteTasks = querySnapshot.documents.map { doc ->
+                doc.reference.delete()
+            }
+
+            // Wait for all delete operations to complete
+            Tasks.whenAllSuccess<Void>(*deleteTasks.toTypedArray())
+                .addOnCompleteListener {
+                    // After deleting from RatingsWarning, delete from Banned
+                    firestore.collection("Banned")
+                        .document(userId)
+                        .delete()
+                        .addOnSuccessListener { onComplete(true) }
+                        .addOnFailureListener { onComplete(false) }
+                }
+        }
+        .addOnFailureListener {
+            onComplete(false)
+        }
 }
 
 fun loadAllBannedUsers(
