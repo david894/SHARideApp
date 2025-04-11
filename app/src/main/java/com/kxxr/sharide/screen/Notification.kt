@@ -42,6 +42,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -90,6 +91,8 @@ fun NotificationScreen(
 
             observeNotifications(context,userId, firestore, notifications, notificationDao)
             observeUnreadMessages(context, userId,firestore,notifications,notificationDao )
+            observeCancelRideStatus(context,userId,firestore,notifications,notificationDao)
+
         }
     }
 
@@ -397,4 +400,84 @@ fun observeUnreadMessages(
                     }
                 }
         }
+}
+
+fun observeCancelRideStatus(
+    context: Context,
+    currentUserId: String,
+    firestore: FirebaseFirestore,
+    notifications: MutableList<NotificationEntity>,
+    notificationDao: NotificationDao
+) {
+    val isDriver = getDriverPreference(context)
+    Log.d("CancelObserver", "User isDriver: $isDriver")
+
+    val requestQuery = if (isDriver) {
+        firestore.collection("requests")
+            .whereEqualTo("driverId", currentUserId)
+            .whereEqualTo("status", "canceled")
+    } else {
+        firestore.collection("requests")
+            .whereEqualTo("passengerId", currentUserId)
+            .whereEqualTo("status", "canceled")
+    }
+
+    requestQuery.addSnapshotListener { requestSnapshot, error ->
+        if (error != null || requestSnapshot == null) {
+            Log.e("CancelObserver", "Snapshot error or null: $error")
+            return@addSnapshotListener
+        }
+
+        Log.d("CancelObserver", "Total canceled requests found: ${requestSnapshot.documents.size}")
+
+        requestSnapshot.documents.forEach { doc ->
+            val rideId = if (isDriver) doc.getString("rideId") else doc.getString("searchId") ?: return@forEach
+            val otherUserId = if (isDriver) doc.getString("passengerId") else doc.getString("driverId") ?: return@forEach
+
+            Log.d("CancelObserver", "Found canceled request: rideId=$rideId, otherUserId=$otherUserId")
+
+            firestore.collection("users")
+                .whereEqualTo("firebaseUserId", otherUserId)
+                .limit(1)
+                .get()
+                .addOnSuccessListener { userSnapshot ->
+                    val name = userSnapshot.documents.firstOrNull()?.getString("name") ?: "User"
+
+                    val collection = if (isDriver) "rides" else "searchs"
+                    if (rideId != null) {
+                        firestore.collection(collection).document(rideId)
+                            .get()
+                            .addOnSuccessListener { rideDoc ->
+                                val location = rideDoc.getString("location") ?: "Unknown"
+                                val destination = rideDoc.getString("destination") ?: "Unknown"
+                                val postTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+
+                                val notification = NotificationEntity(
+                                    image = R.drawable.ban,
+                                    title = "Ride Cancel",
+                                    description = "Your ride participant, $name from $location to $destination has canceled the ride.",
+                                    time = "Ride Cancelled",
+                                    postTime = postTime
+                                )
+
+                                val alreadyShown = notifications.any {
+                                    it.description == notification.description && it.postTime == notification.postTime
+                                }
+
+                                if (!alreadyShown) {
+                                    notifications.add(notification)
+                                    AndroidNotification.show(context, notification)
+
+                                    GlobalScope.launch(Dispatchers.IO) {
+                                        val exists = notificationDao.getNotification(notification.title, notification.description) != null
+                                        if (!exists) {
+                                            notificationDao.insertNotification(notification)
+                                        }
+                                    }
+                                }
+                            }
+                    }
+                }
+        }
+    }
 }

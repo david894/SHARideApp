@@ -591,13 +591,15 @@ fun ReminderContent(
         Text(text = title, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
         Spacer(modifier = Modifier.height(8.dp))
 
-        if (items.isEmpty()) {
+        val filteredItems = items.filter { it.status.lowercase() != "canceled" }
+
+        if (filteredItems.isEmpty()) {
             Text(text = emptyText, fontSize = 16.sp, color = Color.Gray)
         } else {
             LazyColumn(
                 modifier = Modifier.heightIn(max = 200.dp)
             ) {
-                items(items) { item ->
+                items(filteredItems) { item ->
                     val index = items.indexOf(item)
                     RideItem(
                         title = if (isDriver) "Ride ${index + 1}" else "Search ${index + 1}",
@@ -606,7 +608,6 @@ fun ReminderContent(
                         isDriver = isDriver,
                         onClick = {
                             if (isDriver) {
-                                if (isDriver) {
                                     firestore.collection("requests")
                                         .whereEqualTo("rideId", item.id)
                                         .get()
@@ -637,7 +638,7 @@ fun ReminderContent(
                                         .addOnFailureListener {
                                             Log.e("Navigation", "Failed to fetch ride details")
                                         }
-                                }
+
 
                             } else {
                                 checkRequestStatus(
@@ -698,6 +699,7 @@ fun checkRequestStatus(
                 Toast.makeText(context, "Ride is already past. No action taken.", Toast.LENGTH_SHORT).show()
             } else {
                 when (status) {
+                    "canceled" ->  navController.navigate("matching_screen")
                     "pending" -> navController.navigate("pending_ride_requested/$searchId")
                     "successful", "startBoarding","onBoarding","complete" -> navController.navigate("successful_ride_requested/${index + 1}/$searchId")
                 }

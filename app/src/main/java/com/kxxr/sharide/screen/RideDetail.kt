@@ -789,7 +789,7 @@ fun cancelRide(firestore: FirebaseFirestore, navController: NavController, rideI
 
             // Delete all related requests
             for (document in documents) {
-                batch.delete(document.reference)
+                batch.update(document.reference, "status", "canceled") // Update status to "canceled"
             }
 
             // Delete the ride itself

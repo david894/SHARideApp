@@ -80,6 +80,7 @@ import com.kxxr.logiclibrary.eWallet.paymentAPI
 import com.kxxr.logiclibrary.eWallet.verifyCurrentPin
 import com.kxxr.sharide.R
 import com.kxxr.sharide.db.RideDetail
+import com.kxxr.sharide.db.SuccessfulUserInfo
 import kotlinx.coroutines.launch
 
 @Composable
@@ -109,6 +110,7 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
             }
     }
     var isOnBoarding by remember { mutableStateOf(false) }
+    var isComplete by remember { mutableStateOf(false) }
     // Check if any request has "onBoarding" status
     LaunchedEffect(searchId) {
         db.collection("requests")
@@ -134,8 +136,22 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
                 }
             }
     }
+
+    var isStatusComplete by remember { mutableStateOf(false) }
+    LaunchedEffect(searchId) {
+        db.collection("requests")
+            .whereEqualTo("searchId", searchId)
+            .whereEqualTo("status", "complete")
+            .get()
+            .addOnSuccessListener { querySnapshot ->
+                if (!querySnapshot.isEmpty) {
+                    isStatusComplete = true
+                }
+            }
+    }
+    // Check if any request has "complete" status
     Scaffold(
-        topBar = { SuccessfulSearchTopBar(navController, index) } // Change to search index
+        topBar = { SuccessfulSearchTopBar(navController, index) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -182,7 +198,7 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
                         EmergencyCallButton()
                         Spacer(modifier = Modifier.height(16.dp))
                         Column {
-                            // 🚗 **Driver Section**
+                            // Driver Section
                             Text(
                                 text = "Driver",
                                 fontSize = 20.sp,
@@ -193,7 +209,7 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
 
                             Spacer(modifier = Modifier.height(16.dp))
 
-                            // 👥 **Ride Participants Section**
+                            // Ride Participants Section
                             Text(
                                 text = "Ride Participants",
                                 fontSize = 20.sp,
@@ -206,7 +222,7 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
                             val timeLeftMillis = convertToTimestamp(ride.date, ride.time) - System.currentTimeMillis()
                             val oneHourMillis = 60 * 60 * 1000
 
-                            // 🚀 If "Start Boarding", show Complete Button
+                            //  If "Start Boarding", show Complete Button
                             if (isOnBoarding) {
                                 CompleteButton(
                                     firestore = db,
@@ -223,7 +239,10 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
                                     searchId = searchId,
                                     context = context
                                 )
-                            } else {
+                            } else if (isStatusComplete) {
+                                // not button will display
+                            }
+                            else {
                                 CancelSuccessfulRideButton(
                                     firestore = db,
                                     navController = navController,
@@ -686,7 +705,7 @@ fun RideParticipantsSection(rideId: String, navController: NavController) {
                                         Icon(
                                             imageVector = Icons.Default.LocationOn,
                                             contentDescription = "Location Icon",
-                                            tint = Color.Red // or your desired color
+                                            tint = Color.Red
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
@@ -700,7 +719,7 @@ fun RideParticipantsSection(rideId: String, navController: NavController) {
                                         Icon(
                                             imageVector = Icons.Default.LocationOn,
                                             contentDescription = "Location Icon",
-                                            tint = Color.Blue // or your desired color
+                                            tint = Color.Blue
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
@@ -728,7 +747,7 @@ fun CancelSuccessfulRideButton(
     firestore: FirebaseFirestore,
     navController: NavController,
     rideId: String,
-    currentUserId: String, // Pass the current user ID
+    currentUserId: String,
     context: android.content.Context
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -771,7 +790,7 @@ private fun cancelRide(
                                 val batch = firestore.batch()
 
                                 for (doc in requestDocs.documents) {
-                                    batch.delete(doc.reference) // 👈 directly delete the request
+                                    batch.update(doc.reference, "status", "canceled") // Update status to "canceled"
                                 }
 
                                 batch.commit()
@@ -807,12 +826,12 @@ private fun cancelRide(
 fun BoardRideButton(
     firestore: FirebaseFirestore,
     navController: NavController,
-    searchId: String,  // Change from searchId to rideId
+    searchId: String,
     context: Context
 ) {
     val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return
 
-    // Read max attempts from strings.xml
+
     val maxAttempts = stringResource(id = R.string.max_pin_attempts).toInt()
     val amount = stringResource(id = R.string.fare_amount).toInt()
 
@@ -980,13 +999,4 @@ fun startChatWithDriver(
 }
 
 
-
-data class SuccessfulUserInfo(
-    val firebaseUserId: String = "",
-    val name: String = "Unknown",
-    val imageUrl: String = "",
-    val rating: Double = 4.5,
-    val location: String = "",
-    val destination: String = "",
-    )
 
