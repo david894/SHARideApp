@@ -60,6 +60,9 @@ import com.kxxr.logiclibrary.Driver.searchVehicle
 import com.kxxr.logiclibrary.Ratings.loadRatingScore
 import com.kxxr.logiclibrary.eWallet.loadWalletBalance
 import com.kxxr.sharide.R
+import com.kxxr.sharide.db.DriverInfo
+import com.kxxr.sharide.db.RideDetails
+import com.kxxr.sharide.db.RideInfo
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -151,7 +154,7 @@ fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, 
                             DriverCard(navController, firebaseAuth, firestore, index + 1, driver, ride.rideId,searchId,"Request")
                             }else{
 
-                                // Optionally show a warning (or just skip entirely)
+                                //  show a warning, user is not able to have request button
                                 Text(
                                     text = "Driver ${driver.name} is in your blacklist.",
                                     color = Color.Gray,
@@ -369,7 +372,7 @@ fun DriverCard(
         ) {
             Text("Ride Details", color = Color.Black, fontSize = 18.sp, fontWeight = FontWeight.Bold, textDecoration = TextDecoration.Underline)
             Spacer(modifier = Modifier.height(8.dp))
-            // 🚀 Show Ride Details from Firestore
+            //  Show Ride Details from Firestore
             rideDetails?.let {
                 Text("📍 Location: ${it.location}", color = Color.Black, fontSize = 14.sp)
                 Text("🚏 Stop: ${it.stop}", color = Color.Black, fontSize = 14.sp)
@@ -515,28 +518,6 @@ fun fetchRideAndDriverDetails(
         }
 }
 
-
-data class RideDetails(
-    val time: String,
-    val destination: String,
-    val stop: String,
-    val location: String
-)
-
-data class DriverInfo(
-    val driverId: String,
-    val name: String,
-    val imageUrl: String,
-    val rating: Double,
-    val price: String
-)
-data class RideInfo(
-    val rideId: String,
-    val pickupLocation: String,
-    val destination: String,
-    val time: String
-)
-
 fun sendRequestToDriver(
     firestore: FirebaseFirestore,
     rideId: String,
@@ -566,7 +547,7 @@ fun fetchDriverForPendingRequest(
     onSuccess: (DriverInfo, RideInfo) -> Unit,
     onFailure: (String) -> Unit
 ) {
-    // Step 1: Get rideId from requests where status is "pending"
+    // Get rideId from requests where status is "pending"
     firestore.collection("requests")
         .whereEqualTo("searchId", searchId)
         .whereEqualTo("status", "pending")
@@ -581,13 +562,13 @@ fun fetchDriverForPendingRequest(
             val request = requestDocs.documents.first()
             val rideId = request.getString("rideId") ?: return@addOnSuccessListener
 
-            // Step 2: Get driverId from rides collection
+            // Get driverId from rides collection
             firestore.collection("rides").document(rideId)
                 .get()
                 .addOnSuccessListener { rideDoc ->
                     val driverId = rideDoc.getString("driverId") ?: return@addOnSuccessListener
 
-                    // Step 3: Fetch driver details from users collection
+                    // Fetch driver details from users collection
                     firestore.collection("users").document(driverId)
                         .get()
                         .addOnSuccessListener { userDoc ->

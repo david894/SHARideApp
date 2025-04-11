@@ -19,5 +19,13 @@
     <string name="tarumt_phone">0341450250</string>
     <string name="ambulance_phone">0341459999</string>
     <string name="fire_phone">0340235544</string>
+    <string name="chatot_header">Gemini Chat Bot</string>
+    <string name="chatbot_typing">Gemini is typing...</string>
+    <string name="content_place_holder_chatbot">Your message</string>
+    <string name="gemeni_api">" private val apiKey = AIzaSyCQ-zfS1V7tSgOuv_znYHeOItHi_VmEfEM"</string>
+    <string name="google_map_navigation_url">https://www.google.com/maps/dir/?api=1</string>
+    <string name="google_map_navigation_package">com.google.android.apps.maps</string>
+    <string name="ride_detail_url">https://maps.googleapis.com/maps/api/directions/json?</string>
+
 
 </resources>

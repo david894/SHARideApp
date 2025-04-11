@@ -14,7 +14,7 @@ fun findMatchingRides(
         fetchUsers(firestore) { usersSnapshot ->
             fetchSearches(firestore) { searchSnapshot ->
 
-                // ✅ Get matching ride documents
+                // Get matching ride documents
                 val matchingRides = ridesSnapshot.documents.filter { ride ->
                     getMatchingDrivers(listOf(ride), searchSnapshot, usersSnapshot).isNotEmpty()
                 }
@@ -45,7 +45,7 @@ fun fetchSearches(
 ) {
     firestore.collection("searchs")
         .orderBy("timestamp", Query.Direction.DESCENDING) // Order by latest timestamp
-        .limit(1) // Get only the latest search
+        .limit(1) // Get only one latest search
         .get()
         .addOnSuccessListener(onSuccess)
         .addOnFailureListener { }
@@ -73,7 +73,7 @@ fun getMatchingDrivers(
     rideSnapshot.forEach { ride ->
         val driverId = ride.getString("driverId") ?: return@forEach
 
-        // ❌ Skip ride if it's driven by the current user
+        //  Skip ride if it's driven by the current user
         if (driverId == currentUserId) return@forEach
 
         val rideDate = ride.getString("date") ?: return@forEach
@@ -98,7 +98,7 @@ fun getMatchingDrivers(
             val genderPreference = search.getString("genderPreference") ?: "Both"
             val passengerCapacity = search.getLong("capacity")?.toInt() ?: 1
 
-            // ✅ Check all conditions only if the date matches
+            //  Check all conditions only if the date matches
             val isMatch = isDateValid(rideDate,searchDate) && isTimeValid(searchTimeMinutes, rideTimeMinutes) &&
                     isLocationValid(searchLocation, rideLocation, rideStop) &&
                     isDestinationValid(searchDestination, rideStop, rideDestination) &&
@@ -107,7 +107,7 @@ fun getMatchingDrivers(
 
             if (isMatch) {
                 matchingRides.add(ride)
-                return@forEach // ✅ Stop checking once a match is found for this ride
+                return@forEach // Stop checking once a match is found for this ride
             }
         }
     }

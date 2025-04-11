@@ -119,7 +119,7 @@ fun SearchBar(
                 .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Back Button instead of Location Icon
+            // Back Button
             IconButton(onClick = { navController.popBackStack() }) {
                 Icon(
                     imageVector = Icons.Default.ArrowBack,
@@ -151,7 +151,7 @@ fun SearchBar(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 230.dp) // Adjust height for ~4 items (each item ~48dp)
+                    .heightIn(max = 230.dp)
                     .background(Color.White)
             ) {
                 LazyColumn {

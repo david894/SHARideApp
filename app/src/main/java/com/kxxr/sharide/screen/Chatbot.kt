@@ -24,8 +24,11 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import com.google.gson.Gson
+import com.kxxr.sharide.R
 import com.kxxr.sharide.db.BusData
+import com.kxxr.sharide.db.ChatbotMessage
 
 @Composable
 fun ChatbotScreen(viewModel: ChatBotViewModel = viewModel()) {
@@ -33,7 +36,9 @@ fun ChatbotScreen(viewModel: ChatBotViewModel = viewModel()) {
     val botResponse by viewModel.response.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val messages = remember { mutableStateListOf<ChatbotMessage>() }
-
+    val chatbotHeader = stringResource(id = R.string.chatot_header)
+    val chatbotTyping = stringResource(id = R.string.chatbot_typing)
+    val contentPlaceHolder = stringResource(id = R.string.content_place_holder_chatbot)
     val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     val context = LocalContext.current
     LaunchedEffect(Unit) {
@@ -43,14 +48,14 @@ fun ChatbotScreen(viewModel: ChatBotViewModel = viewModel()) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Gemini Chat Bot", color = Color.White) },
+                title = { Text(chatbotHeader, color = Color.White) },
                 navigationIcon = {
                     IconButton(onClick = { backDispatcher?.onBackPressed() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF0075FD), // Blue bar
+                    containerColor = Color(0xFF0075FD),
                     titleContentColor = Color.White
                 )
             )
@@ -73,7 +78,7 @@ fun ChatbotScreen(viewModel: ChatBotViewModel = viewModel()) {
                 }
             }
 
-            // ✅ Typing indicator ABOVE input field
+            //Typing indicator
             if (isLoading) {
                 Row(
                     modifier = Modifier
@@ -93,13 +98,13 @@ fun ChatbotScreen(viewModel: ChatBotViewModel = viewModel()) {
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Gemini is typing...", color = Color.White)
+                            Text(chatbotTyping, color = Color.White)
                         }
                     }
                 }
             }
 
-            // 📝 Input Row
+            // user input Row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -109,7 +114,7 @@ fun ChatbotScreen(viewModel: ChatBotViewModel = viewModel()) {
                 OutlinedTextField(
                     value = userInput,
                     onValueChange = { userInput = it },
-                    label = { Text("Your message") },
+                    label = { Text(contentPlaceHolder) },
                     modifier = Modifier.weight(1f)
                 )
 
@@ -135,7 +140,7 @@ fun ChatbotScreen(viewModel: ChatBotViewModel = viewModel()) {
                 }
             }
 
-            // 🪄 Add bot response after generation
+            // bot response after generation
             LaunchedEffect(botResponse) {
                 if (botResponse.isNotBlank()) {
                     messages.add(ChatbotMessage(botResponse, isUser = false))
@@ -165,19 +170,5 @@ fun MessageBubble(message: ChatbotMessage) {
                 style = MaterialTheme.typography.bodyMedium
             )
         }
-    }
-}
-
-data class ChatbotMessage(val text: String, val isUser: Boolean)
-
-fun loadBusData(context: Context): BusData? {
-    return try {
-        val inputStream = context.assets.open("data.json")
-        val json = inputStream.bufferedReader().use { it.readText() }
-        val gson = Gson()
-        gson.fromJson(json, BusData::class.java)
-    } catch (e: Exception) {
-        e.printStackTrace()
-        null
     }
 }

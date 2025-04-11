@@ -45,11 +45,12 @@ import com.google.firebase.firestore.firestore
 import com.google.firebase.storage.FirebaseStorage
 import com.google.maps.android.compose.*
 import com.kxxr.sharide.R
+import com.kxxr.sharide.db.Ride
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-// Main home screen(driver and passenger
+// Main home screen(driver and passenger)
 @Composable
 fun HomePage(navController: NavController, firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
 
@@ -252,7 +253,7 @@ fun ProfileHeader(
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        // Switch with custom color (moved to the right)
+
         Switch(
             checked = isDriver,
             onCheckedChange = { onRoleChange(it) },
@@ -416,7 +417,7 @@ fun RideReminder(
                             .get()
                             .addOnSuccessListener { querySnapshot ->
                                 val requestStatus = querySnapshot.documents
-                                    .firstOrNull()?.getString("status") // Take first request status if exists
+                                    .firstOrNull()?.getString("status") ?: "Unknown"
                                 val updatedStatus = formatTimeLeft(timeLeftMillis,rideIdStatus,requestStatus)
 
                                 // Update rideItems inside listener
@@ -433,12 +434,12 @@ fun RideReminder(
                                 rideItems.sortByDescending { it.timeLeftMillis }
                             }
                             .addOnFailureListener {
-                                // If no request document is found, default to "Prepare"
+                                // If no request document is found, default to "Unknown"
                                 rideItems.removeIf { it.id == rideId }
                                 rideItems.add(
                                     Ride(
                                         id = rideId,
-                                        status = "Prepare",
+                                        status = "Unknown",
                                         timeLeftMillis = timeLeftMillis,
                                         date = date,
                                         time = time
@@ -503,7 +504,7 @@ fun SearchReminder(
                         val timestamp = convertToTimestamp(date, time)
                         val timeLeftMillis = timestamp - currentTime
                         val rideIdStatus = "null"
-                        // Default status (assumes "Prepare" until requestStatus is retrieved)
+                        // Default status (assumes "Unknown" until requestStatus is retrieved)
                         var status = formatTimeLeft(timeLeftMillis, null,null)
 
                         // Fetch status from "requests" collection using searchId
@@ -512,7 +513,7 @@ fun SearchReminder(
                             .get()
                             .addOnSuccessListener { querySnapshot ->
                                 val requestStatus = querySnapshot.documents
-                                    .firstOrNull()?.getString("status") // Take first matching request status
+                                    .firstOrNull()?.getString("status") ?: "Unknown"  // Take first matching request status
                                 val updatedStatus = formatTimeLeft(timeLeftMillis,rideIdStatus, requestStatus)
 
                                 // Update searchItems list with correct status
@@ -529,12 +530,12 @@ fun SearchReminder(
                                 searchItems.sortByDescending { it.timeLeftMillis }
                             }
                             .addOnFailureListener {
-                                // If no request is found, default to "Prepare"
+                                // If no request is found, default to "Unknown"
                                 searchItems.removeIf { it.id == searchId }
                                 searchItems.add(
                                     Ride(
                                         id = searchId,
-                                        status = "Prepare",
+                                        status = "Unknown",
                                         timeLeftMillis = timeLeftMillis,
                                         date = date,
                                         time = time
@@ -617,7 +618,7 @@ fun ReminderContent(
 
 
                                             val formatter = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())
-                                            val dateTimeString = "${item.date} ${item.time}" // Combine date and time
+                                            val dateTimeString = "${item.date} ${item.time}"
                                             val rideTimeMillis = formatter.parse(dateTimeString)?.time ?: 0L
 
                                             val currentTimeMillis = System.currentTimeMillis()
@@ -667,7 +668,7 @@ fun checkRequestStatus(
     context: Context
 ) {
     val formatter = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())
-    val dateTimeString = "$date $time" // Combine date and time
+    val dateTimeString = "$date $time"
     val rideTimeMillis = formatter.parse(dateTimeString)?.time ?: 0L
 
     val currentTimeMillis = System.currentTimeMillis()
@@ -698,7 +699,7 @@ fun checkRequestStatus(
             } else {
                 when (status) {
                     "pending" -> navController.navigate("pending_ride_requested/$searchId")
-                    "successful", "startBoarding","onBoarding" -> navController.navigate("successful_ride_requested/${index + 1}/$searchId")
+                    "successful", "startBoarding","onBoarding","complete" -> navController.navigate("successful_ride_requested/${index + 1}/$searchId")
                 }
             }
         }
@@ -720,7 +721,7 @@ fun convertToTimestamp(date: String, time: String): Long {
 }
 
 fun formatTimeLeft(timeLeftMillis: Long, rideIdStatus: String?, requestStatus: String?): String {
-    val gracePeriodMillis = -60 * 60 * 1000
+    val gracePeriodMillis = -120 * 60 * 1000
 
     return when {
         rideIdStatus == "complete" -> "Completed"
@@ -738,8 +739,9 @@ fun formatTimeLeft(timeLeftMillis: Long, rideIdStatus: String?, requestStatus: S
             else -> "${timeLeftMillis / 60000} min left"
         }
 
-        // If time is late but within the 30-minute grace period
+        // If time is late but within the 60-minute grace period
         timeLeftMillis in (gracePeriodMillis + 1)..0 -> when (requestStatus) {
+            "Unknown" -> "Prepare"
             "pending", "successful" -> "Prepare"       // Let users prepare even if a bit late
             "startBoarding","onBoarding" -> "OnGoing"
             "complete" -> "Completed"
@@ -815,13 +817,6 @@ fun RideItem(title: String, status: String, statusColor: Color, isDriver: Boolea
     }
 }
 
-data class Ride(
-    val id: String,
-    val status: String,
-    val timeLeftMillis: Long,
-    val date: String,
-    val time: String
-)
 
 
 // Error screen when location permission is denied
@@ -862,7 +857,7 @@ fun NotificationPermissionErrorScreen(context: Context) {
         )
         Spacer(modifier = Modifier.height(16.dp))
         Image(
-            painter = painterResource(id = R.drawable.error), // Replace with your own icon if needed
+            painter = painterResource(id = R.drawable.error),
             contentDescription = "Error Icon",
             modifier = Modifier.size(100.dp)
         )

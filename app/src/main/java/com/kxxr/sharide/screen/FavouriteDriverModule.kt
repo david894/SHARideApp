@@ -147,7 +147,7 @@ fun ManageDriverCard(
     buttonText: String,
     backgroundColor: Color,
     onClick: () -> Unit,
-    imageResId: Int // Pass drawable resource ID here
+    imageResId: Int
 ) {
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -443,8 +443,9 @@ fun addToList(collection: String, driverId: String) {
 fun FavouriteDriverScreen(passengerId: String, navController: NavController) {
     val db = Firebase.firestore
     var driverIds by remember { mutableStateOf<List<String>>(emptyList()) }
+    var driverToDelete by remember { mutableStateOf<String?>(null) } // confirmation dialog
 
-    // Step 1: Load driverIds
+    // Load driverIds
     LaunchedEffect(Unit) {
         db.collection("favourites")
             .whereEqualTo("passengerId", passengerId)
@@ -500,23 +501,10 @@ fun FavouriteDriverScreen(passengerId: String, navController: NavController) {
                             // Delete Button
                             Button(
                                 onClick = {
-                                    val favRef = db.collection("favourites")
-                                        .whereEqualTo("passengerId", passengerId)
-                                        .limit(1)
-
-                                    favRef.get().addOnSuccessListener { docs ->
-                                        val doc = docs.firstOrNull()
-                                        doc?.reference?.update(
-                                            "driverIds",
-                                            FieldValue.arrayRemove(driverId)
-                                        )
-                                            ?.addOnSuccessListener {
-                                                driverIds = driverIds.filterNot { it == driverId }
-                                            }
-                                    }
+                                    driverToDelete = driverId // Trigger confirmation
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color.White)
-                            ) {
+                            ){
                                 Text("Delete", color = Color.Red)
                             }
                         }
@@ -524,6 +512,41 @@ fun FavouriteDriverScreen(passengerId: String, navController: NavController) {
                 }
             }
         }
+    }// Confirmation Dialog
+    if (driverToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { driverToDelete = null },
+            title = { Text("Confirm Deletion") },
+            text = { Text("Are you sure you want to remove this driver from your favourites?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val favRef = db.collection("favourites")
+                            .whereEqualTo("passengerId", passengerId)
+                            .limit(1)
+
+                        favRef.get().addOnSuccessListener { docs ->
+                            val doc = docs.firstOrNull()
+                            doc?.reference?.update(
+                                "driverIds",
+                                FieldValue.arrayRemove(driverToDelete)
+                            )?.addOnSuccessListener {
+                                driverIds = driverIds.filterNot { it == driverToDelete }
+                                driverToDelete = null
+                                navController.popBackStack()
+                            }
+                        }
+                    }
+                ) {
+                    Text("Yes", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { driverToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
@@ -531,30 +554,16 @@ fun FavouriteDriverScreen(passengerId: String, navController: NavController) {
 @Composable
 fun BlackListDriverScreen(passengerId: String,navController: NavController) {
     val db = Firebase.firestore
-    var driverList by remember { mutableStateOf<List<DriverInfo>>(emptyList()) }
+    var driverList by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    var driverToUnblock by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         db.collection("blackLists")
             .whereEqualTo("passengerId", passengerId)
             .get()
             .addOnSuccessListener { docs ->
-                val driverIds = docs.firstOrNull()?.get("driverIds") as? List<String> ?: emptyList()
-                if (driverIds.isNotEmpty()) {
-                    db.collection("users")
-                        .whereIn("firebaseUserId", driverIds)
-                        .get()
-                        .addOnSuccessListener { users ->
-                            driverList = users.map {
-                                DriverInfo(
-                                    driverId = it.getString("firebaseUserId") ?: "",
-                                    name = it.getString("name") ?: "",
-                                    imageUrl = it.getString("profileImageRes") ?: "",
-                                    rating = 0.0,
-                                    price = ""
-                                )
-                            }
-                        }
-                }
+                driverList = docs.firstOrNull()?.get("driverIds") as? List<String> ?: emptyList()
             }
     }
     Column(
@@ -562,34 +571,64 @@ fun BlackListDriverScreen(passengerId: String,navController: NavController) {
             .fillMaxSize()
     ) {
         ManageDriverTopBar(title = "Driver Black List", navController = navController)
-
-        LazyColumn(modifier = Modifier.padding(16.dp)) {
-            items(driverList) { driver ->
-                DriverCard(driverId = driver.driverId, navController = navController,  cardColor = Color.Gray) {
-                    Button(
-                        onClick = {
-                            // Remove from blacklist
-                            db.collection("blackLists")
-                                .whereEqualTo("passengerId", passengerId)
-                                .get()
-                                .addOnSuccessListener { docs ->
-                                    val doc = docs.firstOrNull()
-                                    doc?.reference?.update(
-                                        "driverIds",
-                                        FieldValue.arrayRemove(driver.driverId)
-                                    )
-                                }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+        if (driverList.isEmpty()) {
+            Text("No black list drivers.", modifier = Modifier.padding(16.dp))
+        } else {
+            LazyColumn(modifier = Modifier.padding(16.dp)) {
+                items(driverList) { driverId ->
+                    DriverCard(
+                        driverId = driverId,
+                        navController = navController,
+                        cardColor = Color.Gray
                     ) {
-                        Text("Unblock", color = Color.White)
+                        Button(
+                            onClick = {
+                                driverToUnblock = driverId
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White)
+                        )  {
+                            Text("Unblock", color = Color.Red)
+                        }
                     }
-                }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
             }
         }
     }
+    // Confirmation dialog
+    if (driverToUnblock != null) {
+        AlertDialog(
+            onDismissRequest = { driverToUnblock = null },
+            title = { Text("Confirm Unblock") },
+            text = { Text("Are you sure you want to unblock this driver?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val blackListRef = db.collection("blackLists")
+                        .whereEqualTo("passengerId", passengerId)
+                        .limit(1)
+
+                    blackListRef.get().addOnSuccessListener { docs ->
+                        val doc = docs.firstOrNull()
+                        doc?.reference?.update("driverIds", FieldValue.arrayRemove(driverToUnblock))
+                            ?.addOnSuccessListener {
+                                driverList = driverList.filterNot { it == driverToUnblock }
+                                driverToUnblock = null
+                                navController.popBackStack() // Go back after unblocking
+                            }
+                    }
+                }) {
+                    Text("Yes", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { driverToUnblock = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
+
 
 

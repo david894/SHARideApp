@@ -3,6 +3,7 @@ package com.kxxr.sharide.db
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kxxr.sharide.R
 import com.kxxr.sharide.StoreInterface.GeminiApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,7 +18,7 @@ import retrofit2.Response
 
 class ChatBotViewModel : ViewModel() {
 
-    private val apiKey = "AIzaSyCQ-zfS1V7tSgOuv_znYHeOItHi_VmEfEM" // 🔑 Replace with your actual Gemini API key
+    private var apiKey: String? = null
 
     private val _response = MutableStateFlow("Gemini is ready to chat!")
     val response = _response.asStateFlow()
@@ -49,6 +50,9 @@ class ChatBotViewModel : ViewModel() {
     fun initialize(context: Context) {
         if (busRouteData == null) {
             busRouteData = loadRoutesFromAssets(context)
+        }
+        if (apiKey == null) {
+            apiKey = context.getString(R.string.gemeni_api)
         }
     }
     // Load data.json from assets
@@ -90,7 +94,7 @@ class ChatBotViewModel : ViewModel() {
 
             try {
                 val response: Response<GeminiResponse> =
-                    geminiApi.generateContent(apiKey, request).execute()
+                    geminiApi.generateContent(apiKey ?: "", request).execute()
 
                 if (response.isSuccessful) {
                     val body = response.body()

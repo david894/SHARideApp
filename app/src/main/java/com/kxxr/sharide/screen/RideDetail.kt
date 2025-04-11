@@ -176,7 +176,7 @@ fun RideDetailScreen(navController: NavController, firestore: FirebaseFirestore,
 
                             Spacer(modifier = Modifier.height(16.dp))
 
-                            // ✅ Remove "null" values from passenger list
+                            //  Remove "null" values from passenger list
                             val currentPassengers = ride.passengerIds?.filter { it != "null" } ?: emptyList()
                             val rideCapacity = ride.capacity ?: 0
 
@@ -193,12 +193,12 @@ fun RideDetailScreen(navController: NavController, firestore: FirebaseFirestore,
                             }
 
                             Spacer(modifier = Modifier.height(16.dp))
-                            // ✅ Calculate time left until the ride starts
+                            // Calculate time left until the ride starts
                             val timeLeftMillis = convertToTimestamp(ride.date, ride.time) - System.currentTimeMillis()
                             val oneHourMillis = 60 * 60 * 1000
-                            val tenMinMillis = -10 * 60 * 1000
+                            val tenMinMillis = -30 * 60 * 1000
                             if (ride.rideStatus == "complete"){
-                                // nothing
+                                // not display any button
                             }else if (status.value) {
                                 CompleteRideButton(firestore = firestore, rideId = rideId, navController = navController,context = context)
                             }else if (timeLeftMillis in tenMinMillis..oneHourMillis) {
@@ -292,12 +292,12 @@ fun RideMap(
             icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)
         )
 
-        // Draw Route (RED & THICKER)
+        // Draw Route
         if (route.isNotEmpty()) {
             Polyline(
                 points = route,
-                color = Color.Red,  // Change to red
-                width = 12f          // Make thicker
+                color = Color.Red,
+                width = 12f
             )
         }
     }
@@ -314,8 +314,8 @@ suspend fun getRoute(
 
     // Correctly format waypoints
     val waypoints = stop?.let { "&waypoints=${it.latitude},${it.longitude}" } ?: ""
-
-    val url = "https://maps.googleapis.com/maps/api/directions/json?" +
+    val baseUrl = context.getString(R.string.ride_detail_url)
+    val url = baseUrl +
             "origin=${origin.latitude},${origin.longitude}" +
             "&destination=${destination.latitude},${destination.longitude}" +
             "$waypoints&key=$apiKey"
@@ -327,7 +327,7 @@ suspend fun getRoute(
             connection.connect()
 
             val response = connection.inputStream.bufferedReader().use { it.readText() }
-            Log.d("DirectionsAPI", "API Response: $response") // Debug log
+            Log.d("DirectionsAPI", "API Response: $response")
 
             val json = JSONObject(response)
 
@@ -428,7 +428,7 @@ fun RouteDetails(pickupLocation: String, stop: String?, destination: String) {
     }
 }
 
-// **Update TopBar to Show Ride Index**
+// Update TopBar to Show Ride Index
 @Composable
 fun RideDetailTopBar(navController: NavController, index: Int) {
     TopAppBar(
@@ -442,7 +442,7 @@ fun RideDetailTopBar(navController: NavController, index: Int) {
 }
 
 
-// **Update RideTimeSection to Show Firebase Time**
+// Update RideTimeSection to Show Firebase Time
 @Composable
 fun RideTimeSection(time: String,driverId: String, navController: NavController) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -652,7 +652,7 @@ fun StartNavigationButton(
                                                 Toast.makeText(context, "Failed to fetch ride info", Toast.LENGTH_SHORT).show()
                                             }
                                     }else {
-                                        // No passengers → Directly update the ride status to "complete"
+                                        // No passengers will Directly update the ride status to "complete"
                                         firestore.collection("rides").document(rideId)
                                             .update("rideStatus", "complete")
                                             .addOnSuccessListener {
@@ -751,7 +751,7 @@ fun sendMessageToChat(chatId: String, senderId: String, text: String) {
         .collection("messages")
         .add(messageData)
 
-    // Optionally update lastMessage and lastMessageTimestamp
+    //  update lastMessage and lastMessageTimestamp
     FirebaseFirestore.getInstance()
         .collection("chats")
         .document(chatId)
@@ -835,7 +835,7 @@ fun CompleteRideButton(
             )
         },
         modifier = Modifier.fillMaxWidth(),
-        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF008000)) // Green
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF008000))
     ) {
         Text("Complete Ride", color = Color.White, fontWeight = FontWeight.Bold)
     }
@@ -843,11 +843,33 @@ fun CompleteRideButton(
 
 fun completeRide(firestore: FirebaseFirestore, rideId: String, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
     val rideRef = firestore.collection("rides").document(rideId)
-
+    val requestRef = firestore.collection("request").document(rideId)
     rideRef.get()
         .addOnSuccessListener { document ->
             if (document.exists()) {
                 rideRef.update("rideStatus", "complete")
+                    .addOnSuccessListener {
+                        Log.d("Firestore", "Ride marked as complete.")
+                        onSuccess()
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("Firestore", "Failed to update ride status: ${e.message}")
+                        onFailure(e)
+                    }
+            } else {
+                Log.e("Firestore", "Ride not found!")
+                onFailure(Exception("Ride not found"))
+            }
+        }
+        .addOnFailureListener { e ->
+            Log.e("Firestore", "Error fetching ride: ${e.message}")
+            onFailure(e)
+        }
+
+    rideRef.get()
+        .addOnSuccessListener { document ->
+            if (document.exists()) {
+                rideRef.update("status", "complete")
                     .addOnSuccessListener {
                         Log.d("Firestore", "Ride marked as complete.")
                         onSuccess()
@@ -870,7 +892,7 @@ fun completeRide(firestore: FirebaseFirestore, rideId: String, onSuccess: () -> 
 
 
 @Composable
-fun PassengerCard(passenger: Passenger, rideId: String, driverId: String, navController: NavController, type: String, location:String, destination: String) { // Receive rideId
+fun PassengerCard(passenger: Passenger, rideId: String, driverId: String, navController: NavController, type: String, location:String, destination: String) {
     var showDialog by remember { mutableStateOf(false) }
     val firestore = FirebaseFirestore.getInstance()
     var rating by remember { mutableStateOf(0.0) }
@@ -954,7 +976,7 @@ fun PassengerCard(passenger: Passenger, rideId: String, driverId: String, navCon
                         Icon(
                             imageVector = Icons.Default.LocationOn,
                             contentDescription = "Location Icon",
-                            tint = Color.Red // or your desired color
+                            tint = Color.Red
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
@@ -968,7 +990,7 @@ fun PassengerCard(passenger: Passenger, rideId: String, driverId: String, navCon
                         Icon(
                             imageVector = Icons.Default.LocationOn,
                             contentDescription = "Location Icon",
-                            tint = Color.Blue // or your desired color
+                            tint = Color.Blue
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
@@ -1052,12 +1074,12 @@ fun PassengerCard(passenger: Passenger, rideId: String, driverId: String, navCon
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp) // Ensures button fully occupies the bottom space
+                    .height(50.dp)
             ) {
                 Button(
                     onClick = {
                         startChatWithPassenger(
-                            driverId = driverId, // You pass this from your screen
+                            driverId = driverId,
                             passenger = passenger,
                             navController = navController
                         )
