@@ -359,19 +359,31 @@ fun checkDuplicatePlate(
         .whereEqualTo("status", "Active")
         .get()
         .addOnSuccessListener { querySnapshot ->
-            val document = querySnapshot.documents[0]
-            val OwnerUserid = document.getString("UserID") ?: ""
-            if(OwnerUserid == userId){
-                firestore.collection("Vehicle").document(document.id).delete()
+            if (querySnapshot.isEmpty) {
+                // No duplicate
                 onResult(false)
-            }else{
-                onResult(!querySnapshot.isEmpty) // Returns `true` if duplicate exists
+                return@addOnSuccessListener
+            }
+
+            val document = querySnapshot.documents.firstOrNull()
+            val ownerUserId = document?.getString("UserID") ?: ""
+
+            if (ownerUserId == userId) {
+                // User owns this vehicle – allow and delete old record
+                if (document != null) {
+                    document.reference.delete()
+                }
+                onResult(false)
+            } else {
+                // Duplicate exists
+                onResult(true)
             }
         }
         .addOnFailureListener {
             onResult(false)
         }
 }
+
 
 fun uploadImageToFirebase(
     storage: FirebaseStorage,
@@ -466,7 +478,6 @@ fun handleVehicleSubmission(
 ) {
     val firestore = FirebaseFirestore.getInstance()
     val firebaseStorage = FirebaseStorage.getInstance()
-    val currentuser = FirebaseAuth.getInstance().currentUser
 
     // Validate inputs
     if (
@@ -480,7 +491,7 @@ fun handleVehicleSubmission(
     }
 
     // Check for duplicate plate number
-    checkDuplicatePlate(firestore, registrationNum,currentuser!!.uid) { isDuplicate ->
+    checkDuplicatePlate(firestore, registrationNum,userId) { isDuplicate ->
         if (isDuplicate) {
             // Duplicate plate number
             Toast.makeText(context, "Duplicate Car Plate!", Toast.LENGTH_SHORT).show()
@@ -490,10 +501,11 @@ fun handleVehicleSubmission(
         }
 
         // Proceed with uploading images
-        uploadImageToFirebase(firebaseStorage, "Vehicle Photo/$caseId/car_front.jpg", carFrontUri!!,
+        uploadImageToFirebase(firebaseStorage, "Vehicle Photo/$caseId/car_front.jpg", carFrontUri,
             onSuccess = { frontUrl ->
 
-                uploadImageToFirebase(firebaseStorage, "Vehicle Photo/$caseId/car_back.jpg", carBackUri!!,
+                uploadImageToFirebase(firebaseStorage, "Vehicle Photo/$caseId/car_back.jpg",
+                    carBackUri,
                     onSuccess = { backUrl ->
 
                         // Save vehicle details to Firestore
