@@ -42,14 +42,5 @@
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyAYFHXZLaqAKMiPvxHKw45xRrlm95Vng7U" />
-
-        <service
-            android:name=".StoreInterface.FCMService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
-
     </application>
 </manifest>

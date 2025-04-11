@@ -5,9 +5,5 @@ plugins {
     alias(libs.plugins.google.gms.google.services) apply false
     alias(libs.plugins.android.library) apply false
 }
-buildscript {
-    dependencies {
-        classpath ("com.google.gms:google-services:4.4.0")
-    }
-}
+
 

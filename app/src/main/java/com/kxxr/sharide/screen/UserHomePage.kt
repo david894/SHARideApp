@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.model.LatLng
@@ -64,43 +65,55 @@ fun HomePage(navController: NavController, firebaseAuth: FirebaseAuth, firestore
 }
 
 
-// Map screen and settle location permissions
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun MapScreen(navController: NavController, firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
     val context = LocalContext.current
-    val locationPermissionState = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
+
+    // Multiple permissions: Location and Notification
+    val permissionsState = rememberMultiplePermissionsState(
+        permissions = listOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.POST_NOTIFICATIONS
+        )
+    )
+
     var isPermissionRequested by remember { mutableStateOf(false) }
-    // Retrieve isDriver state from SharedPreferences
-    var isDriver by remember {
-        mutableStateOf(getDriverPreference(context))
-    }
+    var isDriver by remember { mutableStateOf(getDriverPreference(context)) }
+
+    val locationGranted = permissionsState.permissions.find { it.permission == Manifest.permission.ACCESS_FINE_LOCATION }?.status?.isGranted == true
+    val notificationGranted = permissionsState.permissions.find { it.permission == Manifest.permission.POST_NOTIFICATIONS }?.status?.isGranted == true
+
     when {
-        // If permission is granted, show the map
-        locationPermissionState.status.isGranted -> {
+        // All permissions granted
+        locationGranted && notificationGranted -> {
             ShowUserScreen(
                 navController, firebaseAuth, firestore, isDriver,
                 onRoleChange = {
                     isDriver = it
-                    saveDriverPreference(context, it) // Save the preference when toggled
+                    saveDriverPreference(context, it)
                 }
             )
         }
-        // If permission was denied, show error screen
-        isPermissionRequested && !locationPermissionState.status.isGranted -> {
-            PermissionErrorScreen(context)
+
+        // Show error for specific missing permission
+        isPermissionRequested -> {
+            when {
+                !locationGranted -> LocationPermissionErrorScreen(context)
+                !notificationGranted -> NotificationPermissionErrorScreen(context)
+            }
         }
+
+        // First launch: request permissions
         else -> {
-            // Request permission on first launch
             LaunchedEffect(Unit) {
-                if (!isPermissionRequested) {
-                    isPermissionRequested = true
-                    locationPermissionState.launchPermissionRequest()
-                }
+                isPermissionRequested = true
+                permissionsState.launchMultiplePermissionRequest()
             }
         }
     }
 }
+
 
 fun saveDriverPreference(context: Context, isDriver: Boolean) {
     val sharedPreferences = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
@@ -813,7 +826,7 @@ data class Ride(
 
 // Error screen when location permission is denied
 @Composable
-fun PermissionErrorScreen(context: Context) {
+fun LocationPermissionErrorScreen(context: Context) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text(text = "Location Access Required", fontWeight = FontWeight.Bold, fontSize = 24.sp)
         Spacer(modifier = Modifier.height(16.dp))
@@ -831,6 +844,52 @@ fun PermissionErrorScreen(context: Context) {
         }
     }
 }
+
+
+@Composable
+fun NotificationPermissionErrorScreen(context: Context) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Notification Access Required",
+            fontWeight = FontWeight.Bold,
+            fontSize = 24.sp
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Image(
+            painter = painterResource(id = R.drawable.error), // Replace with your own icon if needed
+            contentDescription = "Error Icon",
+            modifier = Modifier.size(100.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Please allow notification access to stay updated with important ride and chat updates.",
+            fontSize = 16.sp,
+            color = Color.Gray
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(
+            onClick = {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                }
+                context.startActivity(intent)
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+        ) {
+            Text(text = "Open App Settings", color = Color.White)
+        }
+    }
+}
+
 
 @Composable
 fun fetchUserName(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore): String {

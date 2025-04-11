@@ -10,5 +10,7 @@ data class Passenger(
     val rating: Double = 0.0,
     val reviews: Int = 0,
     val imageRes: String = "",
-    val time: String = ""
-)
+    val time: String = "",
+    val location: String = "",
+    val destination: String = ""
+    )

@@ -467,35 +467,58 @@ fun FavouriteDriverScreen(passengerId: String, navController: NavController) {
                         navController = navController,
                         cardColor = Color(0xFFFFC0CB) // Pink
                     ) {
-                        Button(
-                            onClick = {
-                                // Step 2: Check or create chat
-                                db.collection("chats")
-                                    .whereEqualTo("passengerId", passengerId)
-                                    .whereEqualTo("driverId", driverId)
-                                    .limit(1)
-                                    .get()
-                                    .addOnSuccessListener { docs ->
-                                        val chatId = if (!docs.isEmpty) {
-                                            docs.first().id
-                                        } else {
-                                            // Create new chat if not exist
-                                            val newChat = hashMapOf(
-                                                "passengerId" to passengerId,
-                                                "driverId" to driverId,
-                                                "timestamp" to FieldValue.serverTimestamp()
-                                            )
-                                            val newDocRef = db.collection("chats").document()
-                                            newDocRef.set(newChat)
-                                            newDocRef.id
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // Chat Button
+                            Button(
+                                onClick = {
+                                    db.collection("chats")
+                                        .whereEqualTo("passengerId", passengerId)
+                                        .whereEqualTo("driverId", driverId)
+                                        .limit(1)
+                                        .get()
+                                        .addOnSuccessListener { docs ->
+                                            val chatId = if (!docs.isEmpty) {
+                                                docs.first().id
+                                            } else {
+                                                val newChat = hashMapOf(
+                                                    "passengerId" to passengerId,
+                                                    "driverId" to driverId,
+                                                    "timestamp" to FieldValue.serverTimestamp()
+                                                )
+                                                val newDocRef = db.collection("chats").document()
+                                                newDocRef.set(newChat)
+                                                newDocRef.id
+                                            }
+                                            navController.navigate("chat_screen/$chatId")
                                         }
-                                        // Navigate to Chat screen
-                                        navController.navigate("chat_screen/$chatId")
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.White)
+                            ) {
+                                Text("Chat", color = Color(0xFFFFC0CB))
+                            }
+
+                            // Delete Button
+                            Button(
+                                onClick = {
+                                    val favRef = db.collection("favourites")
+                                        .whereEqualTo("passengerId", passengerId)
+                                        .limit(1)
+
+                                    favRef.get().addOnSuccessListener { docs ->
+                                        val doc = docs.firstOrNull()
+                                        doc?.reference?.update(
+                                            "driverIds",
+                                            FieldValue.arrayRemove(driverId)
+                                        )
+                                            ?.addOnSuccessListener {
+                                                driverIds = driverIds.filterNot { it == driverId }
+                                            }
                                     }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.White) // Pink
-                        ) {
-                            Text("Chat", color = Color(0xFFFFC0CB))
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.White)
+                            ) {
+                                Text("Delete", color = Color.Red)
+                            }
                         }
                     }
                 }
@@ -503,7 +526,6 @@ fun FavouriteDriverScreen(passengerId: String, navController: NavController) {
         }
     }
 }
-
 
 
 @Composable
@@ -539,7 +561,7 @@ fun BlackListDriverScreen(passengerId: String,navController: NavController) {
         modifier = Modifier
             .fillMaxSize()
     ) {
-        ManageDriverTopBar(title = "Manage Driver", navController = navController)
+        ManageDriverTopBar(title = "Driver Black List", navController = navController)
 
         LazyColumn(modifier = Modifier.padding(16.dp)) {
             items(driverList) { driver ->

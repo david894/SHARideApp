@@ -128,7 +128,7 @@ fun observeNotifications(
             activeNotifications.forEach { newNotification ->
                 if (existingNotifications.none { it.title == newNotification.title && it.description == newNotification.description }) {
                     existingNotifications.add(newNotification)
-                    showAndroidNotification(context, newNotification)
+                    AndroidNotification.show(context, newNotification)
 
                 }
             }
@@ -317,32 +317,6 @@ fun getCurrentTime(): String {
     return formatter.format(Date())
 }
 
-private fun showAndroidNotification(context: Context, notification: NotificationEntity) {
-    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-    // Create channel only if Android O and above
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val channelId = "ride_reminder_channel"
-        val channelName = "Ride Reminders"
-        val channel = NotificationChannel(
-            channelId,
-            channelName,
-            NotificationManager.IMPORTANCE_DEFAULT
-        )
-        notificationManager.createNotificationChannel(channel)
-    }
-
-    val builder = NotificationCompat.Builder(context, "ride_reminder_channel")
-        .setSmallIcon(notification.image) // Ensure this is a real drawable (vector preferred)
-        .setContentTitle(notification.title)
-        .setContentText(notification.description)
-        .setAutoCancel(true)
-        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-
-    notificationManager.notify(notification.title.hashCode(), builder.build())
-}
-
-
 fun observeUnreadMessages(
     context: Context,
     currentUserId: String,
@@ -408,7 +382,7 @@ fun observeUnreadMessages(
 
                                             if (!alreadyShown) {
                                                 notifications.add(notification)
-                                                showAndroidNotification(context, notification)
+                                                AndroidNotification.show(context, notification)
 
                                                 GlobalScope.launch(Dispatchers.IO) {
                                                     val exists = notificationDao.getNotification(notification.title, notification.description) != null

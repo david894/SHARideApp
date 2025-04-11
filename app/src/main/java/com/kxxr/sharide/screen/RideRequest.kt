@@ -61,6 +61,7 @@ import com.kxxr.logiclibrary.Ratings.loadRatingScore
 import com.kxxr.logiclibrary.eWallet.loadWalletBalance
 import com.kxxr.sharide.R
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 @Composable
 fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, driverId: String, rideId: String, searchId:String) {
@@ -68,6 +69,7 @@ fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, 
     var driverList by remember { mutableStateOf<List<DriverInfo>>(emptyList()) }
     var rideDriverPairs by remember { mutableStateOf<List<Pair<RideInfo, DriverInfo>>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    val currentUserId = firebaseAuth.currentUser?.uid ?: ""
 
     LaunchedEffect(driverId, rideId) {
         isLoading = true
@@ -89,14 +91,15 @@ fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, 
             val rideRef = firestore.collection("rides").document(rideId)
 
             driverRef.get().addOnSuccessListener { driverDoc ->
+                val driver = DriverInfo(
+                    driverId = driverDoc.id,
+                    name = driverDoc.getString("name") ?: "Unknown",
+                    imageUrl = driverDoc.getString("profileImageUrl") ?: "",
+                    rating = driverDoc.getDouble("rating") ?: 4.5,
+                    price = "RM 1"
+                )
                 rideRef.get().addOnSuccessListener { rideDoc ->
-                    val driver = DriverInfo(
-                        driverId = driverDoc.id,
-                        name = driverDoc.getString("name") ?: "Unknown",
-                        imageUrl = driverDoc.getString("profileImageUrl") ?: "",
-                        rating = driverDoc.getDouble("rating") ?: 4.5,
-                        price = "RM 1"
-                    )
+
 
                     val ride = RideInfo(
                         rideId = rideDoc.id,
@@ -142,14 +145,47 @@ fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, 
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+
                         itemsIndexed(rideDriverPairs) { index, (ride, driver) ->
+                            if (!DriverNotInBlackList(currentUserId, driverId)) {
                             DriverCard(navController, firebaseAuth, firestore, index + 1, driver, ride.rideId,searchId,"Request")
+                            }else{
+
+                                // Optionally show a warning (or just skip entirely)
+                                Text(
+                                    text = "Driver ${driver.name} is in your blacklist.",
+                                    color = Color.Gray,
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.padding(vertical = 8.dp)
+                                )
+                                DriverCard(navController, firebaseAuth, firestore, index + 1, driver, ride.rideId,searchId,"BlackList")
+                            }
                         }
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+fun DriverNotInBlackList(passengerId: String, driverId: String): Boolean {
+    val context = LocalContext.current
+    val result = produceState<Boolean>(initialValue = false, key1 = passengerId, key2 = driverId) {
+        val snapshot = FirebaseFirestore.getInstance()
+            .collection("blackLists")
+            .whereEqualTo("passengerId", passengerId)
+            .get()
+            .await()
+
+        val blacklistedDrivers = snapshot.documents
+            .firstOrNull()
+            ?.get("driverIds") as? List<*> ?: emptyList<Any>()
+
+        value = blacklistedDrivers.contains(driverId)
+    }
+
+    return result.value
 }
 
 
@@ -372,7 +408,7 @@ fun DriverCard(
                     ) {
                         Text("Request")
                     }
-                }else{
+                }else if(type == "pending"){
                     Button(
                         onClick = {
                             coroutineScope.launch {
@@ -397,6 +433,9 @@ fun DriverCard(
                     ) {
                         Text("Cancel Request", color = Color.White)
                     }
+                }
+                else{
+                    // no thing to do
                 }
 
             }

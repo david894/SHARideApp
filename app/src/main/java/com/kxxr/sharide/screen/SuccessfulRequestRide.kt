@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -569,17 +570,26 @@ fun RideParticipantsSection(rideId: String, navController: NavController) {
                         .limit(1)
                         .get()
                         .addOnSuccessListener { userDocs ->
-                            val userDoc = userDocs.documents.firstOrNull()
-                            if (userDoc != null) {
-                                val user = SuccessfulUserInfo(
-                                    firebaseUserId = userDoc.getString("firebaseUserId") ?: "",
-                                    name = userDoc.getString("name") ?: "Unknown",
-                                    imageUrl = userDoc.getString("profileImageUrl") ?: "",
-                                    rating = userDoc.getDouble("rating") ?: 4.5
-                                )
-                                usersList.add(user)
-                                participants = usersList.toList() // Update state
-                            }
+                            db.collection("searchs")
+                                .whereEqualTo("passengerId", passengerId)
+                                .get()
+                                .addOnSuccessListener { searchDocs ->
+                                    val userDoc = userDocs.documents.firstOrNull()
+                                    val searchDoc = searchDocs.documents.firstOrNull()
+                                    if (userDoc != null&& searchDoc != null) {
+                                        val user = SuccessfulUserInfo(
+                                            firebaseUserId = userDoc.getString("firebaseUserId")
+                                                ?: "",
+                                            name = userDoc.getString("name") ?: "Unknown",
+                                            imageUrl = userDoc.getString("profileImageUrl") ?: "",
+                                            rating = userDoc.getDouble("rating") ?: 4.5,
+                                            location = searchDoc.getString("location")?: "",
+                                            destination = searchDoc.getString("destination")?: ""
+                                            )
+                                        usersList.add(user)
+                                        participants = usersList.toList() // Update state
+                                    }
+                                }
                         }
                         .addOnFailureListener { exception ->
                             errorMessage = "Error fetching participant data"
@@ -672,6 +682,33 @@ fun RideParticipantsSection(rideId: String, navController: NavController) {
                                         color = Color.White,
                                         fontSize = 14.sp
                                     )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.LocationOn,
+                                            contentDescription = "Location Icon",
+                                            tint = Color.Red // or your desired color
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = user.location,
+                                            color = Color.White,
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.LocationOn,
+                                            contentDescription = "Location Icon",
+                                            tint = Color.Blue // or your desired color
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = user.destination,
+                                            color = Color.White,
+                                            fontSize = 14.sp
+                                        )
+                                    }
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
@@ -949,5 +986,7 @@ data class SuccessfulUserInfo(
     val name: String = "Unknown",
     val imageUrl: String = "",
     val rating: Double = 4.5,
+    val location: String = "",
+    val destination: String = "",
     )
 

@@ -476,13 +476,37 @@ fun RidePassengerListSection(rideId: String,rideTime: String,driverId: String,na
                                 val name = userDoc.getString("name") ?: "Unknown"
                                 val imageUrl = userDoc.getString("profileImageUrl") ?: ""
                                 val passengerId = userDoc.getString("firebaseUserId") ?: ""
-                                passengers.add(Passenger(passengerId, name, 4.5, 2, imageUrl, rideTime))
 
-                                // Update state only when all data is fetched
-                                value = passengers
+                                db.collection("searchs")
+                                    .whereEqualTo("passengerId", passengerId)
+                                    .get()
+                                    .addOnSuccessListener { searchSnapshot ->
+                                        searchSnapshot.documents.firstOrNull()?.let { searchDoc ->
+                                            val location = searchDoc.getString("location") ?: "Unknown"
+                                            val destination = searchDoc.getString("destination") ?: "Unknown"
+                                            val rideTime = searchDoc.getString("time") ?: "Unknown"
+
+                                            passengers.add(
+                                                Passenger(
+                                                    passengerId,
+                                                    name,
+                                                    4.5,
+                                                    2,
+                                                    imageUrl,
+                                                    rideTime,
+                                                    location,
+                                                    destination
+                                                )
+                                            )
+
+                                            // Update state here if needed
+                                            value = passengers
+                                        }
+                                    }
                             }
                         }
                 }
+
             }
             .addOnFailureListener { exception ->
                 Log.e("Firestore", "Error fetching ride passengers", exception)
@@ -494,7 +518,7 @@ fun RidePassengerListSection(rideId: String,rideTime: String,driverId: String,na
             Text("No confirmed passengers", fontSize = 16.sp, color = Color.Gray)
         } else {
             passengerListState.value.forEach { passenger ->
-                PassengerCard(passenger,"",driverId, navController,"Confirmed" )
+                PassengerCard(passenger,"",driverId, navController,"Confirmed",passenger.location,passenger.destination )
             }
         }
     }
@@ -523,26 +547,44 @@ fun PendingPassengerListSection(rideId: String, rideTime: String, navController:
 
                 passengerIds.forEach { passengerId ->
                     db.collection("users")
-                        .whereEqualTo("firebaseUserId", passengerId) // Match `firebaseUserId`
+                        .whereEqualTo("firebaseUserId", passengerId)
                         .get()
                         .addOnSuccessListener { userSnapshot ->
                             userSnapshot.documents.firstOrNull()?.let { userDoc ->
                                 val name = userDoc.getString("name") ?: "Unknown"
                                 val imageUrl = userDoc.getString("profileImageUrl") ?: ""
                                 val passengerId = userDoc.getString("firebaseUserId") ?: ""
-                                passengers.add(Passenger(passengerId, name, 4.5, 2, imageUrl, rideTime))
-                            }
-                        }
-                        .addOnFailureListener { e ->
-                            Log.e("Firebase", "Error fetching user details for $passengerId", e)
-                        }
-                        .addOnCompleteListener {
-                            if (remainingFetches.decrementAndGet() == 0) {
-                                Log.d("Firebase", "All passengers fetched: $passengers")
-                                value = passengers.toList()
+
+                                db.collection("searchs")
+                                    .whereEqualTo("passengerId", passengerId)
+                                    .get()
+                                    .addOnSuccessListener { searchSnapshot ->
+                                        searchSnapshot.documents.firstOrNull()?.let { searchDoc ->
+                                            val location = searchDoc.getString("location") ?: "Unknown"
+                                            val destination = searchDoc.getString("destination") ?: "Unknown"
+                                            val rideTime = searchDoc.getString("time") ?: "Unknown"
+
+                                            passengers.add(
+                                                Passenger(
+                                                    passengerId,
+                                                    name,
+                                                    4.5,
+                                                    2,
+                                                    imageUrl,
+                                                    rideTime,
+                                                    location,
+                                                    destination
+                                                )
+                                            )
+
+                                            // Update state here if needed
+                                            value = passengers
+                                        }
+                                    }
                             }
                         }
                 }
+
             }
             .addOnFailureListener { e ->
                 Log.e("Firebase", "Error fetching requests for rideId: $rideId", e)
@@ -555,7 +597,7 @@ fun PendingPassengerListSection(rideId: String, rideTime: String, navController:
             Text("No pending passengers", fontSize = 16.sp, color = Color.Gray)
         } else {
             passengerListState.value.forEach { passenger ->
-                PassengerCard(passenger, rideId, "",navController,"Pending") // Pass rideId
+                PassengerCard(passenger, rideId, "",navController,"Pending",passenger.location,passenger.destination) // Pass rideId
             }
         }
     }
@@ -828,7 +870,7 @@ fun completeRide(firestore: FirebaseFirestore, rideId: String, onSuccess: () -> 
 
 
 @Composable
-fun PassengerCard(passenger: Passenger, rideId: String, driverId: String, navController: NavController, type: String) { // Receive rideId
+fun PassengerCard(passenger: Passenger, rideId: String, driverId: String, navController: NavController, type: String, location:String, destination: String) { // Receive rideId
     var showDialog by remember { mutableStateOf(false) }
     val firestore = FirebaseFirestore.getInstance()
     var rating by remember { mutableStateOf(0.0) }
@@ -906,6 +948,33 @@ fun PassengerCard(passenger: Passenger, rideId: String, driverId: String, navCon
                             passenger.time,
                             fontSize = 14.sp,
                             color = Color.White
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = "Location Icon",
+                            tint = Color.Red // or your desired color
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = location,
+                            color = Color.White,
+                            fontSize = 14.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = "Location Icon",
+                            tint = Color.Blue // or your desired color
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = destination,
+                            color = Color.White,
+                            fontSize = 14.sp
                         )
                     }
                 }
