@@ -218,8 +218,6 @@ fun ProfileScreen(firebaseAuth: FirebaseAuth, navController: NavController) {
                     ProfileCard(title = "Driver Management",img = "manage", onClick = { navController.navigate("manage_driver") })
                     Spacer(modifier = Modifier.height(10.dp)) // Pushes Log Out button to bottom
                 }
-                ProfileCard(title = "Rating",img = "ratings_dashboard", onClick = {navController.navigate("rate_ride/${"Driver"}/${"3WiWYZ0sCBabUhPFF0SZ"}")})
-
             }
 
             Spacer(modifier = Modifier.height(50.dp)) // Pushes Log Out button to bottom

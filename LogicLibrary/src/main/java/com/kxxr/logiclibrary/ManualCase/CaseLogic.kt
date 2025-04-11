@@ -210,7 +210,7 @@ fun uploadVehicleImagesAndSave(
                     saveVehicleToFirestore(
                         firestore, caseId, userId,
                         case!!.CarMake, case.CarModel, case.CarColour,
-                        case.CarRegistrationNumber, frontUrl.toString(), backUrl.toString()
+                        case.CarRegistrationNumber, case.CarType,case.PetPreference,frontUrl.toString(), backUrl.toString()
                     ) { vehicleSaved ->
                         if (vehicleSaved) {
                             // Update driver details
@@ -297,6 +297,8 @@ fun updateVehicle(
                                 "CarModel" to case.CarModel,
                                 "CarColour" to case.CarColour,
                                 "CarRegistrationNumber" to case.CarRegistrationNumber,
+                                "CarType" to case.CarType,
+                                "PetPreference" to case.PetPreference,
                                 "CarFrontPhoto" to frontUrl.toString(),
                                 "CarBackPhoto" to backUrl.toString(),
                                 "status" to "Active",
