@@ -9,6 +9,8 @@ data class DriverCase(
     val CarModel: String = "",
     val CarColour: String = "",
     val CarRegistrationNumber: String = "",
+    val CarType: String = "",
+    val PetPreference: String = "",
     val driverSelfie: String = "",
     val CarFrontPhoto: String = "",
     val CarBackPhoto: String = "",

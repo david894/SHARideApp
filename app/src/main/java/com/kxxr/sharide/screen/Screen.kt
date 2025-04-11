@@ -2849,6 +2849,8 @@ fun AddNewVehicle(navController: NavController) {
     var carmodel by remember { mutableStateOf("") }
     var carcolor by remember { mutableStateOf("") }
     var registrationnum by remember { mutableStateOf("") }
+    var carType by remember { mutableStateOf("") }
+    var petPreference by remember { mutableStateOf("") }
 
     // Image upload URIs
     var carfronturi by remember { mutableStateOf<Uri?>(null) }
@@ -2874,12 +2876,14 @@ fun AddNewVehicle(navController: NavController) {
         showDialog = true
         loadVehicleData(userId) { vehicle ->
             vehicle?.let {
-                carmake = it.carMake
-                carmodel = it.carModel
-                carcolor = it.carColor
-                registrationnum = it.registrationNum
-                existingcarfrontUrl = it.carFrontPhoto
-                existingcarbackUrl = it.carBackPhoto
+                carmake = it.CarMake
+                carmodel = it.CarModel
+                carcolor = it.CarColour
+                registrationnum = it.CarRegistrationNumber
+                carType = it.CarType
+                petPreference = it.PetPreference
+                existingcarfrontUrl = it.CarFrontPhoto
+                existingcarbackUrl = it.CarBackPhoto
             }
             showDialog = false
         }
@@ -2972,7 +2976,93 @@ fun AddNewVehicle(navController: NavController) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        if(carmake.isNotEmpty() && carmodel.isNotEmpty() && carcolor.isNotEmpty() && registrationnum.isNotEmpty()){
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.Start // Align everything to the start
+        ) {
+            Text(text = "Car Type", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(50.dp) // Space options evenly
+            ) {
+                Row(
+                    modifier = Modifier.clickable { carType = "5-Seater" },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = carType == "5-Seater",
+                        onClick = { carType = "5-Seater" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = Color.Blue,
+                            unselectedColor = Color.Gray
+                        )
+                    )
+                    Text(text = "5-Seater")
+                }
+                Row(
+                    modifier = Modifier.clickable { carType = "7-Seater" },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = carType == "7-Seater",
+                        onClick = { carType = "7-Seater" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = Color.Blue,
+                            unselectedColor = Color.Gray
+                        )
+                    )
+                    Text(text = "7-Seater")
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.Start // Align everything to the start
+        ) {
+            Text(text = "Pet Preference", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(50.dp) // Space options evenly
+            ) {
+                Row(
+                    modifier = Modifier.clickable { petPreference = "Yes" },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = petPreference == "Yes",
+                        onClick = { petPreference = "Yes" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = Color.Blue,
+                            unselectedColor = Color.Gray
+                        )
+                    )
+                    Text(text = "Yes")
+                }
+                Row(
+                    modifier = Modifier.clickable { petPreference = "No" },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = petPreference == "No",
+                        onClick = { petPreference = "No" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = Color.Blue,
+                            unselectedColor = Color.Gray
+                        )
+                    )
+                    Text(text = "No")
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if(carmake.isNotEmpty() && carmodel.isNotEmpty() && carcolor.isNotEmpty() && registrationnum.isNotEmpty() && carType.isNotEmpty() && petPreference.isNotEmpty()){
             Text(text = "Done",
                 fontWeight = FontWeight.Bold,
                 color = Color.Black,
@@ -3186,7 +3276,7 @@ fun AddNewVehicle(navController: NavController) {
                 if(
                     carmake.isNotEmpty() && carmodel.isNotEmpty() && carcolor.isNotEmpty()
                     && registrationnum.isNotEmpty() && carfronturi != null && carbackuri != null
-                    && backVerificationStatus.contains("Matched") && verificationStatus.contains("Matched")
+                    && backVerificationStatus.contains("Matched") && verificationStatus.contains("Matched") && petPreference.isNotEmpty() && carType.isNotEmpty()
                 ){
                     handleVehicleSubmission(
                         context = context,
@@ -3197,6 +3287,8 @@ fun AddNewVehicle(navController: NavController) {
                         carModel = carmodel,
                         carColor = carcolor,
                         registrationNum = registrationnum,
+                        carType = carType,
+                        petPreference = petPreference,
                         carFrontUri = carfronturi,
                         carBackUri = carbackuri,
                         verificationStatus = verificationStatus,
@@ -3292,6 +3384,8 @@ fun DriverCustomerService(navController: NavController) {
     var carmodel by remember { mutableStateOf("") }
     var carcolor by remember { mutableStateOf("") }
     var registrationnum by remember { mutableStateOf("") }
+    var carType by remember { mutableStateOf("") }
+    var petPreference by remember { mutableStateOf("") }
 
     // Image upload URIs
     var carfronturi by remember { mutableStateOf<Uri?>(null) }
@@ -3558,8 +3652,92 @@ fun DriverCustomerService(navController: NavController) {
         )
 
         Spacer(modifier = Modifier.height(8.dp))
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.Start // Align everything to the start
+        ) {
+            Text(text = "Car Type", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Spacer(modifier = Modifier.height(8.dp))
 
-        if(carmake.isNotEmpty() && carmodel.isNotEmpty() && carcolor.isNotEmpty() && registrationnum.isNotEmpty()){
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(50.dp) // Space options evenly
+            ) {
+                Row(
+                    modifier = Modifier.clickable { carType = "5-Seater" },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = carType == "5-Seater",
+                        onClick = { carType = "5-Seater" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = Color.Blue,
+                            unselectedColor = Color.Gray
+                        )
+                    )
+                    Text(text = "5-Seater")
+                }
+                Row(
+                    modifier = Modifier.clickable { carType = "7-Seater" },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = carType == "7-Seater",
+                        onClick = { carType = "7-Seater" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = Color.Blue,
+                            unselectedColor = Color.Gray
+                        )
+                    )
+                    Text(text = "7-Seater")
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.Start // Align everything to the start
+        ) {
+            Text(text = "Pet Preference", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(50.dp) // Space options evenly
+            ) {
+                Row(
+                    modifier = Modifier.clickable { petPreference = "Yes" },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = petPreference == "Yes",
+                        onClick = { petPreference = "Yes" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = Color.Blue,
+                            unselectedColor = Color.Gray
+                        )
+                    )
+                    Text(text = "Yes")
+                }
+                Row(
+                    modifier = Modifier.clickable { petPreference = "No" },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = petPreference == "No",
+                        onClick = { petPreference = "No" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = Color.Blue,
+                            unselectedColor = Color.Gray
+                        )
+                    )
+                    Text(text = "No")
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        if(carmake.isNotEmpty() && carmodel.isNotEmpty() && carcolor.isNotEmpty() && registrationnum.isNotEmpty() && carType.isNotEmpty() && petPreference.isNotEmpty()){
             Text(text = "Done",
                 fontWeight = FontWeight.Bold,
                 color = Color.Black,
@@ -3690,10 +3868,10 @@ fun DriverCustomerService(navController: NavController) {
             onClick = {
                 showDialog = true
 
-                if(IDUri != null && name.isNotEmpty() && driverid.isNotEmpty() && selfieUri != null && carmake.isNotEmpty() && carmodel.isNotEmpty() && carcolor.isNotEmpty() && registrationnum.isNotEmpty() && carfronturi != null && carbackuri != null){
+                if(IDUri != null && name.isNotEmpty() && driverid.isNotEmpty() && selfieUri != null && carmake.isNotEmpty() && carmodel.isNotEmpty() && carcolor.isNotEmpty() && registrationnum.isNotEmpty() && carfronturi != null && carbackuri != null && carType.isNotEmpty() && petPreference.isNotEmpty()){
                     uploadDriverData(firebaseStorage, firestore, caseId,
                         name, driverid, IDUri!!, selfieUri!!, carmake,
-                        carmodel, carcolor, registrationnum, carfronturi!!,
+                        carmodel, carcolor, registrationnum,carType,petPreference, carfronturi!!,
                         carbackuri!!, userId, context, navController,
                         onUploadFinished = { showDialog = false }
                     )

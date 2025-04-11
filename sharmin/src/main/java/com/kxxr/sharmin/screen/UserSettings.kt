@@ -1240,6 +1240,12 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
             Text("Car Colour: ${idCase.CarColour}")
             Spacer(modifier = Modifier.height(8.dp))
 
+            Text("Car Type: ${idCase.CarType}")
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text("Pet Preference: ${idCase.PetPreference}")
+            Spacer(modifier = Modifier.height(8.dp))
+
             Text("Car Front Image:",fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -1402,6 +1408,12 @@ fun DriverCaseDetailScreen(navController: NavController, caseId: String) {
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 Text("Car Colour: ${dupVehicle.CarColour}")
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text("Car Type: ${dupVehicle.CarType}")
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text("Pet Preference: ${dupVehicle.PetPreference}")
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 Text("Owner Name: ${owner?.name}")
@@ -2000,6 +2012,12 @@ fun UserDetailScreen(navController: NavController, userId: String) {
                                 Spacer(modifier = Modifier.height(4.dp))
 
                                 Text("Car Colour : ${vehicle.CarColour}")
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Text("Car Type : ${vehicle.CarType}")
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Text("Pet Preference : ${vehicle.PetPreference}")
                                 Spacer(modifier = Modifier.height(4.dp))
 
                                 Text("Car Front Photo :")

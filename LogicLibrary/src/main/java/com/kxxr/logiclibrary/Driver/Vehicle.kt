@@ -9,5 +9,7 @@ data class Vehicle(
     val CarRegistrationNumber: String = "",
     val UserID: String = "",
     val caseId: String = "",
-    val status: String = ""
+    val status: String = "",
+    val CarType: String = "",
+    val PetPreference: String = "",
 )

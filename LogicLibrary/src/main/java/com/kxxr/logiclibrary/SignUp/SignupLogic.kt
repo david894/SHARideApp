@@ -23,6 +23,7 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import android.os.Handler
 import android.os.Looper
+import com.kxxr.logiclibrary.Driver.Vehicle
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 
 fun performSignUp(
@@ -316,7 +317,7 @@ fun saveDriverToFirestore(
         .addOnSuccessListener { onComplete() }
         .addOnFailureListener { onComplete() }
 }
-fun loadVehicleData(userId: String, onResult: (VehicleData?) -> Unit) {
+fun loadVehicleData(userId: String, onResult: (Vehicle?) -> Unit) {
     val firestore = FirebaseFirestore.getInstance()
     firestore.collection("Vehicle")
         .whereEqualTo("UserID", userId)
@@ -324,13 +325,18 @@ fun loadVehicleData(userId: String, onResult: (VehicleData?) -> Unit) {
         .addOnSuccessListener { querySnapshot ->
             if (!querySnapshot.isEmpty) {
                 val document = querySnapshot.documents[0]
-                val vehicle = VehicleData(
-                    carMake = document.getString("CarMake") ?: "",
-                    carModel = document.getString("CarModel") ?: "",
-                    carColor = document.getString("CarColour") ?: "",
-                    registrationNum = document.getString("CarRegistrationNumber") ?: "",
-                    carFrontPhoto = document.getString("CarFrontPhoto") ?: "",
-                    carBackPhoto = document.getString("CarBackPhoto") ?: ""
+                val vehicle = Vehicle(
+                    CarMake = document.getString("CarMake") ?: "",
+                    CarModel = document.getString("CarModel") ?: "",
+                    CarColour = document.getString("CarColour") ?: "",
+                    CarRegistrationNumber = document.getString("CarRegistrationNumber") ?: "",
+                    CarFrontPhoto = document.getString("CarFrontPhoto") ?: "",
+                    CarBackPhoto = document.getString("CarBackPhoto") ?: "",
+                    CarType = document.getString("CarType") ?: "",
+                    PetPreference = document.getString("PetPreference") ?: "",
+                    UserID = document.getString("UserID") ?: "",
+                    caseId = document.getString("caseId") ?: "",
+                    status = document.getString("status") ?: "",
                 )
                 onResult(vehicle)
             } else {
@@ -345,6 +351,7 @@ fun loadVehicleData(userId: String, onResult: (VehicleData?) -> Unit) {
 fun checkDuplicatePlate(
     firestore: FirebaseFirestore,
     registrationNum: String,
+    userId: String,
     onResult: (Boolean) -> Unit
 ) {
     firestore.collection("Vehicle")
@@ -352,7 +359,14 @@ fun checkDuplicatePlate(
         .whereEqualTo("status", "Active")
         .get()
         .addOnSuccessListener { querySnapshot ->
-            onResult(!querySnapshot.isEmpty) // Returns `true` if duplicate exists
+            val document = querySnapshot.documents[0]
+            val OwnerUserid = document.getString("UserID") ?: ""
+            if(OwnerUserid == userId){
+                firestore.collection("Vehicle").document(document.id).delete()
+                onResult(false)
+            }else{
+                onResult(!querySnapshot.isEmpty) // Returns `true` if duplicate exists
+            }
         }
         .addOnFailureListener {
             onResult(false)
@@ -387,6 +401,8 @@ fun saveVehicleToFirestore(
     carModel: String,
     carColor: String,
     registrationNum: String,
+    carType: String,
+    petPreference: String,
     frontPhotoUrl: String,
     backPhotoUrl: String,
     onComplete: (Boolean) -> Unit
@@ -399,6 +415,8 @@ fun saveVehicleToFirestore(
         "CarRegistrationNumber" to registrationNum,
         "CarFrontPhoto" to frontPhotoUrl,
         "CarBackPhoto" to backPhotoUrl,
+        "CarType" to carType,
+        "PetPreference" to petPreference,
         "status" to "Active",
         "UserID" to userId
     )
@@ -438,6 +456,8 @@ fun handleVehicleSubmission(
     carModel: String,
     carColor: String,
     registrationNum: String,
+    carType: String,
+    petPreference: String,
     carFrontUri: Uri?,
     carBackUri: Uri?,
     verificationStatus: String,
@@ -446,12 +466,13 @@ fun handleVehicleSubmission(
 ) {
     val firestore = FirebaseFirestore.getInstance()
     val firebaseStorage = FirebaseStorage.getInstance()
+    val currentuser = FirebaseAuth.getInstance().currentUser
 
     // Validate inputs
     if (
         carMake.isEmpty() || carModel.isEmpty() || carColor.isEmpty() || registrationNum.isEmpty()
         || carFrontUri == null || carBackUri == null
-        || !verificationStatus.contains("Matched") || !backVerificationStatus.contains("Matched")
+        || !verificationStatus.contains("Matched") || !backVerificationStatus.contains("Matched") || carType.isEmpty() || petPreference.isEmpty()
     ) {
         Toast.makeText(context, "Please fill up all the details", Toast.LENGTH_SHORT).show()
         onComplete()
@@ -459,8 +480,9 @@ fun handleVehicleSubmission(
     }
 
     // Check for duplicate plate number
-    checkDuplicatePlate(firestore, registrationNum) { isDuplicate ->
+    checkDuplicatePlate(firestore, registrationNum,currentuser!!.uid) { isDuplicate ->
         if (isDuplicate) {
+            // Duplicate plate number
             Toast.makeText(context, "Duplicate Car Plate!", Toast.LENGTH_SHORT).show()
             navController.navigate("duplicatecar")
             onComplete()
@@ -475,7 +497,7 @@ fun handleVehicleSubmission(
                     onSuccess = { backUrl ->
 
                         // Save vehicle details to Firestore
-                        saveVehicleToFirestore(firestore, caseId, userId, carMake, carModel, carColor, registrationNum, frontUrl, backUrl) { vehicleSaved ->
+                        saveVehicleToFirestore(firestore, caseId, userId, carMake, carModel, carColor, registrationNum, carType, petPreference,frontUrl, backUrl) { vehicleSaved ->
                             if (vehicleSaved) {
                                 // Update driver details
                                 updateDriverDetails(firestore, userId, caseId, registrationNum) { driverUpdated ->
@@ -519,6 +541,8 @@ fun uploadDriverData(
     carmodel: String,
     carcolor: String,
     registrationnum: String,
+    cartype: String,
+    petpreference: String,
     carfronturi: Uri,
     carbackuri: Uri,
     userId: String,
@@ -534,7 +558,7 @@ fun uploadDriverData(
                 uploadFile(storageRef.child("car_back.jpg"), carbackuri) { carBackUrl ->
                     saveDriverData(firestore, caseId, name, driverid,
                         idCardUrl, selfieUrl, carmake, carmodel,
-                        carcolor, registrationnum, carFrontUrl, carBackUrl,
+                        carcolor, registrationnum, cartype,petpreference,carFrontUrl, carBackUrl,
                         userId, context, navController, onUploadFinished
                     )
                 }
@@ -570,6 +594,8 @@ fun saveDriverData(
     carmodel: String,
     carcolor: String,
     registrationnum: String,
+    carType: String,
+    petPreference: String,
     carFrontUrl: String,
     carBackUrl: String,
     userId: String,
@@ -587,6 +613,8 @@ fun saveDriverData(
         "CarModel" to carmodel,
         "CarColour" to carcolor,
         "CarRegistrationNumber" to registrationnum,
+        "CarType" to carType,
+        "PetPreference" to petPreference,
         "CarFrontPhoto" to carFrontUrl,
         "CarBackPhoto" to carBackUrl,
         "status" to "",
