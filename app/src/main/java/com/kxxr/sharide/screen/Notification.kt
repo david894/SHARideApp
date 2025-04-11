@@ -101,7 +101,6 @@ fun NotificationScreen(
     }
 }
 
-
 fun observeNotifications(
     context: Context,
     currentUserId:String,
@@ -192,8 +191,6 @@ private fun createCombinedNotificationIfNeeded(
     }
 }
 
-
-
 @Composable
 fun NotificationTopBar(navController: NavController, notificationDao: NotificationDao) {
     var showDialog by remember { mutableStateOf(false) }
@@ -246,11 +243,7 @@ fun clearAllNotifications(notificationDao: NotificationDao) {
     }
 }
 
-
-
-/**
- * Displays the list of notifications.
- */
+// Displays the list of notifications.
 @Composable
 fun NotificationList(notifications: List<NotificationEntity>, paddingValues: PaddingValues) {
     LazyColumn(
@@ -311,10 +304,7 @@ fun NotificationItem(image: Int, title: String, description: String, time: Strin
     }
 }
 
-
-/**
- * Returns the current system time in HH:mm format
- */
+// Returns the current system time in HH:mm format
 fun getCurrentTime(): String {
     val formatter = SimpleDateFormat("HH:mm", Locale.getDefault())
     return formatter.format(Date())
@@ -410,7 +400,6 @@ fun observeCancelRideStatus(
     notificationDao: NotificationDao
 ) {
     val isDriver = getDriverPreference(context)
-    Log.d("CancelObserver", "User isDriver: $isDriver")
 
     val requestQuery = if (isDriver) {
         firestore.collection("requests")
@@ -423,18 +412,12 @@ fun observeCancelRideStatus(
     }
 
     requestQuery.addSnapshotListener { requestSnapshot, error ->
-        if (error != null || requestSnapshot == null) {
-            Log.e("CancelObserver", "Snapshot error or null: $error")
-            return@addSnapshotListener
-        }
+        if (error != null || requestSnapshot == null) return@addSnapshotListener
 
-        Log.d("CancelObserver", "Total canceled requests found: ${requestSnapshot.documents.size}")
 
         requestSnapshot.documents.forEach { doc ->
             val rideId = if (isDriver) doc.getString("rideId") else doc.getString("searchId") ?: return@forEach
             val otherUserId = if (isDriver) doc.getString("passengerId") else doc.getString("driverId") ?: return@forEach
-
-            Log.d("CancelObserver", "Found canceled request: rideId=$rideId, otherUserId=$otherUserId")
 
             firestore.collection("users")
                 .whereEqualTo("firebaseUserId", otherUserId)
