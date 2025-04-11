@@ -9,8 +9,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,7 +39,7 @@ fun MatchingScreen(navController: NavController, firestore: FirebaseFirestore) {
     var searchId by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var matchingRides by remember { mutableStateOf<List<DocumentSnapshot>?>(null) } // Keep DocumentSnapshot
+    var matchingRides by remember { mutableStateOf<List<DocumentSnapshot>?>(null) }
     var showDialog by remember { mutableStateOf(false) }
 
     val user = FirebaseAuth.getInstance().currentUser
@@ -123,9 +126,9 @@ fun MatchingScreenContent(
     location: String,
     destination: String,
     isLoading: Boolean,
-    matchingRides: List<DocumentSnapshot>?, // Still using DocumentSnapshot
-    searchId: String?, // Add searchId parameter
-    firestore: FirebaseFirestore, // Add Firestore instance
+    matchingRides: List<DocumentSnapshot>?,
+    searchId: String?,
+    firestore: FirebaseFirestore,
     navController: NavController
 ) {
     val context = LocalContext.current
@@ -159,25 +162,25 @@ fun MatchingScreenContent(
                 )
 
                 val driverIds = matchingRides.mapNotNull { it.getString("driverId") }
-                val rideIds = matchingRides.mapNotNull { it.id } // ✅ Get ride IDs
+                val rideIds = matchingRides.mapNotNull { it.id } //  Get ride IDs
 
                 val driverIdsString = driverIds.joinToString(",")
-                val rideIdsString = rideIds.joinToString(",") // ✅ Convert to string
+                val rideIdsString = rideIds.joinToString(",") //  Convert to string
 
                 Button(onClick = {
-                    // ✅ Update Firestore's "searchs" collection with driverIdsString and rideIdsString
+                    //  Update Firestore's "searchs" collection with driverIdsString and rideIdsString
                     if (searchId != null) {
                         firestore.collection("searchs")
                             .document(searchId)
                             .update(
                                 mapOf(
                                     "driverIdsString" to driverIdsString,
-                                    "rideIdsString" to rideIdsString, // ✅ Store ride IDs
+                                    "rideIdsString" to rideIdsString, //  Store ride IDs
                                     "searchId" to searchId
                                 )
                             )
                             .addOnSuccessListener {
-                                // ✅ Navigate to the next screen with both values
+                                //  Navigate to the next screen with both values
                                 navController.navigate("request_ride/$driverIdsString/$rideIdsString/$searchId")
                             }
                             .addOnFailureListener { e ->
@@ -260,28 +263,56 @@ fun AlternativeSolutionDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val options = listOf("Search Another Ride", "Chat with TAR UMT Bus", "Cancel Matching")
+    val options = listOf(
+        "Search Another Ride" to Icons.Default.Search,
+        "Chat with TAR UMT Bus" to Icons.Default.Chat,
+        "Cancel Matching" to Icons.Default.Close
+    )
 
     AlertDialog(
         onDismissRequest = { onDismiss() },
-        title = { Text("Alternative Solutions") },
+        title = {
+            Text(
+                text = "Alternative Solutions",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+        },
         text = {
-            Column {
-                options.forEachIndexed { index, option ->
-                    TextButton(onClick = {
-                        when (index) {
-                            0 -> navController.navigate("search_screen") // Search another ride
-                            1 -> navController.navigate("chatbot") // Chat with TAR UMT Bus bot
-                            2 -> {
-                                cancelSearch(searchId, firestore) {
-                                    Toast.makeText(context, "Matching Canceled", Toast.LENGTH_SHORT).show()
-                                    navController.popBackStack() // Go back
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                options.forEachIndexed { index, (label, icon) ->
+                    TextButton(
+                        onClick = {
+                            when (index) {
+                                0 -> navController.navigate("search_screen")
+                                1 -> navController.navigate("chatbot")
+                                2 -> {
+                                    cancelSearch(searchId, firestore) {
+                                        Toast.makeText(context, "Matching Canceled", Toast.LENGTH_SHORT).show()
+                                        navController.popBackStack()
+                                    }
                                 }
                             }
+                            onDismiss()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp),
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = label,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = label,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium
+                            )
                         }
-                        onDismiss() // Close dialog after selection
-                    }) {
-                        Text(option)
                     }
                 }
             }
@@ -289,6 +320,7 @@ fun AlternativeSolutionDialog(
         confirmButton = {}
     )
 }
+
 
 @Composable
 fun MatchingText(searchId: String?, firestore: FirebaseFirestore, navController: NavController) {

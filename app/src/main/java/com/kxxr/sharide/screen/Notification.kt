@@ -207,7 +207,7 @@ fun NotificationTopBar(navController: NavController, notificationDao: Notificati
                 Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = "Clear Notifications",
-                    tint = Color(0xFF1976D2) // SHARide theme color
+                    tint = Color(0xFF1976D2)
                 )
             }
         },
@@ -296,10 +296,10 @@ fun NotificationItem(image: Int, title: String, description: String, time: Strin
             Column(modifier = Modifier.weight(1f)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween // Align time to the right
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(text = time, fontWeight = FontWeight.Bold, fontSize = 16.sp) // "3 hours left"
-                    Text(text = postTime, fontSize = 14.sp, color = Color.Gray) // Fixed timestamp
+                    Text(text = time, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(text = postTime, fontSize = 14.sp, color = Color.Gray)
                 }
                 Text(text = title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 Text(text = description, fontSize = 14.sp, color = Color.Gray)

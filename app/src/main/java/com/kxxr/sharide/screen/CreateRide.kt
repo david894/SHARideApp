@@ -81,7 +81,6 @@ fun CreateRideScreen(navController: NavController) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val userId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
-    // State variables
     var date by remember { mutableStateOf("Select Date") }
     var time by remember { mutableStateOf("Select Time") }
     var location by remember { mutableStateOf("") }
@@ -98,7 +97,7 @@ fun CreateRideScreen(navController: NavController) {
             location = loc
             locationLatLng = latLng
         },
-        { stopName, latLng -> // Correctly update stop location
+        { stopName, latLng ->
             stop = stopName
             stopLatLng = latLng
         },
@@ -186,7 +185,7 @@ fun CreateRideTopBar(navController: NavController) {
                 Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
             }
         },
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0075FD)) // Blue background
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0075FD))
     )
 }
 
@@ -306,7 +305,7 @@ fun LocationFields(
             modifier = Modifier.fillMaxWidth(),
             readOnly = true,
             trailingIcon = {
-                IconButton(onClick = { navController.navigate("search_destination") }) { // Fixed navigation destination
+                IconButton(onClick = { navController.navigate("search_destination") }) {
                     Icon(Icons.Default.LocationOn, contentDescription = "Select Destination")
                 }
             }

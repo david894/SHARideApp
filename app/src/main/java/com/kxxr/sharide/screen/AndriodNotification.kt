@@ -60,7 +60,6 @@ object AndroidNotification {
                 .notify(System.currentTimeMillis().toInt(), builder.build())
         } catch (e: SecurityException) {
             e.printStackTrace()
-            // You can show a Toast or Log here if needed
         }
     }
 

@@ -76,7 +76,7 @@ fun SearchRideScreen(navController: NavController) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val userId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
-    // State variables
+
     var date by remember { mutableStateOf("Select Date") }
     var time by remember { mutableStateOf("Select Time") }
     var location by remember { mutableStateOf("") }
@@ -103,7 +103,7 @@ fun SearchRideScreen(navController: NavController) {
 
     Scaffold(
         topBar = { CreateSearchTopBar(navController) },
-        // important
+
         bottomBar = { BottomNavBar("search_ride", navController) }
     ) { paddingValues ->
         Column(
@@ -179,7 +179,7 @@ fun CreateSearchTopBar(navController: NavController) {
                 Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
             }
         },
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0075FD)) // Blue background
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0075FD))
     )
 }
 
@@ -407,7 +407,7 @@ fun ConfirmSearchButton(
                     return@launch // Stops here, doesn't continue
                 }
 
-                // ✅ Only run this if the user is allowed to search
+                //  Only run this if the user is allowed to search
                 val searchRef = firestore.collection("searchs").document()
                 val searchId = searchRef.id
 

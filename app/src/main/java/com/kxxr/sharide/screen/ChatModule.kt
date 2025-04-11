@@ -94,6 +94,8 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.kxxr.sharide.R
+import com.kxxr.sharide.db.ChatPreview
+import com.kxxr.sharide.db.Message
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.UUID
@@ -185,7 +187,7 @@ fun ChatListScreen(userId: String, navController: NavController) {
                 }
             }
 
-            // 🔵 Floating Chatbot Button
+            // Floating Chatbot Button
             IconButton(
                 onClick = { navController.navigate("chatbot") },
                 modifier = Modifier
@@ -215,7 +217,7 @@ fun ChatTopBar(navController: NavController) {
         title = {
             Text(
                 text = "SHARide Chat",
-                color = Color.White // Text color for white background
+                color = Color.White
             )
         },
         navigationIcon = {
@@ -289,7 +291,7 @@ fun ChatPreviewCard(chat: ChatPreview, onClick: () -> Unit) {
                 )
             }
 
-            // 🔴 Red dot for unread messages
+            // Red dot for unread messages
             if (hasUnread) {
                 Box(
                     modifier = Modifier
@@ -350,7 +352,7 @@ fun ChatScreen(
             uploadImageToFirebase(imageUri.value!!, chatId, currentUserId,messageRef.id)
         }
     }
-    // Step 1: Get the chat document and determine receiver ID
+    //Get the chat document and determine receiver ID
     LaunchedEffect(chatId) {
         db.collection("chats").document(chatId).get()
             .addOnSuccessListener { chatDoc ->
@@ -359,7 +361,7 @@ fun ChatScreen(
 
                 val receiverId = if (driverId == currentUserId) passengerId else driverId
 
-                // Step 2: Fetch receiver's user profile
+                // Fetch receiver's user profile
                 db.collection("users")
                     .whereEqualTo("firebaseUserId", receiverId)
                     .get()
@@ -384,7 +386,7 @@ fun ChatScreen(
                 }
             }
     }
-    // Step 3: Listen for chat messages
+    //  Listen for chat messages
     LaunchedEffect(chatId) {
         db.collection("chats")
             .document(chatId)
@@ -397,7 +399,7 @@ fun ChatScreen(
                 for (doc in snapshot.documents) {
                     val message = doc.toObject(Message::class.java)
                     if (message != null) {
-                        message.firestoreId = doc.id // store the actual document ID
+                        message.firestoreId = doc.id // store the document ID
                         messages.add(message)
                     }
                 }
@@ -409,7 +411,7 @@ fun ChatScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White) // Set screen background to blue
+            .background(Color.White)
     ) {
         TopAppBar(
             title = { Text(receiverName, color = Color.White) },
@@ -419,8 +421,8 @@ fun ChatScreen(
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = Color(0xFF0075FD), // Blue background
-                titleContentColor = Color.White      // Title text color
+                containerColor = Color(0xFF0075FD),
+                titleContentColor = Color.White
             )
         )
 
@@ -830,22 +832,5 @@ fun deleteMessage(chatId: String, message: Message) {
 
 
 
-data class ChatPreview(
-    val chatId: String,
-    val passengerName: String,
-    val passengerImage: String,
-    val lastMessage: String,
-    val lastMessageTimestamp: Timestamp?
-)
 
-data class Message(
-    val messageId: String = "",
-    val senderId: String = "",
-    val messageText: String = "",
-    val messageType: String = "text",
-    val timestamp: Timestamp? = null,
-    val location: GeoPoint? = null,
-    val isRead: Boolean = false,
-    val imageUrl: String? = null,
-    @get:Exclude var firestoreId: String = ""
-)
+
