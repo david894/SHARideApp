@@ -4,7 +4,6 @@ package com.kxxr.sharide.screen
 
 import android.app.TimePickerDialog
 import android.content.Context
-import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -12,19 +11,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AddLocation
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.outlined.AccessTime
@@ -33,8 +28,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,7 +39,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -107,7 +99,6 @@ fun CreateRideScreen(navController: NavController) {
         },
     )
 
-
     Scaffold(
         topBar = { CreateRideTopBar(navController) },
         bottomBar = { BottomNavBar("create_ride", navController) }
@@ -131,6 +122,8 @@ fun CreateRideScreen(navController: NavController) {
                 destination, { destination = it },
                 capacity, { capacity = it },
             )
+
+            Spacer(modifier = Modifier.height(20.dp))
 
             ConfirmRideButton(
                 navController = navController,
@@ -189,7 +182,6 @@ fun CreateRideTopBar(navController: NavController) {
     )
 }
 
-
 @Composable
 fun CreateRideDetailsCard(
     navController: NavController,
@@ -199,8 +191,7 @@ fun CreateRideDetailsCard(
     location: String,
     stop: String,
     destination: String, onDestinationChange: (String) -> Unit,
-    capacity: Int, onCapacityChange: (Int) -> Unit,
-
+    capacity: Int, onCapacityChange: (Int) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -217,7 +208,6 @@ fun CreateRideDetailsCard(
             }
     }
 }
-
 
 @Composable
 fun DateTimePicker(
@@ -431,7 +421,18 @@ private suspend fun canUserCreateAgainInOneHour(
 }
 
 @Composable
-fun CapacitySelector(capacity: Int, onCapacityChanged: (Int) -> Unit) {
+fun CapacitySelector(
+    capacity: Int,
+    onCapacityChanged: (Int) -> Unit
+) {
+    var maxCapacity by remember { mutableStateOf(3) }
+
+    // Fetch max capacity based on vehicle info
+    fetchUserVehicleMaxCapacity { max ->
+        maxCapacity = max
+        if (capacity > max) onCapacityChanged(max)
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -458,7 +459,7 @@ fun CapacitySelector(capacity: Int, onCapacityChanged: (Int) -> Unit) {
             )
 
             IconButton(
-                onClick = { if (capacity < 3) onCapacityChanged(capacity + 1) },
+                onClick = { if (capacity < maxCapacity) onCapacityChanged(capacity + 1) },
                 modifier = Modifier.size(40.dp),
                 colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Blue)
             ) {
@@ -469,6 +470,32 @@ fun CapacitySelector(capacity: Int, onCapacityChanged: (Int) -> Unit) {
                 )
             }
         }
+    }
+}
+
+@Composable
+fun fetchUserVehicleMaxCapacity(
+    firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance(),
+    onResult: (Int) -> Unit
+) {
+    val context = LocalContext.current
+    val db = FirebaseFirestore.getInstance()
+    val userId = firebaseAuth.currentUser?.uid ?: return
+
+    LaunchedEffect(Unit) {
+        db.collection("Vehicle")
+            .whereEqualTo("UserID",userId)
+            .get()
+            .addOnSuccessListener { document ->
+                val document = document.documents.firstOrNull()
+                val carType = document?.getString("CarType") ?: "5-Seater"
+                val maxCapacity = if (carType == "7-Seater") 5 else 3
+                onResult(maxCapacity)
+            }
+            .addOnFailureListener {
+                // fallback if failed
+                onResult(3)
+            }
     }
 }
 
@@ -504,7 +531,6 @@ fun showTimePicker(context: Context, selectedDate: String, onTimeSelected: (Stri
     timePickerDialog.show()
 }
 
-
 fun showDatePicker(context: Context, onDateSelected: (String) -> Unit, onTimeReset: () -> Unit) {
     val calendar = Calendar.getInstance()
     val year = calendar.get(Calendar.YEAR)
@@ -530,7 +556,6 @@ fun showDatePicker(context: Context, onDateSelected: (String) -> Unit, onTimeRes
         month,
         day
     )
-
     // Set minimum date to today (restrict past dates)
     datePickerDialog.datePicker.minDate = System.currentTimeMillis()
     datePickerDialog.show()

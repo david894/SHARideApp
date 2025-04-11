@@ -88,9 +88,6 @@ fun MatchingScreen(navController: NavController, firestore: FirebaseFirestore) {
             }
         )
     }
-
-
-
     MatchingScreenContent(location, destination, isLoading, matchingRides, searchId, firestore, navController)
 }
 
@@ -201,7 +198,6 @@ fun MatchingScreenContent(
     }
 }
 
-
 fun fetchLatestSearchId(userId: String, onSuccess: (String?) -> Unit, onFailure: (String) -> Unit) {
     val firestore = FirebaseFirestore.getInstance()
 
@@ -236,7 +232,6 @@ fun fetchSearchDetails(searchId: String, onSuccess: (String, String, String) -> 
             onFailure(exception.localizedMessage ?: "Unknown error")
         }
 }
-
 
 @Composable
 fun LocationBox(location: String, icon: ImageVector) {
@@ -321,7 +316,6 @@ fun AlternativeSolutionDialog(
     )
 }
 
-
 @Composable
 fun MatchingText(searchId: String?, firestore: FirebaseFirestore, navController: NavController) {
     var showDialog by remember { mutableStateOf(false) }
@@ -352,7 +346,6 @@ fun MatchingText(searchId: String?, firestore: FirebaseFirestore, navController:
     }
 }
 
-
 // Function to cancel the ride in Firebase
 fun cancelSearch(searchId: String?, firestore: FirebaseFirestore, onComplete: () -> Unit) {
     searchId?.let { id ->
@@ -362,7 +355,6 @@ fun cancelSearch(searchId: String?, firestore: FirebaseFirestore, onComplete: ()
             .addOnFailureListener { onComplete() } // Still navigate even if deletion fails
     } ?: onComplete()
 }
-
 
 @Composable
 fun MatchingIndicator() {

@@ -4,14 +4,15 @@
 
 package com.kxxr.sharide.screen
 
-import android.app.TimePickerDialog
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -23,8 +24,6 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.outlined.AccessTime
-import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -58,7 +57,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
 import com.google.android.gms.maps.model.LatLng
 import com.google.firebase.firestore.FirebaseFirestore
-import java.util.Calendar
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import kotlinx.coroutines.CoroutineScope
@@ -68,7 +66,6 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Locale
-
 
 @Composable
 fun SearchRideScreen(navController: NavController) {
@@ -88,6 +85,7 @@ fun SearchRideScreen(navController: NavController) {
     var petPreference by remember { mutableStateOf("Select pet Preference") }
     var genderPreference by remember { mutableStateOf("Select gender Preference") }
     var vehicleType by remember { mutableStateOf("Vehicle Type") }
+
     ObserveSearchSelectedLocations(navController, lifecycleOwner, { loc, latLng ->
         location = loc
         locationLatLng = latLng
@@ -129,6 +127,8 @@ fun SearchRideScreen(navController: NavController) {
                 vehicleType, { vehicleType = it },
             )
 
+            Spacer(modifier = Modifier.height(20.dp))
+
             ConfirmSearchButton(
                 navController = navController,
                 firestore = firestore,
@@ -169,7 +169,6 @@ fun ObserveSearchSelectedLocations(
     }
 }
 
-
 @Composable
 fun CreateSearchTopBar(navController: NavController) {
     TopAppBar(
@@ -182,7 +181,6 @@ fun CreateSearchTopBar(navController: NavController) {
         colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0075FD))
     )
 }
-
 
 @Composable
 fun SearchRideDetailsCard(
@@ -212,10 +210,11 @@ fun SearchRideDetailsCard(
             petPreferenceDropdown(petPreference, onPetPreferenceChange)
             genderPreferenceDropdown(genderPreference, onGenderPreferenceChange)
             VehicleDropdown(VehicleType, onVehicleTypeChange)
-            CapacitySelectorCarSeated(VehicleType, capacity, onCapacityChange, onCapacityReset)
+            CapacitySelectorCarSeater(VehicleType, capacity, onCapacityChange, onCapacityReset)
         }
     }
 }
+
 @Composable
 fun SearchLocationFields(
     navController: NavController,
@@ -317,7 +316,7 @@ fun genderPreferenceDropdown(genderPreference: String, onGenderPreferenceChange:
 
 @Composable
 fun VehicleDropdown(VehicleType: String, onVehicleTypeChange: (String) -> Unit) {
-    val vehiclePreferences = listOf("5-seated", "7-seated")
+    val vehiclePreferences = listOf("5-Seater", "7-Seater")
     var expanded by remember { mutableStateOf(false) }
 
     Column {
@@ -476,15 +475,15 @@ private suspend fun canUserSearchAgainInOneHour(
 }
 
 @Composable
-fun CapacitySelectorCarSeated(
+fun CapacitySelectorCarSeater(
     vehicleType: String,
     capacity: Int,
     onCapacityChanged: (Int) -> Unit,
     onCapacityReset: () -> Unit
 ) {
     val maxCapacity = when (vehicleType) {
-        "5-seated" -> 3
-        "7-seated" -> 5
+        "5-Seater" -> 3
+        "7-Seater" -> 5
         else -> 1
     }
 

@@ -2,13 +2,11 @@
 
 package com.kxxr.sharide.screen
 
-import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,12 +28,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -43,16 +36,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
 import com.kxxr.logiclibrary.Driver.Driver
 import com.kxxr.logiclibrary.Driver.Vehicle
 import com.kxxr.logiclibrary.Driver.searchDriver
@@ -60,6 +49,7 @@ import com.kxxr.logiclibrary.Driver.searchVehicle
 import com.kxxr.logiclibrary.Ratings.loadRatingScore
 import com.kxxr.logiclibrary.eWallet.loadWalletBalance
 import com.kxxr.sharide.R
+import com.kxxr.sharide.db.BookmarkShape
 import com.kxxr.sharide.db.DriverInfo
 import com.kxxr.sharide.db.RideDetails
 import com.kxxr.sharide.db.RideInfo
@@ -102,7 +92,6 @@ fun RideRequestScreen(firebaseAuth: FirebaseAuth, navController: NavController, 
                     price = "RM 1"
                 )
                 rideRef.get().addOnSuccessListener { rideDoc ->
-
 
                     val ride = RideInfo(
                         rideId = rideDoc.id,
@@ -190,8 +179,6 @@ fun DriverNotInBlackList(passengerId: String, driverId: String): Boolean {
 
     return result.value
 }
-
-
 
 @Composable
 fun DriverCard(
@@ -366,7 +353,6 @@ fun DriverCard(
                 }
             }
         }
-
         Column(
             modifier = Modifier.fillMaxWidth().padding(16.dp)
         ) {
@@ -440,7 +426,6 @@ fun DriverCard(
                 else{
                     // no thing to do
                 }
-
             }
             Spacer(modifier = Modifier.height(8.dp))
             if(type == "Pending"){
@@ -454,28 +439,8 @@ fun DriverCard(
                 )
             }
         }
-
     }
     Spacer(modifier = Modifier.height(18.dp))
-
-}
-
-class BookmarkShape : Shape {
-    override fun createOutline(
-        size: Size,
-        layoutDirection: LayoutDirection,
-        density: Density
-    ): Outline {
-        val path = Path().apply {
-            moveTo(0f, 0f)
-            lineTo(size.width, 0f)
-            lineTo(size.width, size.height - 20f)
-            lineTo(size.width / 2f, size.height)
-            lineTo(0f, size.height - 20f)
-            close()
-        }
-        return Outline.Generic(path)
-    }
 }
 
 fun fetchRideAndDriverDetails(

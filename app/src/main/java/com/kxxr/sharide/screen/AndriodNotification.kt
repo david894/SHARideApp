@@ -6,12 +6,8 @@ import android.content.Context
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
-import android.content.pm.PackageManager
 import com.kxxr.sharide.R
 import com.kxxr.sharide.db.NotificationEntity
-
-
 import android.app.PendingIntent
 import android.content.Intent
 import android.graphics.BitmapFactory
@@ -53,7 +49,6 @@ object AndroidNotification {
             .setColor(Color.BLUE)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
-
 
         try {
             NotificationManagerCompat.from(context)

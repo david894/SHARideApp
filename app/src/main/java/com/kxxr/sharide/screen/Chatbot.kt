@@ -1,10 +1,7 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
 package com.kxxr.sharide.screen
-import android.content.Context
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.*
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -25,9 +22,7 @@ import androidx.compose.material3.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import com.google.gson.Gson
 import com.kxxr.sharide.R
-import com.kxxr.sharide.db.BusData
 import com.kxxr.sharide.db.ChatbotMessage
 
 @Composable

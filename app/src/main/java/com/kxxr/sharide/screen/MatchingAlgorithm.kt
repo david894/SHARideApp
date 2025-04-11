@@ -5,6 +5,7 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
+
 fun findMatchingRides(
     firestore: FirebaseFirestore,
     onMatchFound: (List<DocumentSnapshot>) -> Unit,
@@ -13,16 +14,17 @@ fun findMatchingRides(
     fetchRides(firestore) { ridesSnapshot ->
         fetchUsers(firestore) { usersSnapshot ->
             fetchSearches(firestore) { searchSnapshot ->
+                fetchVehicle(firestore) { vehicleSnapshot ->
+                    // Get matching ride documents
+                    val matchingRides = ridesSnapshot.documents.filter { ride ->
+                        getMatchingDrivers(listOf(ride), searchSnapshot, usersSnapshot,vehicleSnapshot).isNotEmpty()
+                    }
 
-                // Get matching ride documents
-                val matchingRides = ridesSnapshot.documents.filter { ride ->
-                    getMatchingDrivers(listOf(ride), searchSnapshot, usersSnapshot).isNotEmpty()
-                }
-
-                if (matchingRides.isNotEmpty()) {
-                    onMatchFound(matchingRides)
-                } else {
-                    onNoMatch()
+                    if (matchingRides.isNotEmpty()) {
+                        onMatchFound(matchingRides)
+                    } else {
+                        onNoMatch()
+                    }
                 }
             }
         }
@@ -51,7 +53,6 @@ fun fetchSearches(
         .addOnFailureListener { }
 }
 
-
 fun fetchUsers(
     firestore: FirebaseFirestore,
     onSuccess: (QuerySnapshot) -> Unit
@@ -62,10 +63,21 @@ fun fetchUsers(
         .addOnFailureListener { }
 }
 
+fun fetchVehicle(
+    firestore: FirebaseFirestore,
+    onSuccess: (QuerySnapshot) -> Unit
+) {
+    firestore.collection("Vehicle")
+        .get()
+        .addOnSuccessListener(onSuccess)
+        .addOnFailureListener { }
+}
+
 fun getMatchingDrivers(
     rideSnapshot: List<DocumentSnapshot>,
     searchSnapshot: QuerySnapshot,
     usersSnapshot: QuerySnapshot,
+    vehicleSnapshot: QuerySnapshot,
 ): List<DocumentSnapshot> {
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: return emptyList()
     val matchingRides = mutableListOf<DocumentSnapshot>()
@@ -88,34 +100,41 @@ fun getMatchingDrivers(
         val driverGender = usersSnapshot.documents.find {
             it.getString("firebaseUserId") == driverId
         }?.getString("gender") ?: ""
+        vehicleSnapshot.documents.forEach { vehicle ->
+            val carType = vehicle.getString("CarType") ?: return@forEach
+            val driverPetPreference = vehicle.getString("PetPreference")?: return@forEach
+            searchSnapshot.documents.forEach { search ->
+                val searchDate = search.getString("date") ?: return@forEach
+                val searchLocation = search.getString("location") ?: return@forEach
+                val searchDestination = search.getString("destination") ?: return@forEach
+                val searchTime = search.getString("time") ?: "00:00"
+                val searchTimeMinutes = timeToMinutes(searchTime)
+                val genderPreference = search.getString("genderPreference") ?: "Both"
+                val passengerPetPreference = search.getString("petPreference") ?: "No"
+                val passengerCapacity = search.getLong("capacity")?.toInt() ?: 1
+                val vehicleType = search.getString("vehicleType") ?: return@forEach
 
-        searchSnapshot.documents.forEach { search ->
-            val searchDate = search.getString("date") ?: return@forEach
-            val searchLocation = search.getString("location") ?: return@forEach
-            val searchDestination = search.getString("destination") ?: return@forEach
-            val searchTime = search.getString("time") ?: "00:00"
-            val searchTimeMinutes = timeToMinutes(searchTime)
-            val genderPreference = search.getString("genderPreference") ?: "Both"
-            val passengerCapacity = search.getLong("capacity")?.toInt() ?: 1
+                //  Check all conditions only if the date matches
+                val isMatch = isDateValid(rideDate, searchDate) && isTimeValid(
+                    searchTimeMinutes,
+                    rideTimeMinutes
+                ) &&
+                        isLocationValid(searchLocation, rideLocation, rideStop) &&
+                        isDestinationValid(searchDestination, rideStop, rideDestination) &&
+                        isGenderValid(driverGender, genderPreference) &&
+                        isCapacityValid(rideCapacity, passengerIds, passengerCapacity) &&
+                        isCarTypeValid(carType,vehicleType) &&
+                        isPetValid(driverPetPreference,passengerPetPreference)
 
-            //  Check all conditions only if the date matches
-            val isMatch = isDateValid(rideDate,searchDate) && isTimeValid(searchTimeMinutes, rideTimeMinutes) &&
-                    isLocationValid(searchLocation, rideLocation, rideStop) &&
-                    isDestinationValid(searchDestination, rideStop, rideDestination) &&
-                    isGenderValid(driverGender, genderPreference) &&
-                    isCapacityValid(rideCapacity, passengerIds , passengerCapacity)
-
-            if (isMatch) {
-                matchingRides.add(ride)
-                return@forEach // Stop checking once a match is found for this ride
+                if (isMatch) {
+                    matchingRides.add(ride)
+                    return@forEach // Stop checking once a match is found for this ride
+                }
             }
         }
     }
-
     return matchingRides
 }
-
-
 
 fun isDateValid(searchDate: String, rideDate: String): Boolean {
     return rideDate == searchDate
@@ -143,11 +162,22 @@ fun isGenderValid(driverGender: String, genderPreference: String): Boolean {
     }
 }
 
+fun isPetValid(driverPetPreference: String, passengerPetPreference: String): Boolean {
+    return when (passengerPetPreference.lowercase()) {
+        "yes" -> driverPetPreference == "Yes"
+        "female" -> driverPetPreference == "No"
+        else -> false
+    }
+}
+
 fun isCapacityValid(rideCapacity: Int, passengerIds: List<String>?, passengerCapacity: Int): Boolean {
     val currentPassengerCount = passengerIds?.filter { it != "null" }?.size ?: 0
     return (rideCapacity - currentPassengerCount) >= passengerCapacity
 }
 
+fun isCarTypeValid(carType: String, vehicleType: String): Boolean {
+    return vehicleType == carType
+}
 
 fun timeToMinutes(time: String): Int {
     val parts = time.split(":").map { it.toInt() }

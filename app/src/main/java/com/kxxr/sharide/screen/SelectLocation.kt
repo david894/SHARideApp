@@ -12,7 +12,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -37,7 +36,6 @@ fun SearchLocationScreen(navController: NavController, locationType: Int) {
         position = CameraPosition.fromLatLngZoom(predefinedLocations.first().second, 15f)
     }
     var isExpanded by remember { mutableStateOf(true) }
-
 
     Scaffold(
         topBar = {
@@ -97,7 +95,7 @@ val predefinedLocations = listOf(
     "Pv 18" to LatLng(3.20381, 101.71318),
     "Teratai Residency" to LatLng(3.20088, 101.71146),
     "Prima Setapak Bus Stop" to LatLng(3.19751, 101.71160),
-    "Colombia Hospital Bus Stop" to LatLng(3.21844, 101.76932),
+    "Colombia Hospital Bus Stop" to LatLng(3.20145, 101.71815 ),
     "Setapak Central" to LatLng(3.20550, 101.72024)
 )
 

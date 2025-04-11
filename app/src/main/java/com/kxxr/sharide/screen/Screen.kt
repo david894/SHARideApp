@@ -82,7 +82,6 @@ import com.kxxr.logiclibrary.Login.handleMultiFactorAuthentication
 import com.kxxr.logiclibrary.Login.resetPassword
 import com.kxxr.logiclibrary.Login.signInWithEmailPassword
 import com.kxxr.logiclibrary.Network.NetworkViewModel
-import com.kxxr.logiclibrary.Ratings.Ratings
 import com.kxxr.logiclibrary.Ratings.loadRatingWarningHistory
 import com.kxxr.logiclibrary.SignUp.handleVehicleSubmission
 import com.kxxr.logiclibrary.SignUp.loadVehicleData

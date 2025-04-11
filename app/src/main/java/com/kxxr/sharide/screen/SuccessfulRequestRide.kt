@@ -25,7 +25,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
@@ -110,7 +109,6 @@ fun SuccessfulRequestRideScreen(navController: NavController, index:Int, searchI
             }
     }
     var isOnBoarding by remember { mutableStateOf(false) }
-    var isComplete by remember { mutableStateOf(false) }
     // Check if any request has "onBoarding" status
     LaunchedEffect(searchId) {
         db.collection("requests")
@@ -559,9 +557,7 @@ fun DriverSection(driverId: String, navController: NavController) {
                 Text("Chat")
             }
         }
-
         Spacer(modifier = Modifier.height(10.dp))
-
     }
 }
 
@@ -739,9 +735,6 @@ fun RideParticipantsSection(rideId: String, navController: NavController) {
     }
 }
 
-
-
-
 @Composable
 fun CancelSuccessfulRideButton(
     firestore: FirebaseFirestore,
@@ -830,8 +823,6 @@ fun BoardRideButton(
     context: Context
 ) {
     val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return
-
-
     val maxAttempts = stringResource(id = R.string.max_pin_attempts).toInt()
     val amount = stringResource(id = R.string.fare_amount).toInt()
 
@@ -913,7 +904,6 @@ fun BoardRideButton(
             onDismiss = { navController.popBackStack() }
         )
     }
-
     errorMessage?.let { error ->
         Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
         errorMessage = null

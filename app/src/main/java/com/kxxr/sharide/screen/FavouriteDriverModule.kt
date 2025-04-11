@@ -2,11 +2,9 @@
 
 package com.kxxr.sharide.screen
 
-import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -31,12 +29,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -63,14 +58,12 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
-import com.kxxr.logiclibrary.Driver.Driver
 import com.kxxr.logiclibrary.Driver.Vehicle
 import com.kxxr.logiclibrary.Driver.searchDriver
 import com.kxxr.logiclibrary.Driver.searchVehicle
 import com.kxxr.logiclibrary.Ratings.loadRatingScore
 import com.kxxr.sharide.R
 import kotlinx.coroutines.tasks.await
-
 
 @Composable
 fun ManageDriverScreen(navController: NavController) {
@@ -86,7 +79,6 @@ fun ManageDriverScreen(navController: NavController) {
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-
             ManageDriverCard(
                 title = "Recent History Driver",
                 description = "View the list of drivers you recently interacted with.",
@@ -180,7 +172,6 @@ fun ManageDriverCard(
                     Text(buttonText, color = backgroundColor)
                 }
             }
-
             // Right side (Image)
             Image(
                 painter = painterResource(id = imageResId),
@@ -192,8 +183,6 @@ fun ManageDriverCard(
         }
     }
 }
-
-
 
 @Composable
 fun RecentDriverScreen(navController: NavController) {
@@ -297,7 +286,6 @@ fun RecentDriverScreen(navController: NavController) {
     }
 }
 
-
 @Composable
 fun DriverCard(
     driverId: String,
@@ -307,7 +295,6 @@ fun DriverCard(
 ) {
     val db = Firebase.firestore
     val context = LocalContext.current
-
     var name by remember { mutableStateOf("Unknown") }
     var imageUrl by remember { mutableStateOf("") }
     var rating by remember { mutableStateOf(0.0) }
@@ -422,7 +409,6 @@ fun DriverCard(
         }
     }
 }
-
 
 fun addToList(collection: String, driverId: String) {
     val db = Firebase.firestore
@@ -549,7 +535,6 @@ fun FavouriteDriverScreen(passengerId: String, navController: NavController) {
         )
     }
 }
-
 
 @Composable
 fun BlackListDriverScreen(passengerId: String,navController: NavController) {

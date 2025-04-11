@@ -39,10 +39,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -79,10 +77,6 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.firebase.Firebase
-import com.google.firebase.Timestamp
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.Exclude
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.GeoPoint
@@ -207,11 +201,7 @@ fun ChatListScreen(userId: String, navController: NavController) {
     }
 }
 
-
-
-
-
-    @Composable
+@Composable
 fun ChatTopBar(navController: NavController) {
     TopAppBar(
         title = {
@@ -238,8 +228,6 @@ fun ChatTopBar(navController: NavController) {
         )
     )
 }
-
-
 
 @Composable
 fun ChatPreviewCard(chat: ChatPreview, onClick: () -> Unit) {
@@ -321,7 +309,6 @@ fun checkUnreadMessages(chatId: String, onResult: (Boolean) -> Unit) {
         }
 }
 
-
 @Composable
 fun ChatScreen(
     chatId: String,
@@ -340,10 +327,10 @@ fun ChatScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var messageToDelete by remember { mutableStateOf<Message?>(null) }
     val listState = rememberLazyListState()
-
     var receiverName by remember { mutableStateOf("Chat") }
     var receiverImageUrl by remember { mutableStateOf("") }
     var currentUserImageUrl by remember { mutableStateOf("") }
+
     // For capturing camera image
     val imageUri = remember { mutableStateOf<Uri?>(null) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
@@ -352,13 +339,13 @@ fun ChatScreen(
             uploadImageToFirebase(imageUri.value!!, chatId, currentUserId,messageRef.id)
         }
     }
+
     //Get the chat document and determine receiver ID
     LaunchedEffect(chatId) {
         db.collection("chats").document(chatId).get()
             .addOnSuccessListener { chatDoc ->
                 val driverId = chatDoc.getString("driverId")
                 val passengerId = chatDoc.getString("passengerId")
-
                 val receiverId = if (driverId == currentUserId) passengerId else driverId
 
                 // Fetch receiver's user profile
@@ -425,7 +412,6 @@ fun ChatScreen(
                 titleContentColor = Color.White
             )
         )
-
 
         LazyColumn(
             state = listState,
@@ -512,8 +498,6 @@ fun ChatScreen(
                 )
             }
 
-
-
             val context = LocalContext.current
 
             IconButton(onClick = {
@@ -540,8 +524,6 @@ fun ChatScreen(
                                 "lastMessageTimestamp" to FieldValue.serverTimestamp()
                             )
                         )
-                    } else {
-
                     }
                 }
             }) {
@@ -640,7 +622,6 @@ fun uploadImageToFirebase(uri: Uri, chatId: String, currentUserId: String, messa
                 .add(message)
         }
 }
-
 
 fun fetchCurrentLocation(context: Context, onLocationResult: (LatLng?) -> Unit) {
     val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
@@ -772,7 +753,6 @@ fun ChatBubble(
         }
     }
 }
-
 
 @Composable
 fun CameraPermissionHandler(

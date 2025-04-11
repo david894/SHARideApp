@@ -26,10 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -67,7 +64,6 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.google.maps.android.compose.GoogleMap
@@ -77,6 +73,7 @@ import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.kxxr.logiclibrary.Ratings.loadRatingScore
 import com.kxxr.sharide.R
+import com.kxxr.sharide.db.BookmarkShape
 import com.kxxr.sharide.db.Passenger
 import com.kxxr.sharide.db.RideDetail
 import kotlinx.coroutines.Dispatchers
@@ -187,8 +184,6 @@ fun RideDetailScreen(navController: NavController, firestore: FirebaseFirestore,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(vertical = 8.dp)
                                 )
-
-
                             PendingPassengerListSection(rideId = rideId, rideTime = ride.time, navController = navController)
                             }
 
@@ -229,11 +224,9 @@ fun RideDetailScreen(navController: NavController, firestore: FirebaseFirestore,
     }
 }
 
-
 fun getLatLngFromName(locationName: String?): LatLng? {
     return predefinedLocations.find { it.first == locationName }?.second
 }
-
 
 @Composable
 fun RideMap(
@@ -302,7 +295,6 @@ fun RideMap(
         }
     }
 }
-
 
 suspend fun getRoute(
     context: Context,
@@ -441,7 +433,6 @@ fun RideDetailTopBar(navController: NavController, index: Int) {
     )
 }
 
-
 // Update RideTimeSection to Show Firebase Time
 @Composable
 fun RideTimeSection(time: String,driverId: String, navController: NavController) {
@@ -498,7 +489,6 @@ fun RidePassengerListSection(rideId: String,rideTime: String,driverId: String,na
                                                     destination
                                                 )
                                             )
-
                                             // Update state here if needed
                                             value = passengers
                                         }
@@ -506,13 +496,11 @@ fun RidePassengerListSection(rideId: String,rideTime: String,driverId: String,na
                             }
                         }
                 }
-
             }
             .addOnFailureListener { exception ->
                 Log.e("Firestore", "Error fetching ride passengers", exception)
             }
     }
-
     Column {
         if (passengerListState.value.isEmpty()) {
             Text("No confirmed passengers", fontSize = 16.sp, color = Color.Gray)
@@ -576,7 +564,6 @@ fun PendingPassengerListSection(rideId: String, rideTime: String, navController:
                                                     destination
                                                 )
                                             )
-
                                             // Update state here if needed
                                             value = passengers
                                         }
@@ -584,14 +571,12 @@ fun PendingPassengerListSection(rideId: String, rideTime: String, navController:
                             }
                         }
                 }
-
             }
             .addOnFailureListener { e ->
                 Log.e("Firebase", "Error fetching requests for rideId: $rideId", e)
                 value = emptyList()
             }
     }
-
     Column {
         if (passengerListState.value.isEmpty()) {
             Text("No pending passengers", fontSize = 16.sp, color = Color.Gray)
@@ -647,6 +632,7 @@ fun StartNavigationButton(
                                                 }
 
                                                 openGoogleMapsNavigation(context, pickup, stop, destination)
+
                                             }
                                             .addOnFailureListener {
                                                 Toast.makeText(context, "Failed to fetch ride info", Toast.LENGTH_SHORT).show()
@@ -738,33 +724,33 @@ fun startChatWithPassengerAndSendMessage(
         }
 }
 
-fun sendMessageToChat(chatId: String, senderId: String, text: String) {
+fun sendMessageToChat(chatId: String, senderId: String, messageText: String) {
+    val db = FirebaseFirestore.getInstance()
+    val messagesRef = db.collection("chats").document(chatId).collection("messages")
+
+    val newMessageRef = messagesRef.document() // generate doc to get messageId
+
     val messageData = hashMapOf(
+        "messageId" to newMessageRef.id,
         "senderId" to senderId,
-        "text" to text,
-        "timestamp" to FieldValue.serverTimestamp()
+        "messageText" to messageText,
+        "timestamp" to FieldValue.serverTimestamp(),
+        "isRead" to false,
+        "messageType" to "text"
     )
 
-    FirebaseFirestore.getInstance()
-        .collection("chats")
-        .document(chatId)
-        .collection("messages")
-        .add(messageData)
+    newMessageRef.set(messageData)
 
-    //  update lastMessage and lastMessageTimestamp
-    FirebaseFirestore.getInstance()
-        .collection("chats")
+    // Update last message info in parent chat document
+    db.collection("chats")
         .document(chatId)
         .update(
             mapOf(
-                "lastMessage" to text,
+                "lastMessage" to messageText,
                 "lastMessageTimestamp" to FieldValue.serverTimestamp()
             )
         )
 }
-
-
-
 
 // Cancel Ride Button
 @Composable
@@ -889,8 +875,6 @@ fun completeRide(firestore: FirebaseFirestore, rideId: String, onSuccess: () -> 
         }
 }
 
-
-
 @Composable
 fun PassengerCard(passenger: Passenger, rideId: String, driverId: String, navController: NavController, type: String, location:String, destination: String) {
     var showDialog by remember { mutableStateOf(false) }
@@ -903,7 +887,6 @@ fun PassengerCard(passenger: Passenger, rideId: String, driverId: String, navCon
         rating = Rating
         totalRating = TotalRating
     }
-
 
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -1018,7 +1001,6 @@ fun PassengerCard(passenger: Passenger, rideId: String, driverId: String, navCon
                         .background(Color.White)
                         .padding(horizontal = 16.dp, vertical = 10.dp) // Internal padding
                 )
-
             }
         }
         if(type == "Pending"){
@@ -1069,7 +1051,6 @@ fun PassengerCard(passenger: Passenger, rideId: String, driverId: String, navCon
                 }
             }
         }
-
         if(type == "Confirmed" && driverId.isNotEmpty()){
             Box(
                 modifier = Modifier
@@ -1109,7 +1090,6 @@ fun PassengerCard(passenger: Passenger, rideId: String, driverId: String, navCon
     }
 }
 
-
 fun acceptPassenger(passengerId: String, rideId: String, onSuccess: () -> Unit) {
     val db = Firebase.firestore
     val rideRef = db.collection("rides").document(rideId)
@@ -1141,7 +1121,6 @@ fun acceptPassenger(passengerId: String, rideId: String, onSuccess: () -> Unit) 
     }
 }
 
-
 @Composable
 fun AcceptConfirmationDialog(
     passenger: Passenger,
@@ -1166,7 +1145,6 @@ fun AcceptConfirmationDialog(
     )
 }
 
-
 fun rejectPassenger(passengerId: String, rideId: String, onSuccess: () -> Unit) {
     val db = Firebase.firestore
     val requestQuery = db.collection("requests")
@@ -1181,7 +1159,6 @@ fun rejectPassenger(passengerId: String, rideId: String, onSuccess: () -> Unit) 
         onSuccess() // Navigate back after deletion
     }
 }
-
 
 fun startChatWithPassenger(
     driverId: String,

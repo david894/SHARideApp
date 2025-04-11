@@ -35,7 +35,6 @@ import androidx.navigation.NavController
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
-import com.google.accompanist.permissions.rememberPermissionState
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.model.LatLng
 import com.google.firebase.Firebase
@@ -54,7 +53,6 @@ import java.util.Locale
 @Composable
 fun HomePage(navController: NavController, firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
 
-
     MaterialTheme {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -64,7 +62,6 @@ fun HomePage(navController: NavController, firebaseAuth: FirebaseAuth, firestore
         }
     }
 }
-
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -115,7 +112,6 @@ fun MapScreen(navController: NavController, firebaseAuth: FirebaseAuth, firestor
     }
 }
 
-
 fun saveDriverPreference(context: Context, isDriver: Boolean) {
     val sharedPreferences = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
     sharedPreferences.edit().putBoolean("isDriver", isDriver).apply()
@@ -125,7 +121,6 @@ fun getDriverPreference(context: Context): Boolean {
     val sharedPreferences = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
     return sharedPreferences.getBoolean("isDriver", false) // Default to false (Passenger mode)
 }
-
 
 @Composable
 fun ShowUserScreen(
@@ -197,7 +192,6 @@ fun ShowUserScreen(
     }
 }
 
-
 // Profile header with user info and icons
 @Composable
 fun ProfileHeader(
@@ -209,7 +203,8 @@ fun ProfileHeader(
 ) {
     val userName = fetchUserName(firebaseAuth, firestore)
     val profileBitmap = fetchProfileImage(firebaseAuth)
-
+    val context = LocalContext.current
+    val currentUser = firebaseAuth.currentUser
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -253,10 +248,30 @@ fun ProfileHeader(
 
         Spacer(modifier = Modifier.width(8.dp))
 
-
+        // Role Switch with Validation
         Switch(
             checked = isDriver,
-            onCheckedChange = { onRoleChange(it) },
+            onCheckedChange = { isChecked ->
+                if (isChecked) {
+                    currentUser?.let {
+                        firestore.collection("driver")
+                            .whereEqualTo("userId", it.uid)
+                            .get()
+                            .addOnSuccessListener { querySnapshot ->
+                                if (querySnapshot.isEmpty) {
+                                    navController.navigate("driverintro")
+                                } else {
+                                    onRoleChange(true)
+                                }
+                            }
+                            .addOnFailureListener {
+                                Toast.makeText(context, "Error checking driver status", Toast.LENGTH_SHORT).show()
+                            }
+                    }
+                } else {
+                    onRoleChange(false)
+                }
+            },
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
                 checkedTrackColor = Color(0xFF0075FD),
@@ -277,109 +292,6 @@ fun ProfileHeader(
         }
     }
 }
-
-//@Composable
-//fun ProfileHeader(
-//    firebaseAuth: FirebaseAuth,
-//    firestore: FirebaseFirestore,
-//    isDriver: Boolean,
-//    onRoleChange: (Boolean) -> Unit,
-//    navController: NavController
-//) {
-//    val userName = fetchUserName(firebaseAuth, firestore)
-//    val profileBitmap = fetchProfileImage(firebaseAuth)
-//    val context = LocalContext.current
-//    val currentUser = firebaseAuth.currentUser
-//
-//    Row(
-//        modifier = Modifier
-//            .fillMaxWidth()
-//            .height(56.dp)
-//            .padding(horizontal = 16.dp),
-//        verticalAlignment = Alignment.CenterVertically
-//    ) {
-//        profileBitmap?.let {
-//            Image(
-//                bitmap = it.asImageBitmap(),
-//                contentDescription = "Profile Picture",
-//                modifier = Modifier
-//                    .size(40.dp)
-//                    .clip(CircleShape)
-//            )
-//        } ?: Image(
-//            painter = painterResource(id = R.drawable.profile_ico),
-//            contentDescription = "Profile Picture",
-//            modifier = Modifier
-//                .size(40.dp)
-//                .clip(CircleShape)
-//        )
-//
-//        Spacer(modifier = Modifier.width(8.dp))
-//
-//        Text(
-//            text = "Hi $userName",
-//            fontSize = 18.sp,
-//            fontWeight = FontWeight.Bold
-//        )
-//
-//        Spacer(modifier = Modifier.weight(1f))
-//
-//        // Car/Passenger icon
-//        val roleIcon = if (isDriver) R.drawable.car_front else R.drawable.profile_ico
-//        Image(
-//            painter = painterResource(id = roleIcon),
-//            contentDescription = if (isDriver) "Driver Mode" else "Passenger Mode",
-//            modifier = Modifier.size(40.dp)
-//        )
-//
-//        Spacer(modifier = Modifier.width(8.dp))
-//
-//        // Role Switch with Validation
-//        Switch(
-//            checked = isDriver,
-//            onCheckedChange = { isChecked ->
-//                if (isChecked) {
-//                    currentUser?.let {
-//                        firestore.collection("driver")
-//                            .whereEqualTo("userId", it.uid)
-//                            .get()
-//                            .addOnSuccessListener { querySnapshot ->
-//                                if (querySnapshot.isEmpty) {
-//                                    navController.navigate("driverintro")
-//                                } else {
-//                                    onRoleChange(true)
-//                                }
-//                            }
-//                            .addOnFailureListener {
-//                                Toast.makeText(context, "Error checking driver status", Toast.LENGTH_SHORT).show()
-//                            }
-//                    }
-//                } else {
-//                    onRoleChange(false)
-//                }
-//            },
-//            colors = SwitchDefaults.colors(
-//                checkedThumbColor = Color.White,
-//                checkedTrackColor = Color(0xFF0075FD),
-//                uncheckedThumbColor = Color.White,
-//                uncheckedTrackColor = Color.Gray
-//            )
-//        )
-//
-//        Spacer(modifier = Modifier.width(8.dp))
-//
-//        // Notification icon
-//        IconButton(onClick = { navController.navigate("notification") }) {
-//            Icon(
-//                painter = painterResource(id = R.drawable.notification_ico),
-//                contentDescription = "Notifications",
-//                modifier = Modifier.size(40.dp)
-//            )
-//        }
-//    }
-//}
-
-
 
 @Composable
 fun RideReminder(
@@ -466,7 +378,6 @@ fun RideReminder(
                 }
         }
     }
-
     ReminderContent(
         title = "Ride Reminder",
         emptyText = "No rides available",
@@ -573,8 +484,6 @@ fun SearchReminder(
     )
 }
 
-
-
 @Composable
 fun ReminderContent(
     title: String,
@@ -615,9 +524,6 @@ fun ReminderContent(
                                             val rideStatus = if (documents.isEmpty) "Unknown"
                                             else documents.documents.first().getString("status") ?: "Unknown"
 
-
-
-
                                             val formatter = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())
                                             val dateTimeString = "${item.date} ${item.time}"
                                             val rideTimeMillis = formatter.parse(dateTimeString)?.time ?: 0L
@@ -638,8 +544,6 @@ fun ReminderContent(
                                         .addOnFailureListener {
                                             Log.e("Navigation", "Failed to fetch ride details")
                                         }
-
-
                             } else {
                                 checkRequestStatus(
                                     firestore = firestore,
@@ -681,7 +585,6 @@ fun checkRequestStatus(
         .addOnSuccessListener { documents ->
             val expiredStatuses = listOf("pending", "Unknown","successful")
 
-
             if (documents.isEmpty) {
                 if (timeDiff > 0) {
                     navController.navigate("matching_screen")
@@ -690,7 +593,6 @@ fun checkRequestStatus(
                 }
                 return@addOnSuccessListener
             }
-
 
             val status = documents.documents.first().getString("status") ?: "Unknown"
             val gracePeriodMillis = -60 * 60 * 1000
@@ -710,7 +612,6 @@ fun checkRequestStatus(
             navController.navigate("matching_screen")
         }
 }
-
 
 fun convertToTimestamp(date: String, time: String): Long {
     val formatter = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())
@@ -768,9 +669,6 @@ fun formatTimeLeft(timeLeftMillis: Long, rideIdStatus: String?, requestStatus: S
     }
 }
 
-
-
-
 fun getStatusColor(status: String): Color {
     return when {
         status.contains("hr") || status.contains("min") -> Color(0xFF0075FD) // Blue for upcoming rides
@@ -781,7 +679,6 @@ fun getStatusColor(status: String): Color {
         else -> Color(0xFFB22222) // Gray for unknown statuses
     }
 }
-
 
 @Composable
 fun RideItem(title: String, status: String, statusColor: Color, isDriver: Boolean, onClick: () -> Unit) {
@@ -819,8 +716,6 @@ fun RideItem(title: String, status: String, statusColor: Color, isDriver: Boolea
     }
 }
 
-
-
 // Error screen when location permission is denied
 @Composable
 fun LocationPermissionErrorScreen(context: Context) {
@@ -841,7 +736,6 @@ fun LocationPermissionErrorScreen(context: Context) {
         }
     }
 }
-
 
 @Composable
 fun NotificationPermissionErrorScreen(context: Context) {
@@ -886,7 +780,6 @@ fun NotificationPermissionErrorScreen(context: Context) {
         }
     }
 }
-
 
 @Composable
 fun fetchUserName(firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore): String {
