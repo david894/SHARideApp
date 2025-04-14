@@ -73,6 +73,7 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.kxxr.logiclibrary.AiDetector.detectFaceFromIdCard
 import com.kxxr.logiclibrary.AiDetector.detectPlateNumber
+import com.kxxr.logiclibrary.AiDetector.extractInfoFromDrivingId
 import com.kxxr.logiclibrary.AiDetector.extractInfoFromIdCard
 import com.kxxr.logiclibrary.AiDetector.saveBitmapToCache
 import com.kxxr.logiclibrary.Banned.banUser
@@ -2314,53 +2315,6 @@ fun DriverIdVerificationScreen(navController: NavController) {
         // Show Loading Dialog
         LoadingDialog(text = "Extracting Data from ID...", showDialog = showDialog, onDismiss = { showDialog = false })
     }
-}
-
-fun extractInfoFromDrivingId(
-    context: Context,
-    imageUri: Uri,
-    onResult: (String, String, String) -> Unit // Name, Student ID, Profile Picture
-) {
-    val inputImage = InputImage.fromFilePath(context, imageUri)
-    val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-    recognizer.process(inputImage)
-        .addOnSuccessListener { visionText ->
-            val extractedText = visionText.text
-            if (!extractedText.contains("DRIVING LICENCE", ignoreCase = true)||!extractedText.contains("MALAYSIA", ignoreCase = true)) {
-                onResult("", "", "Error") // Not a valid TARUMT ID
-                return@addOnSuccessListener
-            }
-
-            var name = ""
-            var studentId = ""
-
-            // Loop through the text blocks and lines to extract Name and Student ID
-            for (block in visionText.textBlocks) {
-                for (line in block.lines) {
-                    val text = line.text
-
-                    if (Regex("[0-9]{12}").containsMatchIn(text)){
-                        studentId = text // Matches Student ID pattern
-                    }
-
-                    // Check if the line is likely a name
-                    if (text.all { it.isLetter() || it.isWhitespace() } && text.contains(" ")) {
-                        if (!text.contains("WARGANEGARA", ignoreCase = true) &&
-                            !text.contains("ADDRESS", ignoreCase = true) &&
-                            !text.contains("ALAMAT", ignoreCase = true) &&
-                            !text.contains("TEMPAT", ignoreCase = true)) {
-                            name = text
-                        }
-                    }
-                }
-            }
-
-            // Return results
-            onResult(name, studentId, "Verified")
-        }
-        .addOnFailureListener { e ->
-            onResult("", "", "Error" ) // Failed to process image
-        }
 }
 
 @Composable

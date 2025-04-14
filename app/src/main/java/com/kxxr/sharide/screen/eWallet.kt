@@ -65,6 +65,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
+import com.kxxr.logiclibrary.User.User
+import com.kxxr.logiclibrary.User.loadUserDetails
 import com.kxxr.logiclibrary.eWallet.PinAttemptManager
 import com.kxxr.logiclibrary.eWallet.Transaction
 import com.kxxr.logiclibrary.eWallet.hashAnswer
@@ -699,13 +701,26 @@ fun ActionButton(label: String, img: String, onClick: () -> Unit) {
 
 @Composable
 fun TransactionItem(transaction: Transaction) {
+    val firestore = FirebaseFirestore.getInstance()
+    var receiver by remember { mutableStateOf<User?>(null) }
+    var showDetail by remember { mutableStateOf(false) }
+
+    LaunchedEffect(transaction) {
+        if (transaction.amount >= 0){
+            loadUserDetails(firestore, transaction.from) { receiver = it }
+        }else{
+            loadUserDetails(firestore, transaction.to) { receiver = it }
+        }
+    }
+
     val color = if (transaction.amount >= 0) Color(0xFF008000) else Color(0xFFCC0000)
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(8.dp),
         elevation = CardDefaults.cardElevation(4.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        onClick = {showDetail = !showDetail}
     ) {
         Row(
             modifier = Modifier
@@ -717,6 +732,13 @@ fun TransactionItem(transaction: Transaction) {
             Column {
                 Text(transaction.description, fontWeight = FontWeight.Bold)
                 Text(transaction.date, color = Color.Gray, fontSize = 12.sp)
+                if(showDetail && receiver != null){
+                    if(transaction.amount >= 0){
+                        Text("Payer Name: ${receiver!!.name}", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }else{
+                        Text("Receiver Name: ${receiver!!.name}", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
             }
             Text(
                 text = if (transaction.amount >= 0) "+ RM %.2f".format(transaction.amount) else "- RM %.2f".format(-transaction.amount),
@@ -1127,8 +1149,6 @@ fun ResetPinScreen(navController: NavController) {
 
     LoadingDialog(text = "Loading...", showDialog = showDialog, onDismiss = { showDialog = false })
 }
-
-
 
 @Composable
 fun UpdatePinScreen(navController: NavController) {

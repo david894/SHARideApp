@@ -41,7 +41,9 @@ fun extractInfoFromIdCard(
                         if(text.contains("Faculty",ignoreCase = true) || text.contains("Accountancy",ignoreCase = true) ||
                             text.contains("Business",ignoreCase = true) || text.contains("Science",ignoreCase = true) ||
                             text.contains("Information",ignoreCase = true) || text.contains("University",ignoreCase = true) ||
-                            text.contains("Engineering",ignoreCase = true) || text.contains("Communication",ignoreCase = true))
+                            text.contains("Engineering",ignoreCase = true) || text.contains("Communication",ignoreCase = true) ||
+                            text.contains("Professor",ignoreCase = true) || text.contains("Lecture",ignoreCase = true)
+                            )
                         { }else{
                             name = text // Heuristics for Name
 
@@ -163,4 +165,51 @@ fun detectPlateNumber(
 fun rotateBitmap(bitmap: Bitmap, degrees: Float): Bitmap {
     val matrix = Matrix().apply { postRotate(degrees) }
     return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+}
+
+fun extractInfoFromDrivingId(
+    context: Context,
+    imageUri: Uri,
+    onResult: (String, String, String) -> Unit // Name, Student ID, Profile Picture
+) {
+    val inputImage = InputImage.fromFilePath(context, imageUri)
+    val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    recognizer.process(inputImage)
+        .addOnSuccessListener { visionText ->
+            val extractedText = visionText.text
+            if (!extractedText.contains("DRIVING LICENCE", ignoreCase = true)||!extractedText.contains("MALAYSIA", ignoreCase = true)) {
+                onResult("", "", "Error") // Not a valid TARUMT ID
+                return@addOnSuccessListener
+            }
+
+            var name = ""
+            var studentId = ""
+
+            // Loop through the text blocks and lines to extract Name and Student ID
+            for (block in visionText.textBlocks) {
+                for (line in block.lines) {
+                    val text = line.text
+
+                    if (Regex("[0-9]{12}").containsMatchIn(text)){
+                        studentId = text // Matches Student ID pattern
+                    }
+
+                    // Check if the line is likely a name
+                    if (text.all { it.isLetter() || it.isWhitespace() } && text.contains(" ")) {
+                        if (!text.contains("WARGANEGARA", ignoreCase = true) &&
+                            !text.contains("ADDRESS", ignoreCase = true) &&
+                            !text.contains("ALAMAT", ignoreCase = true) &&
+                            !text.contains("TEMPAT", ignoreCase = true)) {
+                            name = text
+                        }
+                    }
+                }
+            }
+
+            // Return results
+            onResult(name, studentId, "Verified")
+        }
+        .addOnFailureListener { e ->
+            onResult("", "", "Error" ) // Failed to process image
+        }
 }
