@@ -706,7 +706,11 @@ fun TransactionItem(transaction: Transaction) {
     var showDetail by remember { mutableStateOf(false) }
 
     LaunchedEffect(transaction) {
-        loadUserDetails(firestore, transaction.to) { receiver = it }
+        if (transaction.amount >= 0){
+            loadUserDetails(firestore, transaction.from) { receiver = it }
+        }else{
+            loadUserDetails(firestore, transaction.to) { receiver = it }
+        }
     }
 
     val color = if (transaction.amount >= 0) Color(0xFF008000) else Color(0xFFCC0000)
@@ -729,7 +733,11 @@ fun TransactionItem(transaction: Transaction) {
                 Text(transaction.description, fontWeight = FontWeight.Bold)
                 Text(transaction.date, color = Color.Gray, fontSize = 12.sp)
                 if(showDetail && receiver != null){
-                    Text("Receiver Name: ${receiver!!.name}", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    if(transaction.amount >= 0){
+                        Text("Payer Name: ${receiver!!.name}", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }else{
+                        Text("Receiver Name: ${receiver!!.name}", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
                 }
             }
             Text(
