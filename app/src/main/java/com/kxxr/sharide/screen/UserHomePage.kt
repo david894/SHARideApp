@@ -58,14 +58,14 @@ fun HomePage(navController: NavController, firebaseAuth: FirebaseAuth, firestore
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            MapScreen(navController, firebaseAuth, firestore)
+            CheckPermissionScreen(navController, firebaseAuth, firestore)
         }
     }
 }
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun MapScreen(navController: NavController, firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
+fun CheckPermissionScreen(navController: NavController, firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
     val context = LocalContext.current
 
     // Multiple permissions: Location and Notification

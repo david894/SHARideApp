@@ -16,7 +16,6 @@ import com.kxxr.sharide.MainActivity
 
 object AndroidNotification {
     private const val CHANNEL_ID = "sharide_channel"
-
     fun show(context: Context, notification: NotificationEntity) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val permission = android.Manifest.permission.POST_NOTIFICATIONS
@@ -24,14 +23,11 @@ object AndroidNotification {
                 context, permission
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         }
-
         createNotificationChannel(context)
-
         // Intent to launch MainActivity when tapped
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
-
         val pendingIntent = PendingIntent.getActivity(
             context,
             0,

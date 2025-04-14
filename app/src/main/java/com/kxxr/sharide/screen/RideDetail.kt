@@ -1040,9 +1040,7 @@ fun PassengerCard(passenger: Passenger, rideId: String, driverId: String, navCon
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFCC0000)),
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight(),
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
                             shape = RectangleShape
                         ) {
                             Text("Reject", color = Color.White)

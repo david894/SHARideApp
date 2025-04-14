@@ -397,7 +397,7 @@ fun DriverCard(
                     ) {
                         Text("Request")
                     }
-                }else if(type == "pending"){
+                }else if(type == "Pending"){
                     Button(
                         onClick = {
                             coroutineScope.launch {
@@ -503,7 +503,6 @@ fun sendRequestToDriver(
     firestore.collection("requests")
         .add(request)
         .addOnSuccessListener { onSuccess() }
-        .addOnFailureListener { /* Handle failure if needed */ }
 }
 
 fun fetchDriverForPendingRequest(
