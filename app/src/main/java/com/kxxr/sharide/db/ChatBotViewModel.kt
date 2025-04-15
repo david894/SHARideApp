@@ -20,7 +20,7 @@ class ChatBotViewModel : ViewModel() {
 
     private var apiKey: String? = null
 
-    private val _response = MutableStateFlow("Gemini is ready to chat!")
+    private val _response = MutableStateFlow("TAR UMT Bus Service Chatbot is ready to chat!")
     val response = _response.asStateFlow()
 
     private val geminiApi: GeminiApi

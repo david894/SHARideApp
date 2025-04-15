@@ -20,7 +20,7 @@
     <string name="ambulance_phone">0341459999</string>
     <string name="fire_phone">0340235544</string>
     <string name="chatbot_header">TAR UMT Bus Service Chatbot</string>
-    <string name="chatbot_typing">Gemini is typing...</string>
+    <string name="chatbot_typing">TAR UMT Bus Service Chatbot is typing...</string>
     <string name="content_place_holder_chatbot">Your message</string>
     <string name="gemeni_api">"AIzaSyCQ-zfS1V7tSgOuv_znYHeOItHi_VmEfEM"</string>
     <string name="google_map_navigation_url">https://www.google.com/maps/dir/?api=1</string>
