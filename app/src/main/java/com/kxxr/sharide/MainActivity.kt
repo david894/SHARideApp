@@ -40,12 +40,6 @@ class MainActivity : ComponentActivity() {
         nfcAdapter = NfcAdapter.getDefaultAdapter(this)
         isNfcSupported = nfcAdapter != null
 
-        if (!isNfcSupported) {
-            Toast.makeText(this, "NFC not supported on this device", Toast.LENGTH_LONG).show()
-        } else if (nfcAdapter?.isEnabled == false) {
-            Toast.makeText(this, "Please enable NFC in settings", Toast.LENGTH_LONG).show()
-        }
-
         // Get ViewModel directly
         nfcViewModel = ViewModelProvider(this)[NfcViewModel::class.java]
 
