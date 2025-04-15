@@ -3,6 +3,7 @@ package com.kxxr.sharide.screen
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -19,8 +20,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -31,6 +34,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.kxxr.sharide.R
 
 @Composable
 fun MatchingScreen(navController: NavController, firestore: FirebaseFirestore) {
@@ -145,7 +149,7 @@ fun MatchingScreenContent(
             Spacer(modifier = Modifier.height(8.dp))
             LocationBox(destination, Icons.Default.MyLocation)
             Spacer(modifier = Modifier.weight(1f))
-            MatchingIndicator()
+            MatchingIndicator("Search")
             Spacer(modifier = Modifier.weight(1f))
 
             if (matchingRides.isNullOrEmpty()) {
@@ -357,7 +361,7 @@ fun cancelSearch(searchId: String?, firestore: FirebaseFirestore, onComplete: ()
 }
 
 @Composable
-fun MatchingIndicator() {
+fun MatchingIndicator(type: String) {
     val infiniteTransition = rememberInfiniteTransition()
 
     val circle1Size by infiniteTransition.animateFloat(
@@ -408,12 +412,20 @@ fun MatchingIndicator() {
                 .size(circle3Size.dp)
                 .background(Color(0xFF005BBB).copy(alpha = 0.7f), shape = CircleShape)
         )
-
-        Icon(
-            imageVector = Icons.Default.LocationOn,
-            contentDescription = "Location Pin",
-            modifier = Modifier.size(80.dp),
-            tint = Color.Red,
-        )
+        if(type == "Search") {
+            Icon(
+                imageVector = Icons.Default.LocationOn,
+                contentDescription = "Location Pin",
+                modifier = Modifier.size(80.dp),
+                tint = Color.Red,
+            )
+        }else{
+            Image(
+                painter = painterResource(id = R.drawable.nfc_logo),
+                contentDescription = "NFC Logo",
+                modifier = Modifier.size(80.dp),
+                colorFilter = ColorFilter.tint(Color.White)
+            )
+        }
     }
 }

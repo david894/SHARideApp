@@ -102,14 +102,16 @@ fun AppNavHost(
     firebaseAuth: FirebaseAuth,
     firestore: FirebaseFirestore,
     networkViewModel: NetworkViewModel,
-    context: Context
+    context: Context,
+    isNFCSupport: Boolean,
+    NFCData:String?
 ) {
     val navController = rememberNavController()
     val isConnected by networkViewModel.isConnected.collectAsState(initial = true) // Observe connectivity
     val currentUser = firebaseAuth.currentUser
     var isBanned by remember { mutableStateOf(false) }
     var startDestination by remember { mutableStateOf<String?>(null) }
-
+    var NFCDataInfo = NFCData
     if (!isConnected) {
         // Show the "No Internet Connection" screen
         NoInternetScreen(onRetry = { })
@@ -191,7 +193,7 @@ fun AppNavHost(
                 composable("intro") { IntroScreen(navController) }
                 composable("login") { LoginScreen(navController, firebaseAuth) }
                 composable("signup") { SignupIntroScreen(navController) }
-                composable("signup1") { IdVerificationScreen(navController) }
+                composable("signup1") { IdVerificationScreen(navController,isNFCSupport) }
                 composable("signupScreen/{name}/{studentId}/{imagePath}") { backStackEntry ->
                     val name = backStackEntry.arguments?.getString("name").orEmpty()
                     val studentId = backStackEntry.arguments?.getString("studentId").orEmpty()
@@ -199,6 +201,16 @@ fun AppNavHost(
 
                     SignUpScreen(navController, name, studentId, imagePath)
                 }
+                composable("detectNFC/{name}/{studentId}/{imagePath}") { backStackEntry ->
+                    val name = backStackEntry.arguments?.getString("name").orEmpty()
+                    val studentId = backStackEntry.arguments?.getString("studentId").orEmpty()
+                    val imagePath = Uri.decode(backStackEntry.arguments?.getString("imagePath").orEmpty())
+
+                    DetectNFC(navController,NFCDataInfo, name, studentId, imagePath){
+                        NFCDataInfo = null
+                    }
+                }
+
                 composable("emailverify") { EmailVerify(navController) }
                 composable("signupFailed") { UnableToVerifyScreen(navController) }
                 composable("signupFailedFace") { UnableToVerifyFace(navController) }
@@ -998,7 +1010,7 @@ fun StepCard(stepNumber: String, title: String, description: String) {
 }
 
 @Composable
-fun IdVerificationScreen(navController: NavController) {
+fun IdVerificationScreen(navController: NavController,isNFCSupport: Boolean) {
     var name by remember { mutableStateOf("") }
     var studentId by remember { mutableStateOf("") }
     var validTARUMT by remember { mutableStateOf("") }
@@ -1074,7 +1086,11 @@ fun IdVerificationScreen(navController: NavController) {
         if(validTARUMT == "Verified" && filePath != ""){
             validTARUMT = ""
             val encodedFilePath = Uri.encode(filePath) // Encode the file path
-            navController.navigate("signupScreen/$name/$studentId/$encodedFilePath")
+            if(isNFCSupport){
+                navController.navigate("detectNFC/$name/$studentId/$encodedFilePath")
+            }else{
+                navController.navigate("signupScreen/$name/$studentId/$encodedFilePath")
+            }
         }else if(validTARUMT == "Error"){
             validTARUMT = ""
             filePath = ""
@@ -1095,6 +1111,8 @@ fun IdVerificationScreen(navController: NavController) {
         LoadingDialog(text = "Extracting Data from ID...", showDialog = showDialog, onDismiss = { showDialog = false })
     }
 }
+
+
 
 @Composable
 fun UploadIdButton(onImageSelected: (Uri) -> Unit) {
@@ -1141,7 +1159,7 @@ fun SignUpScreen(navController: NavController, name: String, studentId: String, 
     // Password TextField with Visibility Toggle
     var passwordVisible by remember { mutableStateOf(false) }
 
-//     Load Bitmap from the file path
+    //     Load Bitmap from the file path
     val profilePicture: Bitmap? = if (imagePath.isNotEmpty()) {
         BitmapFactory.decodeFile(File(imagePath).absolutePath)
     } else {
