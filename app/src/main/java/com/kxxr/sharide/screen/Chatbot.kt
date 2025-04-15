@@ -31,7 +31,7 @@ fun ChatbotScreen(viewModel: ChatBotViewModel = viewModel()) {
     val botResponse by viewModel.response.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val messages = remember { mutableStateListOf<ChatbotMessage>() }
-    val chatbotHeader = stringResource(id = R.string.chatot_header)
+    val chatbotHeader = stringResource(id = R.string.chatbot_header)
     val chatbotTyping = stringResource(id = R.string.chatbot_typing)
     val contentPlaceHolder = stringResource(id = R.string.content_place_holder_chatbot)
     val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher

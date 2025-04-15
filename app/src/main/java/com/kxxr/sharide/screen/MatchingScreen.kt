@@ -263,7 +263,7 @@ fun AlternativeSolutionDialog(
 ) {
     val context = LocalContext.current
     val options = listOf(
-        "Search Another Ride" to Icons.Default.Search,
+        "Continue Search" to Icons.Default.Search,
         "Chat with TAR UMT Bus" to Icons.Default.Chat,
         "Cancel Matching" to Icons.Default.Close
     )
@@ -283,7 +283,7 @@ fun AlternativeSolutionDialog(
                     TextButton(
                         onClick = {
                             when (index) {
-                                0 -> navController.navigate("search_screen")
+                                0 -> onDismiss()
                                 1 -> navController.navigate("chatbot")
                                 2 -> {
                                     cancelSearch(searchId, firestore) {

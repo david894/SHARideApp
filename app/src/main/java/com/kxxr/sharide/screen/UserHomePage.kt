@@ -58,14 +58,14 @@ fun HomePage(navController: NavController, firebaseAuth: FirebaseAuth, firestore
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            MapScreen(navController, firebaseAuth, firestore)
+            CheckPermissionScreen(navController, firebaseAuth, firestore)
         }
     }
 }
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun MapScreen(navController: NavController, firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
+fun CheckPermissionScreen(navController: NavController, firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore) {
     val context = LocalContext.current
 
     // Multiple permissions: Location and Notification
@@ -624,7 +624,7 @@ fun convertToTimestamp(date: String, time: String): Long {
 }
 
 fun formatTimeLeft(timeLeftMillis: Long, rideIdStatus: String?, requestStatus: String?): String {
-    val gracePeriodMillis = -120 * 60 * 1000
+    val gracePeriodMillis = -60 * 60 * 1000
 
     return when {
         rideIdStatus == "complete" -> "Completed"
@@ -653,6 +653,7 @@ fun formatTimeLeft(timeLeftMillis: Long, rideIdStatus: String?, requestStatus: S
 
         // If time has passed and is beyond the grace period (late by more than 30 minutes)
         timeLeftMillis <= gracePeriodMillis -> when (requestStatus) {
+            "Unknown" -> "Expired"
             "pending" -> "Expired"
             "successful" -> "Prepare"
             "startBoarding","onBoarding" -> "OnGoing"
@@ -662,6 +663,7 @@ fun formatTimeLeft(timeLeftMillis: Long, rideIdStatus: String?, requestStatus: S
 
         // Default fallback (should rarely be hit)
         else -> when (requestStatus) {
+            "Unknown" -> "Expired"
             "pending" -> "Expired"
             "complete" -> "Completed"
             else -> "Expired"
