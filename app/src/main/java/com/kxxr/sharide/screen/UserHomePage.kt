@@ -624,7 +624,7 @@ fun convertToTimestamp(date: String, time: String): Long {
 }
 
 fun formatTimeLeft(timeLeftMillis: Long, rideIdStatus: String?, requestStatus: String?): String {
-    val gracePeriodMillis = -120 * 60 * 1000
+    val gracePeriodMillis = -60 * 60 * 1000
 
     return when {
         rideIdStatus == "complete" -> "Completed"
