@@ -653,6 +653,7 @@ fun formatTimeLeft(timeLeftMillis: Long, rideIdStatus: String?, requestStatus: S
 
         // If time has passed and is beyond the grace period (late by more than 30 minutes)
         timeLeftMillis <= gracePeriodMillis -> when (requestStatus) {
+            "Unknown" -> "Expired"
             "pending" -> "Expired"
             "successful" -> "Prepare"
             "startBoarding","onBoarding" -> "OnGoing"
@@ -662,6 +663,7 @@ fun formatTimeLeft(timeLeftMillis: Long, rideIdStatus: String?, requestStatus: S
 
         // Default fallback (should rarely be hit)
         else -> when (requestStatus) {
+            "Unknown" -> "Expired"
             "pending" -> "Expired"
             "complete" -> "Completed"
             else -> "Expired"
