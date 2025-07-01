@@ -45,6 +45,26 @@
 * Admins can review manual verification submissions, manage e-wallet balances, and enforce user bans.
 * Admin dashboard is protected with 2FA for added security.
 
+### 5. **Route Selection and Scheduling Module**  
+* Matches drivers and passengers by date/time proximity and route.
+* Filters based on preferences (pet-friendly, gender, car type).
+* Uses predefined TAR UMT stops and live traffic data.
+
+### 6. **Real-Time Reminder and Notifications Module**  
+* Sends alerts to drivers and passengers before scheduled rides.
+* Informs users about cancellations or no-driver situations.
+* Unread message and ride update notifications supported.
+
+### 7. **Chat Module**  
+* In-app messaging with support for photo and location sharing.
+* Message deletion feature.
+* Integrated TAR UMT Bus Service Chatbot using Gemini AI and RESTful API.
+
+### 8. **Favourite Driver Module**  
+* Save preferred or recent drivers.
+* Blacklist inappropriate drivers to avoid future matches.
+* Supports CRUD operations for personalization.
+
 ## 🌐 Purpose
 
 SHARide is intended to improve the transportation experience within the TAR UMT campus by offering a safer, more reliable, and eco-friendly alternative to private vehicle use and public transport. By promoting shared rides and providing secure digital infrastructure, SHARide supports the vision of a smarter and more sustainable campus.
