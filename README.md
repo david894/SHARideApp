@@ -39,7 +39,7 @@
 * Auto-ban mechanism triggers when a user receives 3 warnings within 30 days.
 * Ratings and comments are sanitized to prevent inappropriate input.
 
-### 4. **Admin Backend Module**
+### 4. **Admin Backend Module (SHARmin)**
 
 * Provides role-based access control (Admin Group Permissions).
 * Admins can review manual verification submissions, manage e-wallet balances, and enforce user bans.
@@ -75,4 +75,4 @@ SHARide is intended to improve the transportation experience within the TAR UMT 
    `git clone https://github.com/david894/SHARideApp.git`
 2. Open the project in **Android Studio Koala 2024.1.1**
 3. Sync Gradle and ensure Firebase JSON configuration is added
-4. Build and run on an Android device (with NFC enabled for verification module)
+4. Build (SHARide/SHARmin) and run on an Android device (with NFC enabled for SHARide verification module)
