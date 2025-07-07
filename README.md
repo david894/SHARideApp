@@ -1,4 +1,4 @@
-# SHARide: Enhanced Carpooling Mobile Application for TAR UMT
+# SHARide: Carpooling Mobile Application for TAR UMT Student
 
 **SHARide** is a carpooling mobile application developed as part of a Final Year Project at Tunku Abdul Rahman University of Management and Technology (TAR UMT). The app is designed to address pressing transportation challenges faced by students and staff on campus, such as long queues for public transport, safety concerns, and inefficient vehicle utilization. This enhanced version of SHARide introduces advanced features and secure modules to improve usability, safety, and operational efficiency.
 
